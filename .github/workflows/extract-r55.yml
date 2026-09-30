@@ -1,0 +1,52 @@
+name: Extract R55 source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/extract-r55.yml"
+      - "source/Keo_R55_FULL_FROM_R46-17_CACHE_AUTO_BACKGROUND.zip"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract R55 archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf extracted-r55 /tmp/r55
+          mkdir -p extracted-r55 /tmp/r55
+          unzip -q source/Keo_R55_FULL_FROM_R46-17_CACHE_AUTO_BACKGROUND.zip -d /tmp/r55
+          ROOT="$(dirname "$(find /tmp/r55 -type f -name worker.js -print -quit)")"
+          test -n "$ROOT"
+          cp "$ROOT/worker.js" extracted-r55/worker.js
+          if [ -f "$ROOT/wrangler.toml" ]; then cp "$ROOT/wrangler.toml" extracted-r55/wrangler.toml; fi
+          if [ -f "$ROOT/wrangler.json" ]; then cp "$ROOT/wrangler.json" extracted-r55/wrangler.json; fi
+          if [ -f "$ROOT/package.json" ]; then cp "$ROOT/package.json" extracted-r55/package.json; fi
+          if [ -d "$ROOT/public" ]; then
+            mkdir -p extracted-r55/public
+            cp -R "$ROOT/public/." extracted-r55/public/
+          fi
+          printf '%s\n' "$ROOT" > extracted-r55/SOURCE_ROOT.txt
+          find extracted-r55 -maxdepth 3 -type f | sort > extracted-r55/FILES.txt
+
+      - name: Commit extracted source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add extracted-r55
+          if git diff --cached --quiet; then
+            echo "No extraction changes"
+            exit 0
+          fi
+          git commit -m "Extract R55 worker source"
+          git push
