@@ -34,6 +34,8 @@ jobs:
             cp -R "$ROOT/public/." extracted-r55/public/
           fi
           printf '%s\n' "$ROOT" > extracted-r55/SOURCE_ROOT.txt
+          wc -l "$ROOT/worker.js" > extracted-r55/WORKER_LINES.txt
+          grep -nE "export default|export class|DurableObject|scheduled\(|alarm\(|/api/background|predictions|featuredPredictions|R55_STATE|env\." "$ROOT/worker.js" > extracted-r55/WORKER_MARKERS.txt || true
           find extracted-r55 -maxdepth 3 -type f | sort > extracted-r55/FILES.txt
 
       - name: Commit extracted source
