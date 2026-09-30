@@ -1,0 +1,12 @@
+{
+  "name": "r55-system",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node telegram_bot.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
