@@ -1,5 +1,7 @@
 extracted-r55/FILES.txt
 extracted-r55/SOURCE_ROOT.txt
+extracted-r55/WORKER_LINES.txt
+extracted-r55/WORKER_MARKERS.txt
 extracted-r55/ledger.mjs
 extracted-r55/public/app.js
 extracted-r55/public/big-matches.mjs
