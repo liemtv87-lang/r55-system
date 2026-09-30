@@ -27,9 +27,8 @@ jobs:
           ROOT="$(dirname "$(find /tmp/r55 -type f -name worker.js -print -quit)")"
           test -n "$ROOT"
           cp "$ROOT/worker.js" extracted-r55/worker.js
-          if [ -f "$ROOT/wrangler.toml" ]; then cp "$ROOT/wrangler.toml" extracted-r55/wrangler.toml; fi
-          if [ -f "$ROOT/wrangler.json" ]; then cp "$ROOT/wrangler.json" extracted-r55/wrangler.json; fi
-          if [ -f "$ROOT/package.json" ]; then cp "$ROOT/package.json" extracted-r55/package.json; fi
+          find "$ROOT" -maxdepth 1 -type f \( -name '*.mjs' -o -name '*.js' -o -name '*.json' -o -name '*.toml' \) -print0 |
+            while IFS= read -r -d '' file; do cp "$file" "extracted-r55/$(basename "$file")"; done
           if [ -d "$ROOT/public" ]; then
             mkdir -p extracted-r55/public
             cp -R "$ROOT/public/." extracted-r55/public/
