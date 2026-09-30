@@ -22,3 +22,4 @@ extracted-r55/source-health.mjs
 extracted-r55/team-form.mjs
 extracted-r55/text-codec.mjs
 extracted-r55/worker.js
+extracted-r55/wrangler.json
