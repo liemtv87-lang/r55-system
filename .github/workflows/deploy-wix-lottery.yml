@@ -36,7 +36,6 @@ jobs:
           unzip -q -o site.zip -d site
           test -f site/wix.config.json
           grep -q '2bfa787e-7508-43cf-8ddc-2ebaac8dbafe' site/wix.config.json
-
           fetched=0
           for u in             "https://kq247-xoso-r9-v2.lovable.app/xoso.html"             "https://id-preview--bcac79cb-615f-4d4b-970a-6bf57c1f5ea3.lovable.app/xoso.html"
           do
@@ -49,14 +48,10 @@ jobs:
           done
           test "$fetched" = "1"
           mv site/xoso.new.html site/xoso.html
-
           mkdir -p site/dist
           cp site/index.html site/dist/index.html
           cp site/client.html site/dist/client.html
           cp site/xoso.html site/dist/xoso.html
-
-          echo "Prepared files:"
-          find site/dist -maxdepth 1 -type f -printf '%f %s bytes\n'
           grep -n 'V29 / V10\|LOTTERY_CONSENSUS_V10_20261001' site/dist/xoso.html | head
 
       - name: Install Wix CLI
@@ -70,40 +65,44 @@ jobs:
           for candidate in "$WIX_API_KEY_1" "$WIX_API_KEY_2" "$WIX_API_KEY_3"; do
             if [ -n "$candidate" ]; then key="$candidate"; break; fi
           done
+
           if [ -n "$key" ]; then
             echo "Using configured Wix CI credential."
             wix login --api-key "$key"
-          else
-            echo "No Wix CI credential found. Starting Wix device login."
-            rm -f wix-login.log wix-login-clean.txt
-            set +e
-            script -q -e -c "wix login" wix-login.log &
-            login_pid=$!
-            set -e
+            exit 0
+          fi
 
-            for i in $(seq 1 20); do
-              sleep 1
-              if [ -s wix-login.log ] && grep -Eqi 'https://|code|login|authorize|verify' wix-login.log; then
+          echo "No Wix CI credential found. Starting non-interactive Wix device login."
+          rm -f wix-login.log wix-login-clean.txt
+          set +e
+          wix login > wix-login.log 2>&1 &
+          login_pid=$!
+          set -e
+
+          for i in $(seq 1 30); do
+            sleep 1
+            if [ -s wix-login.log ]; then
+              if grep -Eqi 'https://|code|login|authorize|verify|device' wix-login.log; then
                 break
               fi
-            done
+            fi
+          done
 
-            tr -d '\r' < wix-login.log | sed -E 's/\x1B\[[0-9;?]*[ -\/]*[@-~]//g' | tail -120 > wix-login-clean.txt || true
-            {
-              echo "Wix CLI device login for run $GITHUB_RUN_ID"
-              echo
-              echo 'Open/complete the login using the URL and one-time code below:'
-              echo
-              echo '~~~'
-              cat wix-login-clean.txt
-              echo '~~~'
-            } > issue-body.md
+          tr -d '\r' < wix-login.log | tail -200 > wix-login-clean.txt || true
+          {
+            echo "Wix CLI device login for run $GITHUB_RUN_ID"
+            echo
+            echo "Complete the Wix login using the URL and one-time code shown below:"
+            echo
+            echo '~~~'
+            cat wix-login-clean.txt
+            echo '~~~'
+          } > issue-body.md
 
-            issue_url=$(gh issue create               --repo "$GITHUB_REPOSITORY"               --title "Wix device login $GITHUB_RUN_ID"               --body-file issue-body.md)
-            echo "Device login details posted: $issue_url"
+          issue_url=$(gh issue create             --repo "$GITHUB_REPOSITORY"             --title "Wix device login $GITHUB_RUN_ID"             --body-file issue-body.md)
+          echo "Device login details posted: $issue_url"
 
-            wait "$login_pid"
-          fi
+          wait "$login_pid"
 
       - name: Release to existing Wix site
         working-directory: site
