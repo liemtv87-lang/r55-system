@@ -1,0 +1,20 @@
+name: Download Wix production bundle
+on:
+  push:
+    paths:
+      - '.github/workflows/download-wix-production.yml'
+  workflow_dispatch:
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download current Wix production project
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 --connect-timeout 20 -o wix-production.zip "https://www.wix.com/_api/wixstro-deployments/v1/instant-sites/d8cbc40b-c503-4b52-82fb-54a7f703ad7f/download.zip"
+          unzip -l wix-production.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wix-production-current
+          path: wix-production.zip
+          retention-days: 1
