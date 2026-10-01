@@ -1,0 +1,92 @@
+name: Deploy Wix lottery V29 V10
+on:
+  push:
+    paths:
+      - '.github/workflows/deploy-wix-lottery.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WIX_API_KEY_1: ${{ secrets.WIX_API_KEY }}
+      WIX_API_KEY_2: ${{ secrets.WIX_CLI_API_KEY }}
+      WIX_API_KEY_3: ${{ secrets.WIX_TOKEN }}
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download current Wix project and V29 V10 page
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --connect-timeout 20 -o site.zip "https://www.wix.com/_api/wixstro-deployments/v1/instant-sites/2bfa787e-7508-43cf-8ddc-2ebaac8dbafe/download.zip"
+          mkdir -p site
+          unzip -q -o site.zip -d site
+          test -f site/wix.config.json
+          grep -q '2bfa787e-7508-43cf-8ddc-2ebaac8dbafe' site/wix.config.json
+
+          fetched=0
+          for u in             "https://kq247-xoso-r9-v2.lovable.app/xoso.html"             "https://id-preview--bcac79cb-615f-4d4b-970a-6bf57c1f5ea3.lovable.app/xoso.html"
+          do
+            if curl -fL --retry 2 --connect-timeout 20 "$u" -o site/xoso.new.html; then
+              if grep -q 'V29 / V10' site/xoso.new.html && grep -q 'LOTTERY_CONSENSUS_V10_20261001' site/xoso.new.html; then
+                fetched=1
+                break
+              fi
+            fi
+          done
+          test "$fetched" = "1"
+          mv site/xoso.new.html site/xoso.html
+
+          mkdir -p site/dist
+          cp site/index.html site/dist/index.html
+          cp site/client.html site/dist/client.html
+          cp site/xoso.html site/dist/xoso.html
+
+          echo "Prepared files:"
+          find site/dist -maxdepth 1 -type f -printf '%f %s bytes\n'
+          grep -n 'V29 / V10\|LOTTERY_CONSENSUS_V10_20261001' site/dist/xoso.html | head
+
+      - name: Install Wix CLI
+        run: npm install --global @wix/cli@latest
+
+      - name: Authenticate Wix
+        shell: bash
+        run: |
+          set -euo pipefail
+          key=""
+          for candidate in "$WIX_API_KEY_1" "$WIX_API_KEY_2" "$WIX_API_KEY_3"; do
+            if [ -n "$candidate" ]; then key="$candidate"; break; fi
+          done
+          if [ -n "$key" ]; then
+            echo "Using configured Wix CI credential."
+            wix login --api-key "$key"
+          else
+            echo "::notice::No Wix CI credential found. Starting Wix device login; open the URL/code printed below."
+            script -q -e -c "wix login" /dev/null
+          fi
+
+      - name: Release to existing Wix site
+        working-directory: site
+        run: |
+          set -euo pipefail
+          wix release
+
+      - name: Verify live V29 V10
+        run: |
+          set -euo pipefail
+          url="https://instant-tinqeohgsacy-liemtv87-1408.wix-site-host.com/xoso.html"
+          for i in 1 2 3 4 5 6; do
+            if curl -fL --no-cache "$url?verify=$GITHUB_RUN_ID-$i" -o live.html; then
+              if grep -q 'V29 / V10' live.html && grep -q 'LOTTERY_CONSENSUS_V10_20261001' live.html; then
+                echo "LIVE_V29_V10_OK"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Live verification did not see V29/V10 yet."
+          exit 1
