@@ -5,11 +5,20 @@ on:
       - '.github/workflows/deploy-wix-lottery.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: wix-lottery-v29-v10
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      GH_TOKEN: ${{ github.token }}
       WIX_API_KEY_1: ${{ secrets.WIX_API_KEY }}
       WIX_API_KEY_2: ${{ secrets.WIX_CLI_API_KEY }}
       WIX_API_KEY_3: ${{ secrets.WIX_TOKEN }}
@@ -65,8 +74,35 @@ jobs:
             echo "Using configured Wix CI credential."
             wix login --api-key "$key"
           else
-            echo "::notice::No Wix CI credential found. Starting Wix device login; open the URL/code printed below."
-            script -q -e -c "wix login" /dev/null
+            echo "No Wix CI credential found. Starting Wix device login."
+            rm -f wix-login.log wix-login-clean.txt
+            set +e
+            script -q -e -c "wix login" wix-login.log &
+            login_pid=$!
+            set -e
+
+            for i in $(seq 1 20); do
+              sleep 1
+              if [ -s wix-login.log ] && grep -Eqi 'https://|code|login|authorize|verify' wix-login.log; then
+                break
+              fi
+            done
+
+            tr -d '\r' < wix-login.log | sed -E 's/\x1B\[[0-9;?]*[ -\/]*[@-~]//g' | tail -120 > wix-login-clean.txt || true
+            {
+              echo "Wix CLI device login for run $GITHUB_RUN_ID"
+              echo
+              echo 'Open/complete the login using the URL and one-time code below:'
+              echo
+              echo '~~~'
+              cat wix-login-clean.txt
+              echo '~~~'
+            } > issue-body.md
+
+            issue_url=$(gh issue create               --repo "$GITHUB_REPOSITORY"               --title "Wix device login $GITHUB_RUN_ID"               --body-file issue-body.md)
+            echo "Device login details posted: $issue_url"
+
+            wait "$login_pid"
           fi
 
       - name: Release to existing Wix site
@@ -80,7 +116,7 @@ jobs:
           set -euo pipefail
           url="https://instant-tinqeohgsacy-liemtv87-1408.wix-site-host.com/xoso.html"
           for i in 1 2 3 4 5 6; do
-            if curl -fL --no-cache "$url?verify=$GITHUB_RUN_ID-$i" -o live.html; then
+            if curl -fL "$url?verify=$GITHUB_RUN_ID-$i" -o live.html; then
               if grep -q 'V29 / V10' live.html && grep -q 'LOTTERY_CONSENSUS_V10_20261001' live.html; then
                 echo "LIVE_V29_V10_OK"
                 exit 0
