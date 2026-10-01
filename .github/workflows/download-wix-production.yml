@@ -1,4 +1,4 @@
-name: Download Wix production bundle
+name: Download Wix lottery production bundle
 on:
   push:
     paths:
@@ -8,13 +8,13 @@ jobs:
   download:
     runs-on: ubuntu-latest
     steps:
-      - name: Download current Wix production project
+      - name: Download current Wix lottery production project
         run: |
           set -euxo pipefail
-          curl -fL --retry 3 --connect-timeout 20 -o wix-production.zip "https://www.wix.com/_api/wixstro-deployments/v1/instant-sites/d8cbc40b-c503-4b52-82fb-54a7f703ad7f/download.zip"
-          unzip -l wix-production.zip
+          curl -fL --retry 3 --connect-timeout 20 -o wix-lottery-production.zip "https://www.wix.com/_api/wixstro-deployments/v1/instant-sites/2bfa787e-7508-43cf-8ddc-2ebaac8dbafe/download.zip"
+          unzip -l wix-lottery-production.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: wix-production-current
-          path: wix-production.zip
+          name: wix-lottery-production-current
+          path: wix-lottery-production.zip
           retention-days: 1
