@@ -1,0 +1,39 @@
+name: Vietlott Trigger Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vietlott-trigger-once.yml'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Force Vietlott R18 production run
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Triggering Vietlott production..."
+          curl -fsS --retry 3 --retry-delay 5 "https://vietlott-r16.floot.app/_api/vietlott-run?force=1" | tee /tmp/run.json
+          echo
+          echo "Polling status..."
+          for i in $(seq 1 20); do
+            sleep 30
+            code=$(curl -sS -o /tmp/status.json -w "%{http_code}" "https://vietlott-r16.floot.app/_api/vietlott-status")
+            echo "poll=$i http=$code"
+            cat /tmp/status.json
+            echo
+            if grep -q '"success":' /tmp/status.json && ! grep -q '"success":null' /tmp/status.json; then
+              echo "Vietlott run finished"
+              exit 0
+            fi
+            if grep -q '"failed":"' /tmp/status.json; then
+              echo "Vietlott run reported failure"
+              exit 1
+            fi
+          done
+          echo "Timed out waiting for completion"
+          exit 1
