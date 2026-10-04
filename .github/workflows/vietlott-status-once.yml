@@ -1,0 +1,35 @@
+name: Vietlott Status Once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/vietlott-status-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Read Vietlott production status
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS "https://vietlott-r16.floot.app/_api/vietlott-status" -o vietlott-status.json
+          cat vietlott-status.json
+      - name: Save status snapshot
+        shell: bash
+        run: |
+          git config user.name "vietlott-status-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vietlott-status.json
+          git commit -m "ops: snapshot Vietlott status" || exit 0
+          git push
