@@ -1,7 +1,0 @@
-// Shadow challengers: same locked line and odds as the original R38 methods.
-export const NEW_METHODS=['power_consensus','log_pool','form_poisson'];
-export function powerProbability(leftOdd,rightOdd){const a=1/leftOdd,b=1/rightOdd;if(!(a>0&&a<1&&b>0&&b<1))return .5;let lo=0,hi=32;for(let i=0;i<60;i++){const k=(lo+hi)/2;if(a**k+b**k>1)lo=k;else hi=k}return a**((lo+hi)/2)}
-export function challengerProbabilities(pairs){const ps=pairs.map(x=>powerProbability(x.lo,x.ro)),logits=pairs.map(x=>{const a=1/x.lo,b=1/x.ro,p=Math.max(.001,Math.min(.999,a/(a+b)));return Math.log(p/(1-p))});return {power_consensus:ps.reduce((a,b)=>a+b,0)/ps.length,log_pool:1/(1+Math.exp(-logits.reduce((a,b)=>a+b,0)/logits.length))}}
-export function netProfit(grade,odd){return Number.isFinite(odd)&&odd>1?(grade>0?grade*(odd-1):grade):null}
-export function eligibleMethod(id,box){if(!NEW_METHODS.includes(id))return true;const ev=(box?.[id]?.events||[]).filter(x=>Number.isFinite(x.profit)&&Number.isFinite(x.baselineProfit)).slice(-120);if(ev.length<60)return false;const blocks=[ev.slice(0,Math.floor(ev.length/2)),ev.slice(Math.floor(ev.length/2))];return blocks.every(b=>b.reduce((s,x)=>s+x.profit-x.baselineProfit,0)/b.length>.02&&b.reduce((s,x)=>s+x.g-x.baselineGrade,0)>0)}
-export function roiSummary(rec){const ev=(rec?.events||[]).filter(x=>Number.isFinite(x.profit));return {n:ev.length,roi:ev.length?100*ev.reduce((a,x)=>a+x.profit,0)/ev.length:null}}

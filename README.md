@@ -33,11 +33,3 @@ Optional safety flags:
 Football checks every minute, sends when kickoff is about 20 minutes away (18–22 minute window), and enforces at most one football message per 60 minutes.
 
 Lottery windows use Vietnam time: XSMN 16:10–16:14, XSMT 17:10–17:14, XSMB 18:10–18:14.
-
-## Source
-
-The known full R55 source package is preserved at:
-
-`source/Keo_R55_FULL_FROM_R46-17_CACHE_AUTO_BACKGROUND.zip`
-
-Runtime secrets are intentionally not committed.
