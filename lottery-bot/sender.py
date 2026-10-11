@@ -176,6 +176,23 @@ def due(now,region,phase):
     after=REGIONS[region]["after"]
     return after<=t<=dt_time(21,0) if region=="mb" else after<=t<=dt_time(19 if region=="mn" else 20,15)
 
+def verify_telegram_access(token):
+    if not token:
+        print("TELEGRAM_TOKEN_MISSING");return False
+    base="https://api.telegram.org/bot"+token
+    try:
+        me=http_json(base+"/getMe")
+        user=me.get("result",{})
+        if me.get("ok") is not True or not isinstance(user.get("id"),int):
+            print("TELEGRAM_INVALID_TOKEN");return False
+        member=http_json(base+"/getChatMember?chat_id="+CHAT+"&user_id="+str(user["id"]))
+        role=member.get("result",{}).get("status","")
+        print("TELEGRAM_ACCESS_VERIFIED",user.get("username",""),"role",role)
+        return member.get("ok") is True and role in ("administrator","creator","member")
+    except Exception as exc:
+        print("TELEGRAM_ACCESS_BLOCKED",type(exc).__name__)
+        return False
+
 def main():
     now=datetime.now(VN);day=now.date().isoformat()
     override=os.getenv("BOT_REGION","").lower()
@@ -183,7 +200,12 @@ def main():
     forced_phase=os.getenv("BOT_PHASE","")
     dry=os.getenv("DRY_RUN")=="1"
     print("KQ247_GROUP_SENDER_GITHUB",now.isoformat(),"dry_run",dry)
-    if not dry and not os.getenv("TELEGRAM_LOTTERY_BOT_TOKEN"):
+    token=os.getenv("TELEGRAM_LOTTERY_BOT_TOKEN","").strip()
+    if token and not verify_telegram_access(token):
+        print("BLOCKED: Telegram cannot confirm bot and group membership; NO send");return 3
+    if not dry and os.getenv("KQ247_LOTTERY_CUTOVER")!="enabled":
+        print("SAFE_MODE: new GitHub sender is not yet designated primary; NO send");return 3
+    if not dry and not token:
         print("BLOCKED: GitHub Actions secret TELEGRAM_LOTTERY_BOT_TOKEN not configured; NO send");return 3
     attempts=0
     errors=0
