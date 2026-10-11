@@ -1,0 +1,139 @@
+{
+  "scope": "XSMB ONLY / RESEARCH-ONLY; DO NOT CONNECT TO PRODUCTION",
+  "asof": "2026-10-11",
+  "rules": {
+    "per_day_source": "500 latest fully completed actual XSMB draws, strictly predating target draw",
+    "reused_prior_forecasts": false,
+    "exclude_appeared_on_both_latest_actual_draws": true,
+    "ordinary_picks": 3,
+    "double_picks": 2,
+    "preserve_urls_and_license": true,
+    "do_not_change_locked_snapshots": true,
+    "do_not_modify_xsmt_xsmn": true
+  },
+  "experiment_1": {
+    "name": "24-signal, 7 specialized ensemble families",
+    "features": [
+      "F7",
+      "F14",
+      "F30",
+      "F60",
+      "F90",
+      "F180",
+      "F500",
+      "EWMA6",
+      "EWMA12",
+      "EWMA24",
+      "EWMA48",
+      "short_gap",
+      "recent_head_tail",
+      "position_sum",
+      "position_diff",
+      "reversed_digit",
+      "three_day_special_triangle",
+      "historical_analog",
+      "same_weekday",
+      "same_day_of_month",
+      "F7_minus_F90",
+      "F30_minus_F365",
+      "previous_actual_count",
+      "double_number_indicator"
+    ],
+    "specialist_groups": 7,
+    "configs_tested": 2400,
+    "train": {
+      "period": "2022-08-17 to 2024-01-02",
+      "best": {
+        "hit_days": 316,
+        "days": 500
+      }
+    },
+    "validation": {
+      "period": "2024-01-03 to 2025-05-24",
+      "selected": {
+        "hit_days": 304,
+        "days": 500
+      }
+    },
+    "independent_holdout": {
+      "period": "2025-05-25 to 2026-10-10",
+      "selected": {
+        "hit_days": 261,
+        "days": 500
+      }
+    },
+    "decision": "REJECT: below target and legal random benchmark"
+  },
+  "experiment_2": {
+    "name": "18-method independent ranks, score blending/vote threshold/minimum agreement",
+    "families": [
+      "F7",
+      "F14",
+      "F30",
+      "F60",
+      "F90",
+      "F180",
+      "F365",
+      "F500",
+      "EWMA10",
+      "EWMA24",
+      "gap",
+      "head_tail",
+      "triangle",
+      "prize_position_sum_difference",
+      "reverse",
+      "analog_successor",
+      "weekday",
+      "month_day"
+    ],
+    "combination_types": [
+      "weighted rank votes",
+      "threshold voting consensus",
+      "minimum agreement"
+    ],
+    "configs_tested": 2400,
+    "train": {
+      "period": "2022-08-17 to 2024-01-02",
+      "best": {
+        "hit_days": 315,
+        "days": 500
+      }
+    },
+    "validation": {
+      "period": "2024-01-03 to 2025-05-24",
+      "selected": {
+        "hit_days": 304,
+        "days": 500
+      }
+    },
+    "independent_holdout": {
+      "period": "2025-05-25 to 2026-10-10",
+      "selected": {
+        "hit_days": 286,
+        "at_least_two_occurrence_days": 108,
+        "total_occurrences": 418,
+        "identical_consecutive_triplets": 18,
+        "days": 500
+      }
+    },
+    "selected_model": {
+      "trial_id": 661,
+      "method_indices": [
+        6,
+        5,
+        8,
+        17
+      ],
+      "consensus_type": "threshold voting",
+      "not_promoted": true
+    },
+    "decision": "REJECT: below 350-360/500"
+  },
+  "acceptance": {
+    "required_500_day_hit_days_min": 350,
+    "max": 360,
+    "need_locked_independent_chronological_replay": true,
+    "random_eligible_baseline_expected_500": 280.318,
+    "warning": "in-sample retrospective maxima cannot be considered future performance; exact historical R84 339/500 code absent"
+  }
+}
