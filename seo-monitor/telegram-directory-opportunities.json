@@ -1,0 +1,197 @@
+{
+  "purpose": "Free directory opportunities for only two KQ247 Telegram groups; NO submissions to third-party websites are represented as complete without real confirmation.",
+  "destinations": {
+    "football": "https://t.me/keochuyengia79",
+    "lottery": "https://t.me/xsbm999"
+  },
+  "status_codes": [
+    "NOT_SUBMITTED",
+    "SUBMITTED_PENDING_REVIEW",
+    "PUBLISHED_VERIFIED",
+    "REJECTED",
+    "BLOCKED_LOGIN",
+    "BLOCKED_QUOTA",
+    "INELIGIBLE"
+  ],
+  "groups": {
+    "football": {
+      "name": "KQ247 • Nhóm bóng đá, lịch trận và kèo châu Á/Tài Xỉu miễn phí",
+      "short_description": "Nhóm bóng đá KQ247 miễn phí: lịch trận, thông tin trước trận, kèo châu Á và Tài Xỉu tham khảo.",
+      "category": "Sports",
+      "language": "Vietnamese",
+      "tags": [
+        "bóng đá",
+        "soi kèo",
+        "lịch trận",
+        "tài xỉu",
+        "Vietnam"
+      ]
+    },
+    "lottery": {
+      "name": "KQ247 • Nhóm xổ số 3 miền MB MT MN miễn phí",
+      "short_description": "Nhóm xổ số KQ247 miễn phí: kết quả hôm nay, XSMB XSMT XSMN và phân tích dự đoán tham khảo.",
+      "category": "Entertainment / Information",
+      "language": "Vietnamese",
+      "tags": [
+        "xổ số",
+        "xsmb",
+        "xsmt",
+        "xsmn",
+        "Vietnam"
+      ]
+    }
+  },
+  "existing_confirmed_owned_links": [
+    "https://github.com/liemtv87-lang/r55-system",
+    "https://github.com/liemtv87-lang/keo-bong-da-v763",
+    "https://github.com/liemtv87-lang/kq247-xoso-1930-engine",
+    "https://github.com/liemtv87-lang/vietlott-auto-hoc"
+  ],
+  "note": "The 4 GitHub pages share one referring domain (github.com); do not count as four different referring domains.",
+  "external_directory_opportunities": [
+    {
+      "name": "Groupsgyani",
+      "submission_url": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+      "requirement": "free, no login; editorial review; category and tags; 120-character description",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TeleGroups",
+      "submission_url": "https://telegramgroup.arkservices.in/submit",
+      "requirement": "free, reviewed ~24h; image required and some form fields",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TelegramGroups.co",
+      "submission_url": "https://telegramgroups.co/",
+      "requirement": "free submission reported; find Submit page; automated review",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "Telegram Group DB",
+      "submission_url": "https://telegram-group.org/SubmitGroup.php",
+      "requirement": "public submit page; invite and category inputs",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TeleJoiner",
+      "submission_url": "https://telejoiner.com/submit",
+      "requirement": "public submit form; category, language, country",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TeleVerse",
+      "submission_url": "https://televerse.click/",
+      "requirement": "free submit advertised; verify site submission link",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TG Links",
+      "submission_url": "https://tglinks.net/en/",
+      "requirement": "directory claims public group submission and editorial review",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TGStat",
+      "submission_url": "https://tgstat.com/add/channel",
+      "requirement": "free public add-channel form, requires country/language/category",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "Telegram Groups directory",
+      "submission_url": "https://www.telegram-groups.com/",
+      "requirement": "free submission claimed; site states minimum 100 members for most listings",
+      "football_eligible": true,
+      "lottery_eligible": false,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "Telegradia",
+      "submission_url": "https://telegradia.com/",
+      "requirement": "free listing but requires Telegram login; manual identity authentication",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    },
+    {
+      "name": "Metricgram",
+      "submission_url": "https://metricgram.com/features/community_directory",
+      "requirement": "public directory free trial/listing may require sign-up; needs verification",
+      "football_eligible": false,
+      "lottery_eligible": false,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12"
+    }
+  ],
+  "automation_limit": "No authenticated form-submitting browser access and Firecrawl balance is negative as of 2026-10-12; do not assert any external listing has been submitted until a final public listing URL is observed."
+}
