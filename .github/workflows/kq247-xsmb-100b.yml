@@ -1,0 +1,39 @@
+name: KQ247 XSMB Triangle 100B Research
+on:
+  push:
+    paths:
+      - ".github/workflows/kq247-xsmb-100b.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  xsmb-100b-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download independent public XSMB full-prize history
+        shell: bash
+        run: |
+          curl --retry 3 --retry-delay 2 -fsSL --max-time 90 \
+            'https://raw.githubusercontent.com/khiemdoan/vietnam-lottery-xsmb-analysis/refs/heads/main/data/xsmb.csv' \
+            -o /tmp/xsmb_full.csv
+          test "$(wc -l </tmp/xsmb_full.csv)" -ge 2001
+          tail -n 1 /tmp/xsmb_full.csv | cut -c 1-25
+      - name: Compile 200 million formula research
+        shell: bash
+        run: |
+          g++ -O3 -std=c++20 -pthread research/lottery/mb_triangle_100b.cpp -o /tmp/mb_triangle_100b
+      - name: Run 100.352 billion chronological formula-day checks
+        shell: bash
+        run: |
+          set -o pipefail
+          /tmp/mb_triangle_100b /tmp/xsmb_full.csv 4 | tee mb_triangle_100b_report.json
+      - name: Save research-only report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xsmb-100b-research-report
+          path: mb_triangle_100b_report.json
+          if-no-files-found: ignore
+          retention-days: 7
