@@ -1,4 +1,4 @@
-name: KQ247 SEO technical audit (independent)
+name: KQ247 SEO • 2 Telegram groups only
 on:
   workflow_dispatch:
   push:
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Audit 17 SEO objectives and technical endpoints
+      - name: Check two public Telegram groups only
         run: python3 seo-monitor/audit.py
       - name: Add GitHub job summary
         if: always()
