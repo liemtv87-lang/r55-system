@@ -5,6 +5,8 @@ No Supabase dependency, authentication, IndexNow submissions, or synthetic traff
 """
 import json
 import re
+import time
+from urllib.parse import parse_qs, urlsplit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -15,6 +17,8 @@ from urllib.request import Request, urlopen
 HERE = Path(__file__).parent
 TIMEOUT = 9
 MAX_WORKERS = 7
+RETRY_DELAY = 0.45
+TRACKING_KEYS = ('f', 'id', 'uid', 'uagt', 'invite_type', 'path')
 TECH = [
     {"name":"KQ247 homepage","url":"https://www.kq247.com/","kind":"html"},
     {"name":"KQ247 robots.txt","url":"https://www.kq247.com/robots.txt","kind":"robots"},
@@ -57,6 +61,14 @@ class PageHead(HTMLParser):
         if self.in_title:
             self.title += data
 
+def changed_tracking_params(original_url, final_url):
+    """Flag changed query strings without claiming a lost conversion."""
+    before = parse_qs(urlsplit(original_url).query, keep_blank_values=True)
+    after = parse_qs(urlsplit(final_url or original_url).query, keep_blank_values=True)
+    return [key for key in TRACKING_KEYS
+            if key in before and before[key] != after.get(key)]
+
+
 def audit(target):
     kind, name, url = target["kind"], target["name"], target["url"]
     result = {"name":name,"kind":kind,"url":url,"http_status":None,"final_url":None,
@@ -66,20 +78,31 @@ def audit(target):
         "Accept":"text/html,application/xml,text/plain;q=0.8,*/*;q=0.5",
     })
     body = b""
-    try:
-        with urlopen(req, timeout=TIMEOUT) as resp:
-            result["http_status"] = resp.getcode()
-            result["final_url"] = resp.geturl()
-            result["content_type"] = resp.headers.get("Content-Type","")
-            body = resp.read(96000 if kind in ("html","sitemap") else 24000)
-    except HTTPError as ex:
-        result["http_status"] = ex.code
-        result["final_url"] = ex.geturl()
-        result["content_type"] = ex.headers.get("Content-Type","")
-    except (URLError, TimeoutError, OSError, ValueError) as ex:
-        result["issues"].append("Connection problem: " + type(ex).__name__)
-        result["grade"] = "FAIL"
-        return result
+    for attempt in range(2):
+        try:
+            with urlopen(req, timeout=TIMEOUT) as resp:
+                result["http_status"] = resp.getcode()
+                result["final_url"] = resp.geturl()
+                result["content_type"] = resp.headers.get("Content-Type","")
+                body = resp.read(96000 if kind in ("html","sitemap") else 24000)
+            if attempt:
+                result["note"] = "Recovered after one bounded network retry"
+            break
+        except HTTPError as ex:
+            result["http_status"] = ex.code
+            result["final_url"] = ex.geturl()
+            result["content_type"] = ex.headers.get("Content-Type","")
+            break  # Do not retry HTTP 403/429.
+        except (URLError, TimeoutError, OSError, ValueError) as ex:
+            if attempt == 0:
+                time.sleep(RETRY_DELAY)
+                continue
+            result["issues"].append(
+                "Connection problem after 2 attempts: " +
+                type(ex).__name__ + " (" + str(getattr(ex, "reason", ex))[:110] + ")"
+            )
+            result["grade"] = "FAIL"
+            return result
     status = result["http_status"]
     if status == 403 or status == 429:
         result["grade"] = "WARN"
@@ -98,7 +121,15 @@ def audit(target):
         # Public HTML availability does not prove ownership, rankings,
         # affiliate attribution, Telegram member counts, or bot functionality.
         if kind == "affiliate" and result["final_url"] != url:
-            result["note"] = "Redirected; confirm affiliate tracking manually if needed"
+            changed = changed_tracking_params(url, result["final_url"])
+            if changed:
+                result["grade"] = "WARN"
+                result["issues"].append(
+                    "Redirect changed query parameters (" + ",".join(changed) +
+                    "); HTTP cannot confirm affiliate attribution"
+                )
+            else:
+                result["note"] = "Redirected; affiliate attribution not independently verified"
         if kind.startswith("telegram"):
             result["note"] = "Public t.me page only; no member-growth or bot-message verification"
         return result
@@ -159,10 +190,15 @@ def main():
     out = HERE/"out"
     out.mkdir(parents=True,exist_ok=True)
     grades = {x:sum(t["grade"]==x for t in results[:17]) for x in ("OK","WARN","FAIL")}
+    technical_grades = {x:sum(t["grade"]==x for t in results[17:])
+                        for x in ("OK","WARN","FAIL")}
     report = {
         "checked_at_utc":when,
         "objective_count":17,"affiliate_count":14,"telegram_group_count":2,"sales_bot_count":1,
         "objective_grades":grades,
+        "technical_grades":technical_grades,
+        "alerts":[{"name":x["name"],"grade":x["grade"],"issues":x["issues"]}
+                  for x in results if x["grade"] != "OK"],
         "objective_results":results[:17],
         "technical_results":results[17:],
         "disclaimer":"HTTP health only; not search ranking, impressions, link ownership, click conversion or member growth. 403 can be bot protection.",
@@ -174,7 +210,9 @@ def main():
         "Checked (UTC): **"+when+"**",
         "",
         "**Scope: 14 destination links + 2 Telegram groups + 1 sales bot.**",
-        "Statuses: OK "+str(grades["OK"])+", WARN "+str(grades["WARN"])+", FAIL "+str(grades["FAIL"])+".",
+        "17 destinations: OK "+str(grades["OK"])+", WARN "+str(grades["WARN"])+", FAIL "+str(grades["FAIL"])+".",
+        "6 technical endpoints: OK "+str(technical_grades["OK"])+", WARN "+
+        str(technical_grades["WARN"])+", FAIL "+str(technical_grades["FAIL"])+".",
         "",
         "## 17 objective URLs",
         "",
@@ -183,13 +221,21 @@ def main():
     lines += [table_row(x) for x in results[:17]]
     lines += ["","## Six technical KQ247 sites/endpoints","","| Item | HTTP | Grade | Findings |","|---|---:|---|---|"]
     lines += [table_row(x) for x in results[17:]]
+    lines += ["", "## Actionable warnings (read-only)", ""]
+    for item in report["alerts"]:
+        lines.append("- **"+item["grade"]+" — "+item["name"]+"**: "+
+                     ("; ".join(item["issues"]) or "No issue details"))
+    if not report["alerts"]:
+        lines.append("- None detected in this check.")
     lines += ["",
         "## Measurement limitations",
         "",
         "- Availability is NOT Google indexing, ranking, impressions or clicks. Query GSC separately.",
         "- External links are NOT user-owned domains unless independently verified; we cannot edit their onsite SEO.",
         "- Public Telegram previews do not confirm messages, membership counts or new members.",
-        "- 403 may be anti-bot protection; never describe it as confirmed outage.",
+        "- 403 and 429 may be anti-bot protection; never describe them as confirmed outages.",
+        "- Retry only transient network failures once; never retry rate-limited requests.",
+        "- Changed tracking parameters on redirects are verification alerts, NOT proof of lost conversions.",
         "- Zero login, zero fake visits/clicks, zero IndexNow, zero Supabase requests, and zero change to public destinations.",
         ""]
     text = "\n".join(lines)
