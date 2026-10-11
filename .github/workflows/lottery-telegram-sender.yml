@@ -33,6 +33,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   sender:
+    # Guard: cron runs are skipped until the secret is verified and the old sender is disabled.
+    if: ${{ github.event_name != 'schedule' || false }}
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
