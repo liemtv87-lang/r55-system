@@ -98,8 +98,9 @@ def draw_results(day,region,expected_stations):
             raise ValueError("incomplete draw "+name)
         if (nums[0] if region=="mb" else nums[-1])!=special:
             raise ValueError("wrong special draw "+name)
-        if name in found: raise ValueError("duplicate station "+name)
+        if name in found: continue  # archive pages may repeat previous stations; take first dated block only
         found[name]={"special":special,"all2":[x[-2:] for x in nums]}
+        if len(found)==len(expected_stations): break
     if {station_name(k) for k in found}!={station_name(k) for k in expected_stations}:
         raise ValueError("missing stations from actual draw")
     return found
@@ -185,9 +186,10 @@ def main():
     if not dry and not os.getenv("TELEGRAM_LOTTERY_BOT_TOKEN"):
         print("BLOCKED: GitHub Actions secret TELEGRAM_LOTTERY_BOT_TOKEN not configured; NO send");return 3
     attempts=0
+    errors=0
     for region in target_regions:
         for phase in (["pre","result"] if forced_phase not in ("pre","result") else [forced_phase]):
-            if not dry and not due(now,region,phase): continue
+            if not forced_phase and not due(now,region,phase): continue
             print("CHECK",region,phase)
             try:
                 stations,fp=read_snapshot(day,region)
@@ -198,7 +200,8 @@ def main():
                 attempts+=1
             except Exception as ex:
                 print("REGION_FAIL",region,phase,type(ex).__name__,str(ex)[:150])
+                errors+=1
                 if forced_phase: return 1
-    return 0 if attempts or not forced_phase else 1
+    return 1 if errors else (0 if attempts or not forced_phase else 1)
 
 if __name__=="__main__":sys.exit(main())
