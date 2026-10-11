@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KQ247: bounded read-only SEO/link audit of 17 targets + 6 technical endpoints.
+"""KQ247: bounded read-only SEO/link audit of exactly 17 user-defined destinations.
 External URLs are NOT sites the operator can optimize or control.
 No Supabase dependency, authentication, IndexNow submissions, or synthetic traffic.
 """
@@ -19,15 +19,6 @@ TIMEOUT = 9
 MAX_WORKERS = 7
 RETRY_DELAY = 0.45
 TRACKING_KEYS = ('f', 'id', 'uid', 'uagt', 'invite_type', 'path')
-TECH = [
-    {"name":"KQ247 homepage","url":"https://www.kq247.com/","kind":"html"},
-    {"name":"KQ247 robots.txt","url":"https://www.kq247.com/robots.txt","kind":"robots"},
-    {"name":"KQ247 sitemap.xml","url":"https://www.kq247.com/sitemap.xml","kind":"sitemap"},
-    {"name":"Football client","url":"https://kq247-football-live.onrender.com/client.html","kind":"html"},
-    {"name":"Lottery client","url":"https://kq247-xoso-khach-v29.onrender.com/","kind":"html"},
-    {"name":"Vietlott client","url":"https://snapdeploy-vietlott-bridge-df5xvz.v2.appdeploy.ai/client.html","kind":"html"}
-]
-
 class PageHead(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -180,7 +171,7 @@ def main():
     assert len(objectives)==17
     assert [t["slot"] for t in objectives]==list(range(1,18))
     assert sum(t["kind"]=="affiliate" for t in objectives)==14
-    targets = objectives + TECH
+    targets = objectives
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
         futures = {pool.submit(audit,t):i for i,t in enumerate(targets)}
         results = [None]*len(targets)
@@ -190,17 +181,14 @@ def main():
     out = HERE/"out"
     out.mkdir(parents=True,exist_ok=True)
     grades = {x:sum(t["grade"]==x for t in results[:17]) for x in ("OK","WARN","FAIL")}
-    technical_grades = {x:sum(t["grade"]==x for t in results[17:])
-                        for x in ("OK","WARN","FAIL")}
     report = {
         "checked_at_utc":when,
         "objective_count":17,"affiliate_count":14,"telegram_group_count":2,"sales_bot_count":1,
         "objective_grades":grades,
-        "technical_grades":technical_grades,
+        "priority_telegram_groups":[r for r in results if r["kind"]=="telegram_group"],
         "alerts":[{"name":x["name"],"grade":x["grade"],"issues":x["issues"]}
                   for x in results if x["grade"] != "OK"],
-        "objective_results":results[:17],
-        "technical_results":results[17:],
+        "objective_results":results,
         "disclaimer":"HTTP health only; not search ranking, impressions, link ownership, click conversion or member growth. 403 can be bot protection.",
     }
     (out/"seo-hourly.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
@@ -209,18 +197,21 @@ def main():
         "",
         "Checked (UTC): **"+when+"**",
         "",
-        "**Scope: 14 destination links + 2 Telegram groups + 1 sales bot.**",
-        "17 destinations: OK "+str(grades["OK"])+", WARN "+str(grades["WARN"])+", FAIL "+str(grades["FAIL"])+".",
-        "6 technical endpoints: OK "+str(technical_grades["OK"])+", WARN "+
-        str(technical_grades["WARN"])+", FAIL "+str(technical_grades["FAIL"])+".",
+        "**Phạm vi DUY NHẤT: 14 link đích + 2 nhóm Telegram + 1 bot bán hàng. Không có website KQ247, robots hoặc sitemap ngoài yêu cầu.**",
+        "17 mục: OK "+str(grades["OK"])+", WARN "+str(grades["WARN"])+", FAIL "+str(grades["FAIL"])+".",
+        "",
+        "## Ưu tiên quảng bá: 2 nhóm Telegram",
+        "",
+        "- **Nhóm bóng đá KQ247**: https://t.me/keochuyengia79 — chia sẻ lịch trận, kết quả và phân tích kèo tham khảo.",
+        "- **Nhóm xổ số KQ247**: https://t.me/xsbm999 — thông tin kết quả xổ số và dự đoán tham khảo ba miền.",
+        "",
+        "Mục tiêu: tăng thành viên thực và lượt hiển thị thực; báo cáo kiểm tra link KHÔNG phải số tăng trưởng.",
         "",
         "## 17 objective URLs",
         "",
         "| Item | HTTP | Grade | Findings |","|---|---:|---|---|",
     ]
-    lines += [table_row(x) for x in results[:17]]
-    lines += ["","## Six technical KQ247 sites/endpoints","","| Item | HTTP | Grade | Findings |","|---|---:|---|---|"]
-    lines += [table_row(x) for x in results[17:]]
+    lines += [table_row(x) for x in results]
     lines += ["", "## Actionable warnings (read-only)", ""]
     for item in report["alerts"]:
         lines.append("- **"+item["grade"]+" — "+item["name"]+"**: "+
