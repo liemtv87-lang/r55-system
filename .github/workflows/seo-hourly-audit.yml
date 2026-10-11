@@ -6,7 +6,7 @@ on:
       - 'seo-monitor/**'
       - '.github/workflows/seo-hourly-audit.yml'
   schedule:
-    - cron: '55 * * * *'
+    - cron: '17 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -17,7 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - name: Audit 17 SEO objectives and technical endpoints
         run: python3 seo-monitor/audit.py
       - name: Add GitHub job summary
@@ -26,7 +28,7 @@ jobs:
           if test -f seo-monitor/out/report.md; then cat seo-monitor/out/report.md >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Save hourly audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: seo-hourly-report
           path: seo-monitor/out/
