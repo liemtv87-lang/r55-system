@@ -46,6 +46,7 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.5
       - name: Send after validating locked snapshot and complete draw
         env:
+          KQ247_LOTTERY_CUTOVER: disabled
           TELEGRAM_LOTTERY_BOT_TOKEN: ${{ secrets.TELEGRAM_LOTTERY_BOT_TOKEN || secrets.XS_BOT_TOKEN || secrets.TELEGRAM_GROUP_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
           BOT_REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || '' }}
           BOT_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.phase || '' }}
