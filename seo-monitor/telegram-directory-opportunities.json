@@ -11,7 +11,9 @@
     "REJECTED",
     "BLOCKED_LOGIN",
     "BLOCKED_QUOTA",
-    "INELIGIBLE"
+    "INELIGIBLE",
+    "BLOCKED_PAID_CATEGORY",
+    "BLOCKED_BROWSER"
   ],
   "groups": {
     "football": {
@@ -52,7 +54,7 @@
     {
       "name": "Groupsgyani",
       "submission_url": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
-      "requirement": "free, no login; editorial review; category and tags; 120-character description",
+      "requirement": "Free, no account; direct form with Telegram link, platform, category, 3-5 tags, short description <=120 chars; editorial review ~24h",
       "football_eligible": true,
       "lottery_eligible": true,
       "status": "NOT_SUBMITTED",
@@ -60,12 +62,15 @@
         "football": null,
         "lottery": null
       },
-      "last_checked": "2026-10-12"
+      "last_checked": "2026-10-12",
+      "last_verified_source": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+      "form_manual_required": true,
+      "confirmation": "NONE"
     },
     {
       "name": "TeleGroups",
       "submission_url": "https://telegramgroup.arkservices.in/submit",
-      "requirement": "free, reviewed ~24h; image required and some form fields",
+      "requirement": "Free reviewed listing; image JPG/PNG/WebP <=5MB mandatory, name/type/platform/category/link/description; manual form required",
       "football_eligible": true,
       "lottery_eligible": true,
       "status": "NOT_SUBMITTED",
@@ -73,12 +78,14 @@
         "football": null,
         "lottery": null
       },
-      "last_checked": "2026-10-12"
+      "last_checked": "2026-10-12",
+      "form_manual_required": true,
+      "last_verified_source": "https://telegramgroup.arkservices.in/submit"
     },
     {
       "name": "TelegramGroups.co",
-      "submission_url": "https://telegramgroups.co/",
-      "requirement": "free submission reported; find Submit page; automated review",
+      "submission_url": "https://telegramgroups.co/submit",
+      "requirement": "Conflicting free/premium text on page: category Betting/Crypto/Finance explicitly $49 fee; overall form also displays $9.99 paid package. Do not choose paid listing, cannot confirm group will qualify free.",
       "football_eligible": true,
       "lottery_eligible": true,
       "status": "NOT_SUBMITTED",
@@ -86,7 +93,10 @@
         "football": null,
         "lottery": null
       },
-      "last_checked": "2026-10-12"
+      "last_checked": "2026-10-12",
+      "fee_warning": "Paid category auto-detected even if Sports chosen, and may label betting or lottery as premium. NO PAYMENT.",
+      "form_manual_required": true,
+      "last_verified_source": "https://telegramgroups.co/submit"
     },
     {
       "name": "Telegram Group DB",
@@ -104,7 +114,7 @@
     {
       "name": "TeleJoiner",
       "submission_url": "https://telejoiner.com/submit",
-      "requirement": "public submit form; category, language, country",
+      "requirement": "Free direct form, category, country Viet Nam, Vietnamese, tags and agree terms; editorial review",
       "football_eligible": true,
       "lottery_eligible": true,
       "status": "NOT_SUBMITTED",
@@ -112,7 +122,9 @@
         "football": null,
         "lottery": null
       },
-      "last_checked": "2026-10-12"
+      "last_checked": "2026-10-12",
+      "form_manual_required": true,
+      "last_verified_source": "https://telejoiner.com/submit"
     },
     {
       "name": "TeleVerse",
@@ -143,7 +155,7 @@
     {
       "name": "TGStat",
       "submission_url": "https://tgstat.com/add/channel",
-      "requirement": "free public add-channel form, requires country/language/category",
+      "requirement": "Public channel/group add form with country Viet Nam, content language Vietnamese, category. May require additional verification.",
       "football_eligible": true,
       "lottery_eligible": true,
       "status": "NOT_SUBMITTED",
@@ -151,7 +163,9 @@
         "football": null,
         "lottery": null
       },
-      "last_checked": "2026-10-12"
+      "last_checked": "2026-10-12",
+      "form_manual_required": true,
+      "last_verified_source": "https://tgstat.com/add/channel"
     },
     {
       "name": "Telegram Groups directory",
@@ -191,7 +205,76 @@
         "lottery": null
       },
       "last_checked": "2026-10-12"
+    },
+    {
+      "name": "TgDio Vietnam",
+      "submission_url": "https://vi.tgdio.com/",
+      "requirement": "Vietnamese-language Telegram directory; Add Media after owner authentication. Base listing described as free; login required.",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "BLOCKED_LOGIN",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12",
+      "form_manual_required": true,
+      "last_verified_source": "https://vi.tgdio.com/"
+    },
+    {
+      "name": "Telegram Directory tdirectory.me",
+      "submission_url": "https://tdirectory.me/search/vietnamese",
+      "requirement": "Directory advertises group submission and SEO listings; exact free eligibility/submit flow not validated.",
+      "football_eligible": true,
+      "lottery_eligible": true,
+      "status": "NOT_SUBMITTED",
+      "listing_urls": {
+        "football": null,
+        "lottery": null
+      },
+      "last_checked": "2026-10-12",
+      "form_manual_required": true,
+      "last_verified_source": "https://tdirectory.me/search/vietnamese"
     }
   ],
-  "automation_limit": "No authenticated form-submitting browser access and Firecrawl balance is negative as of 2026-10-12; do not assert any external listing has been submitted until a final public listing URL is observed."
+  "automation_limit": "Browser form submission still blocked: Opera Browser connector not connected; Firecrawl remainingCredits -1000 as of 2026-10-12. Metricool native Facebook publishing is independently connected and in use; paid directory categories are NEVER activated.",
+  "free_promotion_placements": [
+    {
+      "provider": "Metricool",
+      "network": "Facebook Page (connected)",
+      "brandId": "7091847",
+      "public_post_url": null,
+      "posting_mode": "organic scheduling no paid boost",
+      "schedule_date": "2026-10-12",
+      "posts": [
+        {
+          "id": 393497063,
+          "when_local": "03:30",
+          "status": "PENDING",
+          "targets": [
+            "https://t.me/keochuyengia79",
+            "https://t.me/xsbm999"
+          ]
+        },
+        {
+          "id": 393497636,
+          "when_local": "10:05",
+          "status": "PENDING",
+          "targets": [
+            "https://t.me/xsbm999"
+          ]
+        },
+        {
+          "id": 393497662,
+          "when_local": "12:05",
+          "status": "PENDING",
+          "targets": [
+            "https://t.me/keochuyengia79"
+          ]
+        }
+      ],
+      "audit_note": "Pending Metricool auto-publish, not confirmed Facebook live posts. Confirm via provider after publish."
+    }
+  ],
+  "updated_at": "2026-10-12"
 }
