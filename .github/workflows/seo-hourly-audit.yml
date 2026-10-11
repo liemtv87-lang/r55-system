@@ -6,7 +6,7 @@ on:
       - 'seo-monitor/**'
       - '.github/workflows/seo-hourly-audit.yml'
   schedule:
-    - cron: '5 * * * *'
+    - cron: '55 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
-      - name: Audit public KQ247 endpoints
+      - name: Audit 17 SEO objectives and technical endpoints
         run: python3 seo-monitor/audit.py
       - name: Add GitHub job summary
         if: always()
