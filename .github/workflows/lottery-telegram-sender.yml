@@ -46,13 +46,14 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.5
       - name: Send after validating locked snapshot and complete draw
         env:
-          TELEGRAM_LOTTERY_BOT_TOKEN: ${{ secrets.TELEGRAM_LOTTERY_BOT_TOKEN }}
+          TELEGRAM_LOTTERY_BOT_TOKEN: ${{ secrets.TELEGRAM_LOTTERY_BOT_TOKEN || secrets.XS_BOT_TOKEN || secrets.TELEGRAM_GROUP_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
           BOT_REGION: ${{ github.event_name == 'workflow_dispatch' && inputs.region || '' }}
           BOT_PHASE: ${{ github.event_name == 'workflow_dispatch' && inputs.phase || '' }}
           DRY_RUN: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run)) && '1' || '0' }}
         shell: bash
         run: |
           set -o pipefail
+          if [ -n "$TELEGRAM_LOTTERY_BOT_TOKEN" ]; then echo "TELEGRAM_TOKEN_PRESENT" ; else echo "TELEGRAM_TOKEN_MISSING"; fi
           python3 lottery-bot/sender.py 2>&1 | tee sender.log
       - name: Save diagnostic log (no credentials)
         if: always()
