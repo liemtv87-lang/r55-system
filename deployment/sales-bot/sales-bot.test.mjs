@@ -7,7 +7,7 @@ const src=readFileSync(new URL('./worker.mjs',import.meta.url),'utf8');
 const moduleCode=readFileSync(new URL('./payos-orders.mjs',import.meta.url),'utf8');
 
 test('Bot has copy code, copy URL and three purchase term handlers',()=>{
- for(const part of ['copy_text:{text:', 'SAO CHÉP MÃ', 'SAO CHÉP LINK', 'MUA 1 THÁNG', 'MUA 1 NĂM', 'MUA 2 NĂM',
+ for(const part of ['copy_text:{text:', 'SAO CHÉP MÃ', 'SAO CHÉP LINK', "[30,'1 THÁNG'],[365,'1 NĂM'],[730,'2 NĂM']",
    "callback_data:'buy:'", "cmd.startsWith('buy:')", "callback_data:'mycodes'", "validClientUrl(product)"]){
   assert.ok(src.includes(part),'missing '+part);
  }
