@@ -1,0 +1,48 @@
+name: KQ247 Sales Links and Vietlott VPS Preflight
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-sales-vietlott-vps-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only customer-link schema, bot health, and VPS capacity
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo VPS_CHECK=CONNECTED
+          df -h /opt/kq247 | tail -1
+          free -m | awk 'NR==2 {print "RAM_TOTAL_MB=" $2,"RAM_AVAILABLE_MB=" $7}'
+          docker exec kq247-sales-bot-primary node --input-type=module - <<'JS'
+          import pg from 'pg';
+          const p=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:8000});
+          try {
+            for (const table of ['sales_link_history','sales_config','sales_licenses','sales_plans']) {
+              const q=await p.query('SELECT column_name,data_type FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=$1 ORDER BY ordinal_position',[table]);
+              console.log('SCHEMA',table,JSON.stringify(q.rows));
+            }
+            const c=await p.query("SELECT key,value FROM sales_config WHERE key LIKE '%url%' OR key LIKE '%link%' ORDER BY key");
+            console.log('LINK_CONFIG',JSON.stringify(c.rows));
+            const x=await p.query("SELECT product,link_role,is_current,COUNT(*)::int n FROM sales_link_history GROUP BY product,link_role,is_current ORDER BY product,link_role,is_current");
+            console.log('LINK_COUNTS',JSON.stringify(x.rows));
+            const y=await p.query("SELECT product,duration_days,price_vnd FROM sales_plans WHERE duration_days=30 ORDER BY product");
+            console.log('MONTH_PLANS',JSON.stringify(y.rows));
+            const z=await p.query("SELECT count(*)::int n FROM sales_licenses");
+            console.log('LICENSE_TOTAL',z.rows[0].n);
+          } finally {await p.end()}
+          JS
+          curl -fsS http://127.0.0.1:18087/healthz
+          echo
+          docker inspect kq247-football-staging --format '{{range $name, $v := .NetworkSettings.Networks}}CADDY_NET={{$name}}{{end}}'
+          VPS
