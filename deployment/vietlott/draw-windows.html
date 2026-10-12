@@ -13,7 +13,7 @@ summary{cursor:pointer;font-weight:700} .goals{font-weight:850}.meta{font-size:1
 <header><h1>VIETLOTT • THỐNG KÊ THEO KỲ</h1>
 <p><strong>30 • 60 • 150 • 1.500 kỳ</strong> được tính theo số kỳ mở thưởng, không phải số ngày.</p>
 <p class="goals">Mục tiêu hồi kiểm 30 kỳ: ≥5 Jackpot và ≥2.000 giải nhất trên cả hai sản phẩm. Đây là mục tiêu, không phải dự báo hay bảo đảm trúng.</p>
-<p class="small">Dàn Mega 6/45: 200.000 bộ; Power 6/55: 600.000 bộ. JP1 và JP2 của Power được ghi riêng.</p>
+<p class="small"><strong>Mega 6/45:</strong> mục tiêu 200.000 bộ, không thống kê vượt <strong>220.000</strong>. <strong>Power 6/55:</strong> mục tiêu 600.000 bộ, không thống kê vượt <strong>650.000</strong>. JP1 và JP2 ghi riêng.</p>
 <a href="/">← Về Vietlott</a></header>
 <div id="status" class="small" role="status">Đang tải báo cáo xác thực...</div>
 <div id="panels"></div>
@@ -28,11 +28,15 @@ const fmt=n=>Number(n||0).toLocaleString('vi-VN');
   const d=await r.json();
   if(!d.ok||!d.products)throw new Error('Thiếu kết quả xác thực');
   let output='';
+  const caps={mega645:220000,power655:650000};
+  const budgets={mega645:200000,power655:600000};
   for(const [key,label] of [['mega645','MEGA 6/45'],['power655','POWER 6/55']]){
    output+='<section><h2>'+label+'</h2><table><thead><tr><th>Kỳ</th><th>Đã chấm</th><th>Jackpot</th><th>G1</th></tr></thead><tbody>';
    for(const n of [30,60,150,1500]){
     const x=d.products[key]?.[String(n)];
     if(!x){output+='<tr><td>'+fmt(n)+'</td><td colspan="3">Chưa có báo cáo</td></tr>';continue}
+    const count=Number(x.average_pool||0),hardMax=caps[key],target=budgets[key];
+    if(count>hardMax||count<=0){output+='<tr><td>'+fmt(n)+'</td><td colspan="3" class="warn">KHÔNG THỐNG KÊ: dàn '+fmt(count)+' bộ vượt giới hạn hoặc không hợp lệ (tối đa '+fmt(hardMax)+').</td></tr>';continue}
     const q=x.complete?'Đủ dữ liệu':'Thiếu '+fmt(n-x.available)+' kỳ';
     const jpSuffix=key==='power655'?' <span class="meta">(JP1 '+fmt(x.jackpot1)+' / JP2 '+fmt(x.jackpot2)+')</span>':'';
     output+='<tr><td><b>'+fmt(n)+'</b></td><td class="'+(x.complete?'':'warn')+'">'+fmt(x.available)+'/'+fmt(n)+'<div class="meta">'+q+'</div></td><td class="jp">'+fmt(x.jackpot)+jpSuffix+'</td><td class="g1">'+fmt(x.g1)+'</td></tr>';
@@ -40,8 +44,11 @@ const fmt=n=>Number(n||0).toLocaleString('vi-VN');
    output+='</tbody></table></section>';
   }
   document.getElementById('panels').innerHTML=output;
-  document.getElementById('status').textContent='Đã đọc hồi kiểm walk-forward trên VPS: '+String(d.generated_at||'-');
-  document.getElementById('note').textContent='Không tự cộng hoặc suy đoán kỳ thiếu. Kết quả có thể khác khi dữ liệu hoặc phiên bản bộ lọc thay đổi.';
+  const warn=d.provisional===true||d.matches_production_reducer===false;
+  document.getElementById('status').textContent=(warn?'CẢNH BÁO: HỒI KIỂM THAM CHIẾU, chưa đúng thuật toán dàn cuối — ':'Đã kiểm tra đúng dàn cuối — ')+String(d.generated_at||'-');
+  document.getElementById('status').style.color=warn?'#b42318':'#076b37';
+  document.getElementById('status').style.fontWeight='900';
+  document.getElementById('note').textContent='Chỉ báo kết quả trên dàn cuối ≤220.000 Mega / ≤650.000 Power. Không tính giải của dàn sau lọc hàng triệu bộ. Không suy đoán kỳ thiếu.';
  }catch(e){document.getElementById('status').textContent='Chưa tải được báo cáo: '+e.message}
 })();
 </script></body></html>
