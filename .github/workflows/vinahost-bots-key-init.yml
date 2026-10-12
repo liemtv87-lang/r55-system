@@ -1,4 +1,5 @@
 name: KQ247 VPS Bot Secure Key Setup
+# Revalidate the existing encryption public key for sealed payment credential transfer.
 on:
   workflow_dispatch:
   push:
