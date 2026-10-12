@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {db,closePool} from 'hatchable';
-import {inspectBongdalu,inspectBongdaluHistoryProbe} from 'lib/bongdaluR55.js';
+import {inspectBongdalu,inspectBongdaluHistoryProbe,resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from 'lib/bongdaluR55.js';
 import {processBongdaluChunk} from 'lib/r55ChunkedBuild.js';
 import {gradeAndLearn} from 'lib/r55Ops.js';
 
@@ -101,6 +101,44 @@ async function run(){
   const p=await inspectBongdaluHistoryProbe(false);
   log('R55_NATIVE_MODEL_PROBE',JSON.stringify({source:'Bongdalu',tested:p.tested,ready:p.ready,modeled:p.results.filter(x=>!!x.prediction).length,examples:p.results.filter(x=>x.prediction).slice(0,2).map(x=>({id:x.id,league:x.league,market:x.prediction}))}));
   if(p.ready<1||p.results.every(x=>!x.prediction))throw Error('native_bongdalu_h2h_or_model_not_ready');
+  return;
+ }
+ if(cmd==='model-batch'){
+  const source=await resolveBongdaluBase();
+  const xmls=await Promise.all(V.BOOKS.map(async([name,id])=>({
+    name,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')
+  })));
+  const markets=V.parseOdds(xmls);
+  const records=V.parseFeed(source.js,markets);
+  const now=Date.now(),day=V.vnDay();
+  const end=Date.parse(day+'T06:00:00Z')+86400000+300000;
+  const pool=records.filter(m=>m.ts>now&&m.ts<=end&&m.market&&!V.excluded(m.league+' '+m.home+' '+m.away))
+    .sort((a,b)=>b.priority-a.priority||b.market.bookmakerCount-a.market.bookmakerCount||a.ts-b.ts);
+  const wanted=Math.min(150,Math.max(1,Number(process.env.MODEL_BATCH_LIMIT||150)));
+  const selected=pool.slice(0,wanted);
+  const matches=[];
+  let attempted=0,historyReady=0;
+  for(let i=0;i<selected.length;i+=12){
+    const batch=selected.slice(i,i+12);
+    const history=await Promise.all(batch.map(async m=>({m,h:await V.history(source.base,m.bongdaluId)})));
+    for(const {m,h} of history){
+      attempted++;
+      if(!h)continue;
+      historyReady++;
+      const forecast=V.makeMarket(m,h,[]);
+      if(forecast)matches.push(forecast);
+    }
+    log('R55_NATIVE_MODEL_BATCH_PROGRESS',JSON.stringify({attempted,total:selected.length,historyReady,modeled:matches.length}));
+  }
+  const accepted=matches.filter(m=>m.market?.researchOnly===false);
+  const data={ok:matches.length>=Math.min(20,selected.length),day,source:source.base,
+    totalFromFeed:records.length,withMarkets:records.filter(m=>!!m.market).length,
+    eligibleFuture:pool.length,attempted,historyReady,modeled:matches.length,
+    qualityCandidates:accepted.length,researchOnly:matches.length-accepted.length,
+    uniqueForecastIds:new Set(matches.map(m=>m.id)).size,
+    examples:matches.slice(0,3).map(m=>({id:m.id,league:m.league,market:m.market.type,choice:m.market.pick,line:m.market.line,odds:m.market.odds}))};
+  log('R55_NATIVE_MODEL_BATCH',JSON.stringify(data));
+  if(!data.ok||data.uniqueForecastIds!==data.modeled)throw Error('native_batch_incomplete');
   return;
  }
  if(cmd==='snapshot-status'){log('NATIVE_SNAPSHOT_STATUS',JSON.stringify(await report()));return;}
