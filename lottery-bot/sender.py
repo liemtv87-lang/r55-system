@@ -102,7 +102,7 @@ def draw_results(day,region,expected_stations):
         found[name]={"special":special,"all2":[x[-2:] for x in nums]}
         if len(found)==len(expected_stations): break
     if {station_name(k) for k in found}!={station_name(k) for k in expected_stations}:
-        raise ValueError("missing stations from actual draw")
+        raise ValueError("missing stations from actual draw; expected="+repr(sorted(expected_stations))+" found="+repr(sorted(found.keys())))
     return found
 
 def html_escape(s):
