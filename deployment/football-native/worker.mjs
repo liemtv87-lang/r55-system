@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {db,closePool} from 'hatchable';
-import {inspectBongdalu} from 'lib/bongdaluR55.js';
+import {inspectBongdalu,inspectBongdaluHistoryProbe} from 'lib/bongdaluR55.js';
 import {processBongdaluChunk} from 'lib/r55ChunkedBuild.js';
 import {gradeAndLearn} from 'lib/r55Ops.js';
 
@@ -97,6 +97,12 @@ async function tick(){
 async function run(){
  const cmd=process.argv[2]||'serve';
  if(cmd==='probe'){await dbReady();const p=await probe();log('NATIVE_PROBE_OK='+Boolean(p.fixtureCount>20&&p.marketCount>20));return;}
+ if(cmd==='model-probe'){
+  const p=await inspectBongdaluHistoryProbe(false);
+  log('R55_NATIVE_MODEL_PROBE',JSON.stringify({source:'Bongdalu',tested:p.tested,ready:p.ready,modeled:p.results.filter(x=>!!x.prediction).length,examples:p.results.filter(x=>x.prediction).slice(0,2).map(x=>({id:x.id,league:x.league,market:x.prediction}))}));
+  if(p.ready<1||p.results.every(x=>!x.prediction))throw Error('native_bongdalu_h2h_or_model_not_ready');
+  return;
+ }
  if(cmd==='snapshot-status'){log('NATIVE_SNAPSHOT_STATUS',JSON.stringify(await report()));return;}
  if(cmd==='grade'){const x=await grade();if(!x.ok)process.exitCode=2;return;}
  if(cmd!=='serve')throw Error('unknown_command');
