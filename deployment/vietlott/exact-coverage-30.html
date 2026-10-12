@@ -1,0 +1,42 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KQ247 Vietlott — Hồi kiểm thật 30 kỳ</title><style>
+body{background:#f2f6fb;color:#14233b;font:15px system-ui,sans-serif;margin:0;padding:18px}
+main{max-width:900px;margin:auto}section{padding:18px;background:white;border:1px solid #e0e7ef;border-radius:14px;margin:12px 0}
+h1{font-size:23px;color:#d0202a;margin:0 0 9px}h2{font-size:18px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stat{border:1px solid #e2e8f0;border-radius:12px;padding:12px}
+.n{font-size:25px;font-weight:900;color:#087044}.meta{color:#5f6e7a;font-size:13px}
+a{color:#0d64a3;font-weight:750}.warn{color:#aa3d10;font-weight:750}
+@media(max-width:470px){.grid{gap:6px}.n{font-size:21px}} </style></head><body><main>
+<section><h1>VIETLOTT — HỒI KIỂM THẬT 30 KỲ</h1>
+<p>Chấm <b>đúng dàn cuối đã rút</b>, bằng cùng thuật toán phủ nhóm 5 số như bản khách, không dùng kết quả tương lai để chọn vé.</p>
+<p>Mega: <b>200.000 bộ</b> (tối đa 220.000) • Power: <b>600.000 bộ</b> (tối đa 650.000).</p>
+<p>Mục tiêu hai sản phẩm: 5 Jackpot và 2.000 G1/30 kỳ — <strong>không bảo đảm đạt</strong>.</p>
+<a href="/">← Vietlott chính</a> · <a href="/draw-windows.html">Thống kê 30/60/150/1.500 kỳ (tham chiếu)</a></section>
+<div id="status" class="meta">Đang xác minh báo cáo trên VPS...</div><div id="result"></div></main>
+<script>
+(async()=>{
+ const status=document.getElementById('status'),root=document.getElementById('result');
+ try{
+  const r=await fetch('/exact-coverage-30.json?ts='+Date.now(),{cache:'no-store'});
+  if(!r.ok)throw Error('Báo cáo đang hoàn thành');
+  const x=await r.json();
+  if(x.verified!==true||x.selector!=='score_plus_unique_five_subsets_v1')throw Error('Chưa được xác minh');
+  const f=n=>Number(n||0).toLocaleString('vi-VN');
+  let jp=0,g1=0,html='';
+  for(const [k,label] of [['mega645','MEGA 6/45'],['power655','POWER 6/55']]){
+    const p=x.products?.[k],max=k==='mega645'?220000:650000,tgt=k==='mega645'?200000:600000;
+    if(!p||p.completed!==30||p.portfolio_target!==tgt||p.portfolio_hard_cap!==max)throw Error('Sai số kỳ hoặc số bộ '+k);
+    const c=p.counts||{},totalJP=(c.Jackpot||0)+(c['Jackpot 1']||0)+(c['Jackpot 2']||0);
+    const nG1=c['Giải nhất']||0;jp+=totalJP;g1+=nG1;
+    html+='<section><h2>'+label+' · 30/30 kỳ đã chấm</h2><div class="grid">'+
+      '<div class="stat"><div class="meta">Jackpot</div><div class="n">'+f(totalJP)+'</div>'+(k==='power655'?'<div class="meta">JP1 '+f(c['Jackpot 1'])+' / JP2 '+f(c['Jackpot 2'])+'</div>':'')+'</div>'+
+      '<div class="stat"><div class="meta">Giải nhất (G1)</div><div class="n">'+f(nG1)+'</div></div></div></section>';
+  }
+  html+='<section><h2>TỔNG HAI DÀN</h2><div class="grid"><div class="stat"><div class="meta">Jackpot / mục tiêu 5</div><div class="n">'+f(jp)+'/5</div></div>'+
+    '<div class="stat"><div class="meta">G1 / mục tiêu 2.000</div><div class="n">'+f(g1)+'/2.000</div></div></div>'+
+    '<p class="warn">Số liệu lịch sử là kết quả kiểm tra, không bảo đảm tương lai đạt chỉ tiêu.</p></section>';
+  root.innerHTML=html;
+  status.textContent='Xác minh dàn thật • '+String(x.generated_at||'')+' • không tính dàn triệu bộ';
+ }catch(e){status.textContent='Chưa có kết quả 30 kỳ xác thực: '+e.message}
+})();
+</script></body></html>
