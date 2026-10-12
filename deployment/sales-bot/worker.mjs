@@ -107,6 +107,35 @@ async function freeTrial(chat,userId,product){
   await send(chat,'Đã cấp mã Free 10 ngày cho '+PRODUCTS[product]+':\n<code>'+escapeHtml(prior.code_value)+'</code>\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang được xác minh.')+'\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',nav());
  }
 }
+
+const LEGACY_HOSTS={
+ football:new Set(['kq247-football-live.onrender.com','kq247-r55-football-2jid7f.v2.appdeploy.ai','kq247-r55-football.hatchable.site','instant-hooyydiodwjk-liemtv87-1408.wix-site-host.com','instant-ilanhgsdsxyz-liemtv87-1408.wix-site-host.com']),
+ lottery:new Set(['kq247-xoso-khach-v29.onrender.com','kq247-xo-so-neon-public-a2f9qy.v2.appdeploy.ai','kq247-xoso-r9-v2.lovable.app','instant-xxvnqbpglxvz-liemtv87-1408.wix-site-host.com','instant-ucmxdfgdjrlt-liemtv87-1408.wix-site-host.com']),
+ vietlott:new Set(['vietlott-auto-hoc.liemtv87.workers.dev','vietlott-r32-runner-free.onrender.com','snapdeploy-vietlott-bridge-df5xvz.v2.appdeploy.ai'])
+};
+function legacyProduct(text){
+ const direct=String(text||'').trim().toLowerCase().match(/^\/?(?:link|links)\s+(bd|football|xs|xoso|lottery|vl|vietlott)$/);
+ if(direct)return ({bd:'football',football:'football',xs:'lottery',xoso:'lottery',lottery:'lottery',vl:'vietlott',vietlott:'vietlott'})[direct[1]];
+ const match=String(text||'').match(/https?:\/\/[^\s<>"]+/i);
+ if(!match)return null;
+ let u;try{u=new URL(match[0]);}catch{return null}
+ const host=u.hostname.toLowerCase();
+ if(host==='kq247-xoso-khach-v29.onrender.com'&&u.searchParams.get('product')==='vietlott')return 'vietlott';
+ if(host.endsWith('.sslip.io')&&host.startsWith('vietlott.'))return 'vietlott';
+ if(host==='64-120-92-172.sslip.io'){
+  if(u.pathname.startsWith('/xoso'))return 'lottery';
+  if(u.pathname.startsWith('/vietlott'))return 'vietlott';
+  return 'football';
+ }
+ for(const [product,hosts] of Object.entries(LEGACY_HOSTS))if(hosts.has(host))return product;
+ return null;
+}
+async function sendLatestClient(chat,product){
+ const link=await validClientUrl(product);
+ if(!link)return send(chat,'⚠️ Link bản khách '+escapeHtml(PRODUCTS[product])+' đang được kiểm tra, không trả link bản chính.',nav());
+ return send(chat,'✅ <b>LINK BẢN KHÁCH MỚI NHẤT</b>\n'+PRODUCTS[product]+'\n'+escapeHtml(link)+'\n\nMã của khách đang sử dụng giữ nguyên. Chọn <b>MÃ CỦA TÔI</b> để lấy lại mã.',nav());
+}
+
 async function handle(update){
  const msg=update.message||update.callback_query?.message;
  if(!msg||msg.chat?.type!=='private')return;
@@ -116,6 +145,7 @@ async function handle(update){
  if(update.callback_query)await telegram('answerCallbackQuery',{callback_query_id:update.callback_query.id});
  const cmd=update.callback_query?.data||update.message?.text?.trim()||'';
  if(cmd==='mycodes'||cmd.startsWith('/mycodes')||cmd.startsWith('/mycode'))return myCodes(chat,user.id);
+ const mapped=legacyProduct(cmd);if(mapped)return sendLatestClient(chat,mapped);
  if(cmd.startsWith('plans:'))return showPlans(chat,cmd.slice(6));
  if(cmd.startsWith('trial:'))return freeTrial(chat,user.id,cmd.slice(6));
  if(cmd==='home'||cmd.startsWith('/start')||cmd.startsWith('/menu'))return send(chat,'KQ247 — chọn sản phẩm hoặc lấy lại mã và link bản khách mới nhất.',nav());
