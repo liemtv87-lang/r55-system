@@ -1,0 +1,73 @@
+name: KQ247 Deploy Sales PayOS Bridge To Existing VPS
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-sales-vps-bridge-live.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-sales-vps-single-live
+  cancel-in-progress: false
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check source and stage image
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd deployment/sales-bot
+          node --check worker.mjs
+          node --check payos-orders.mjs
+          npm install --omit=dev --no-audit --no-fund
+          npm test
+      - name: Confirm Render PayOS is prepared and standby
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 2 --max-time 120 https://tool-sales-bot.onrender.com/healthz |
+            python3 -c 'import json,sys; j=json.load(sys.stdin); p=j.get("payos") or {}; assert j["active"] is False and j["tokenConfigured"] and j["databaseConfigured"] and p.get("ready");print("RENDER_PAYOS_READY=YES")'
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 -X POST -H 'content-type: application/json' -d '{}' https://tool-sales-bot.onrender.com/sales/checkout)
+          test "$code" = "401"
+          echo RENDER_SALES_BRIDGE_UNSIGNED_REJECTED=YES
+      - name: Deploy on existing VinaHost VPS with rollback
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/sales-bridge-stage && chmod 700 /opt/kq247/sales-bridge-stage'
+          sshpass -e scp "${opts[@]}" deployment/sales-bot/worker.mjs deployment/sales-bot/payos-orders.mjs deployment/sales-bot/confirm-payos.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile "$host":/opt/kq247/sales-bridge-stage/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          old=$(docker inspect --format '{{.Image}}' kq247-sales-bot-primary)
+          test -n "$old"
+          envfile=/opt/kq247/.bot-secrets/sales-primary.env
+          test -s "$envfile"
+          cd /opt/kq247/sales-bridge-stage
+          docker build -q -t kq247/sales-bot-bridge:local . >/dev/null
+          docker rm -f kq247-sales-bot-bridge-qa >/dev/null 2>&1 || true
+          docker run -d --name kq247-sales-bot-bridge-qa --network bridge -e KQ247_SALES_BOT_ACTIVE=0 kq247/sales-bot-bridge:local >/dev/null
+          sleep 3
+          docker exec kq247-sales-bot-bridge-qa node -e 'fetch("http://127.0.0.1:3032/healthz").then(r=>r.json()).then(j=>{if(j.active||!j.ok)process.exit(1);console.log("VPS_BRIDGE_SOURCE_QA=PASS")}).catch(()=>process.exit(1))'
+          docker rm -f kq247-sales-bot-bridge-qa >/dev/null
+          docker rm -f kq247-sales-bot-primary >/dev/null
+          rollback() {
+            docker rm -f kq247-sales-bot-primary >/dev/null 2>&1 || true
+            docker run -d --name kq247-sales-bot-primary --restart unless-stopped --env-file "$envfile" -e KQ247_SALES_BOT_ACTIVE=1 -p 127.0.0.1:18087:3032 "$old" >/dev/null
+            echo VPS_SALES_ROLLBACK_RESTORED=YES
+          }
+          trap rollback ERR
+          docker run -d --name kq247-sales-bot-primary --restart unless-stopped --env-file "$envfile" -e KQ247_SALES_BOT_ACTIVE=1 -p 127.0.0.1:18087:3032 kq247/sales-bot-bridge:local >/dev/null
+          sleep 33
+          curl -fsS --max-time 10 http://127.0.0.1:18087/healthz |
+            python3 -c 'import json,sys;j=json.load(sys.stdin); assert j.get("active") and j.get("tokenConfigured") and j.get("databaseConfigured") and j.get("lastPoll") and not j.get("lastError");print("VPS_SALES_SINGLE_POLLER_LIVE=YES")'
+          trap - ERR
+          echo KQ247_SALES_BRIDGE_DEPLOY=SUCCESS
+          REMOTE
