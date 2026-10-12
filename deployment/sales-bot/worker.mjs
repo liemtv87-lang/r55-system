@@ -75,7 +75,7 @@ function bridgeSigned(req,body){
   if(!TOKEN)return false;
   const ts=String(req.headers['x-kq247-time']||'');
   const sig=String(req.headers['x-kq247-signature']||'');
-  if(!/^\\d{13}$/.test(ts)||!Number.isFinite(Number(ts))||Math.abs(Date.now()-Number(ts))>90000)return false;
+  if(!/^[0-9]{13}$/.test(ts)||!Number.isFinite(Number(ts))||Math.abs(Date.now()-Number(ts))>90000)return false;
   if(!/^[a-f0-9]{64}$/i.test(sig))return false;
   const want=crypto.createHmac('sha256',TOKEN).update(ts+'.'+body).digest('hex');
   return crypto.timingSafeEqual(Buffer.from(sig,'hex'),Buffer.from(want,'hex'));
@@ -264,7 +264,7 @@ async function payosHttp(req,res){
      for await(const chunk of req){raw+=chunk.toString('utf8');if(raw.length>4096)throw Error('payload_too_large')}
      if(!bridgeSigned(req,raw)){res.writeHead(401).end('unauthorized');return}
      const j=JSON.parse(raw);
-     if(!/^\\d{1,19}$/.test(String(j.telegramUserId))||!PRODUCTS[j.product]||!isPaidTerm(j.days))throw Error('invalid_request');
+     if(!/^[0-9]{1,19}$/.test(String(j.telegramUserId))||!PRODUCTS[j.product]||!isPaidTerm(j.days))throw Error('invalid_request');
      const order=await createPayosCheckout(pool,String(j.telegramUserId),j.product,Number(j.days));
      res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify(order));
    }catch(e){console.error('SALES_BRIDGE_ERROR',String(e.message).slice(0,80));res.writeHead(400).end('bad_request')}
