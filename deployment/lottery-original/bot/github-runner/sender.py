@@ -67,7 +67,15 @@ def read_snapshot(day,region):
     return stations,fp
 
 def station_name(s):
-    return re.sub(r"\s+"," ",s).strip().casefold()
+    # Neon uses 'TPHCM'; Minh Ngoc's official draw labels the SAME station
+    # 'TP. HCM'. Normalize punctuation/accents, never relax exact date/results.
+    import unicodedata
+    text=unicodedata.normalize("NFD",str(s).casefold().replace("đ","d"))
+    text=re.sub(r"[\u0300-\u036f]","",text)
+    key=re.sub(r"[^a-z0-9]","",text)
+    if key in ("tphcm","tphochiminh","thanhphohochiminh","hochiminh"):
+        return "tphcm"
+    return key
 
 def draw_results(day,region,expected_stations):
     path=REGIONS[region]["path"]
