@@ -1,0 +1,21 @@
+name: KQ247 Sales VPS Standby Health
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-sales-shadow-health.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check sales shadow without credentials
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sshpass -e ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 "curl -fsS http://127.0.0.1:18086/healthz" | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s.get("ok") and s.get("standby") and not s.get("active"); print("KQ247_SALES_VPS_STANDBY=PASS"); print("PAYMENT_STAYS_OLD=YES")'
