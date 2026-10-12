@@ -1,0 +1,42 @@
+name: KQ247 XS VPS HTTPS Main and Client Smoke
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-xoso-three-region-smoke.yml
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify XS three regions and unchanged customer credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request
+          root='https://64-120-92-172.sslip.io'
+          old='https://br-divine-resonance-az0qxt8z-kq247web.compute.c-3.ap-southeast-1.aws.neon.tech/'
+          for region in ('xsmb','xsmt','xsmn'):
+            u=root+'/xoso?region='+region
+            o=old+'?region='+region
+            def get(url):
+              with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'KQ247-Smoke/1.0'}),timeout=25) as r:
+                assert r.status==200
+                return r.read()
+            original=get(o)
+            served=get(u)
+            assert served==original,(region,len(served),len(original))
+            assert all(x.encode() in served for x in ('XSMB','XSMT','XSMN'))
+            print('KQ247_XS_VPS_EXACT_ORIGINAL_'+region.upper()+'=PASS')
+          with urllib.request.urlopen(root+'/xoso-khach?region=xsmb',timeout=25) as r:
+            client=r.read().decode('utf-8')
+          assert 'kq247_lottery_code' in client
+          assert 'kq247_dev' in client
+          assert 'kq247_lottery_verified_v1' in client
+          assert 'kq247auth.compute' in client
+          assert root+'/xoso' in client
+          print('KQ247_XS_VPS_CUSTOMER_EXISTING_CODES=PASS')
+          PY
