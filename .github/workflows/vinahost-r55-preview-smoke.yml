@@ -1,0 +1,45 @@
+name: R55 VPS New Preview Validation
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-preview-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify new VPS risk adjusted predictions and immutable existing snapshot
+        run: |
+          set -euo pipefail
+          site=http://64.120.92.172
+          curl -fsS --connect-timeout 7 --max-time 15 "$site/" -o /tmp/ui.html
+          grep -q 'DỰ ĐOÁN MỚI VPS' /tmp/ui.html
+          echo 'VPS_NEW_PREVIEW_BUTTON=PASS'
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS --connect-timeout 7 --max-time 10 "$site/api/main-football?preview=1&limit=all&from_ts=0" -o /tmp/preview.json; then break; fi
+            sleep 5
+          done
+          curl -fsS --connect-timeout 7 --max-time 15 "$site/api/main-football?limit=all&from_ts=0" -o /tmp/locked.json
+          python3 - <<'PY'
+          import json
+          preview=json.load(open('/tmp/preview.json'))
+          locked=json.load(open('/tmp/locked.json'))
+          assert locked['ok'] and locked['locked'] and not locked.get('preview')
+          assert preview['ok'] and preview.get('preview') is True and preview['locked'] is False
+          assert preview['source_detail']=='native_live_preview_unlocked'
+          assert preview['coverage']>=80
+          for label,d in [('LOCKED',locked),('PREVIEW',preview)]:
+            a=d['predictions']
+            assert len(a)==d['snapshot_total']
+            assert len({p['id'] for p in a})==len(a)
+            assert all(bool(p.get('ah'))!=bool(p.get('ou')) for p in a)
+            assert all(p.get('trusted_pick') is False for p in a)
+            print('VPS_'+label+'_FORECASTS='+str(len(a)))
+            print('VPS_'+label+'_DATE='+str(d['date']))
+          print('VPS_NATIVE_LIVE_PREVIEW_COVERAGE='+str(preview['coverage']))
+          assert locked['snapshot_total']==137
+          print('VPS_PREVIEW_SEPARATE_FROM_DAILY_LOCK=PASS')
+          PY
