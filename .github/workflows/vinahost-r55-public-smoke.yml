@@ -1,0 +1,47 @@
+name: R55 VPS Public UI and API Smoke Test
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-public-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Check published VPS website and exact 20 30 and all routes
+        run: |
+          set -euo pipefail
+          site="http://64.120.92.172"
+          curl -fsS --connect-timeout 7 --max-time 20 "$site/" -o /tmp/r55.html
+          grep -q 'KQ247.*R55' /tmp/r55.html
+          grep -q 'TOÀN BỘ' /tmp/r55.html
+          grep -q '30 TRẬN' /tmp/r55.html
+          grep -q '20 TRẬN' /tmp/r55.html
+          echo "VPS_WEBSITE_PUBLIC=OK"
+          curl -fsS --connect-timeout 7 --max-time 20 "$site/api/health" -o /tmp/health.json
+          python3 -c 'import json;d=json.load(open("/tmp/health.json"));print("VPS_NATIVE_API_HEALTH="+str(d));assert d["ok"] and d["engine"]=="vps-native"'
+          for count in 20 30 all; do
+            curl -fsS --connect-timeout 7 --max-time 20 "$site/api/main-football?mode=all&limit=$count&from_ts=0" -o "/tmp/r55-$count.json"
+          done
+          python3 - <<'PY'
+          import json
+          rows={}
+          for v in ['20','30','all']:
+            d=json.load(open('/tmp/r55-'+v+'.json'))
+            rows[v]=d
+            assert d['ok'] and d['locked']
+            assert isinstance(d['predictions'],list)
+            assert all(bool(p.get('ah')) != bool(p.get('ou')) for p in d['predictions'])
+            assert all(p.get('trusted_pick') is False for p in d['predictions'])
+            assert len({p['id'] for p in d['predictions']})==len(d['predictions'])
+            print('VPS_PUBLIC_COUNT_'+v.upper()+'='+str(len(d['predictions'])))
+          assert len(rows['20']['predictions'])==20
+          assert len(rows['30']['predictions'])==30
+          assert len(rows['all']['predictions'])>=len(rows['30']['predictions'])
+          assert rows['all']['snapshot_total']==len(rows['all']['predictions'])
+          print('VPS_R55_PUBLIC_HISTORY_COMPLETE=PASS')
+          print('VPS_R55_SNAPSHOT_SOURCE='+str(rows['all'].get('source_detail')))
+          PY
