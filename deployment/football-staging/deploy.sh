@@ -56,5 +56,19 @@ curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main
 docker compose exec -T football-native node worker.mjs probe
 docker compose exec -T football-native node worker.mjs model-probe
 docker compose exec -T football-native node worker.mjs snapshot-status
+# Verify the full original public UI and public API on a loopback-only port.
+test -f /opt/kq247/deployment/football-original/public/index.html
+test -f /opt/kq247/deployment/football-original/public/client.html
+test -f /opt/kq247/deployment/football-original/api/main-football.js
+for i in $(seq 1 18); do
+  if curl -fsS --max-time 4 http://127.0.0.1:18081/healthz >/tmp/r55-original-health.json; then break; fi
+  sleep 2
+done
+python3 -c 'import json;d=json.load(open("/tmp/r55-original-health.json"));assert d["ok"] and d["db"];print("R55_ORIGINAL_DB_OK="+str(d["snapshotDays"]))'
+curl -fsS --max-time 15 http://127.0.0.1:18081/ -o /tmp/r55-original-ui.html
+grep -q 'KQ247' /tmp/r55-original-ui.html
+curl -fsS --max-time 15 'http://127.0.0.1:18081/api/main-football?data=1&mode=all&limit=30' -o /tmp/r55-original-api.json
+python3 -c 'import json;d=json.load(open("/tmp/r55-original-api.json"));assert d.get("ok") is True and isinstance(d.get("predictions"),list);print("R55_ORIGINAL_API_READY="+str(len(d["predictions"]))+" LOCKED="+str(d.get("locked")))'
+echo 'R55_ORIGINAL_UNMODIFIED_API_AND_UI=PASS'
 docker compose ps
 echo 'R55_NATIVE_DEPLOY_VERIFIED=YES'

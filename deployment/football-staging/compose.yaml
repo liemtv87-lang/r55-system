@@ -60,6 +60,31 @@ services:
     cpus: "1.5"
     security_opt:
       - no-new-privileges:true
+  # Original source is executed in an isolated read-only test service.
+  # Not yet a customer or Telegram cutover.
+  football-original:
+    build:
+      context: ..
+      dockerfile: football-original/Dockerfile.vps
+    image: kq247/r55-original:local
+    container_name: kq247-football-original
+    restart: unless-stopped
+    depends_on:
+      football-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://r55app:${R55_DB_PASSWORD}@football-db:5432/r55
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:18081:3002"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: 384m
+    pids_limit: 120
+    cpus: "0.60"
+    security_opt:
+      - no-new-privileges:true
   football-preview:
     image: kq247/r55-native:local
     container_name: kq247-football-preview
