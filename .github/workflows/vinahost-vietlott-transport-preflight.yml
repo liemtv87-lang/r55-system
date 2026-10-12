@@ -1,0 +1,35 @@
+name: KQ247 Vietlott VPS Transport Preflight
+on:
+  push:
+    paths: [.github/workflows/vinahost-vietlott-transport-preflight.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Check deployment secret presence without reading values
+        env:
+          HAS_VPS: ${{ secrets.VPS_ROOT_PASSWORD }}
+          HAS_DB: ${{ secrets.NEON_DATABASE_URL }}
+        shell: bash
+        run: |
+          if [ -n "$HAS_VPS" ]; then echo 'VIETLOTT_VPS_ACCESS=READY'; else echo 'VIETLOTT_VPS_ACCESS=MISSING'; exit 1; fi
+          if [ -n "$HAS_DB" ]; then echo 'VIETLOTT_SOURCE_DB_ACCESS=READY'; else echo 'VIETLOTT_SOURCE_DB_ACCESS=MISSING'; exit 1; fi
+      - name: Read only the source manifest
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          python3 -m pip install --quiet psycopg2-binary
+          python3 - <<'PY'
+          import psycopg2
+          from os import environ
+          with psycopg2.connect(environ["DATABASE_URL"],connect_timeout=10) as conn:
+            with conn.cursor() as cur:
+              cur.execute("select count(*),count(*) filter(where source_sha256<>encode(sha256(convert_to(source_text,'UTF8')),'hex')) from kq247_vps_bridge.vietlott_files")
+              n,bad=cur.fetchone()
+              assert n>=31 and bad==0,(n,bad)
+              print("VIETLOTT_SOURCE_MANIFEST_FILES",n,"CHECKSUM_ERRORS",bad)
+          PY
