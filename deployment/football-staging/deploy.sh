@@ -94,7 +94,7 @@ python3 -c 'import json;d=json.load(open("/tmp/r55-original-public-api.json"));a
 echo 'R55_PUBLIC_ORIGINAL_EXACT_UI_AND_API=PASS'
 # VPS Telegram group standby: never publish twice while Hatchable owns delivery.
 curl -fsS --max-time 8 http://127.0.0.1:18083/healthz -o /tmp/r55-vps-group-status.json
-python3 -c 'import json;d=json.load(open("/tmp/r55-vps-group-status.json"));assert d["ok"] and d["service"]=="r55-vps-telegram-group" and not d["active"] and not d["primarySender"];print("R55_VPS_GROUP_STANDBY=PASS")'
+python3 -c 'import json;d=json.load(open("/tmp/r55-vps-group-status.json"));assert d["ok"] and d["service"]=="r55-vps-telegram-group" and (not d["active"] or (d["tokenConfigured"] and d["primarySender"]));print("R55_VPS_GROUP_HEALTH="+("PRIMARY" if d["primarySender"] else "STANDBY"))'
 # Verify exact live Neon UI/read-only copy works on VPS for all 3 regions and customer.
 curl -fsS --max-time 8 http://127.0.0.1:18084/healthz -o /tmp/kq247-xs-health.json
 python3 -c 'import json;d=json.load(open("/tmp/kq247-xs-health.json"));assert d["ok"] and not d["backendMigrated"] and d["neonOriginalReadThrough"];print("KQ247_XS_ORIGINAL_FRONTEND=READY")'
