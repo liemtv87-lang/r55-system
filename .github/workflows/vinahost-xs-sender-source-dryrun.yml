@@ -27,10 +27,11 @@ jobs:
           errors=[]
           for region,pre_hour,result_hour in [('mn',16,17),('mt',17,18),('mb',18,20)]:
               for phase,hour in [('pre',pre_hour),('result',result_hour)]:
-                  assert s.due(datetime(2026,10,13,hour,0,tzinfo=s.VN),region,phase)
-                  assert s.due(datetime(2026,10,13,hour,5,0,tzinfo=s.VN),region,phase)
-                  assert not s.due(datetime(2026,10,13,hour,6,tzinfo=s.VN),region,phase)
-                  assert not s.due(datetime(2026,10,13,hour,9,tzinfo=s.VN),region,phase)
+                  minute=10 if phase=='pre' else 0
+                  assert s.due(datetime(2026,10,13,hour,minute,tzinfo=s.VN),region,phase)
+                  assert s.due(datetime(2026,10,13,hour,minute+4,59,tzinfo=s.VN),region,phase)
+                  assert not s.due(datetime(2026,10,13,hour,minute+6,tzinfo=s.VN),region,phase)
+                  assert not s.due(datetime(2026,10,13,hour,minute+9,tzinfo=s.VN),region,phase)
               for day in ['2026-10-12','2026-10-13']:
                   try:
                       stations,fp=s.read_snapshot(day,region)
