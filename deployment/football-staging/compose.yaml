@@ -158,6 +158,8 @@ services:
     image: kq247/lottery-original-telegram:local
     container_name: kq247-lottery-bot
     restart: unless-stopped
+    env_file:
+      - /opt/kq247/.bot-secrets/xs.env
     environment:
       DRY_RUN: "1"
       KQ247_LOTTERY_CUTOVER: "disabled"

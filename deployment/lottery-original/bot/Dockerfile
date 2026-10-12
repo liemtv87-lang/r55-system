@@ -1,6 +1,6 @@
 FROM python:3.12-alpine
 WORKDIR /app
-RUN apk add --no-cache git && pip install --no-cache-dir beautifulsoup4==4.13.5
+RUN apk add --no-cache git tzdata && pip install --no-cache-dir beautifulsoup4==4.13.5
 COPY lottery-original/bot/github-runner/sender.py /app/lottery-bot/sender.py
 COPY lottery-original/bot/manager.py /app/manager.py
 RUN mkdir -p /app/lottery-bot/state /data

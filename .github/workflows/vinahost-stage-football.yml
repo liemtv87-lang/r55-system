@@ -32,6 +32,18 @@ jobs:
           tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging deployment/football-native deployment/football-original deployment/football-history deployment/football-bots deployment/lottery-original
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247'
           sshpass -e scp -o StrictHostKeyChecking=accept-new /tmp/kq247-r55-stage.tgz root@64.120.92.172:/tmp/kq247-r55-stage.tgz
+      - name: Install XS Telegram token privately on the VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+          XS_TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_LOTTERY_BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" && test -n "$XS_TELEGRAM_TOKEN"
+          # SSH transfers the secret directly over an encrypted pipe. Never log
+          # or commit it; only the VPS root and Docker engine can access xs.env.
+          printf 'TELEGRAM_LOTTERY_BOT_TOKEN=%s\n' "$XS_TELEGRAM_TOKEN" |
+            sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 \
+              'set -eu; umask 077; mkdir -p /opt/kq247/.bot-secrets; cat > /opt/kq247/.bot-secrets/xs.env.tmp; chmod 600 /opt/kq247/.bot-secrets/xs.env.tmp; mv -f /opt/kq247/.bot-secrets/xs.env.tmp /opt/kq247/.bot-secrets/xs.env; test -s /opt/kq247/.bot-secrets/xs.env; echo XS_VPS_TOKEN_TRANSFER=PASS'
       - name: Execute on-VPS deployment script and verify native R55
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
