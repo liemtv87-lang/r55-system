@@ -1,0 +1,25 @@
+name: Activate VPS Sales Sender
+on:
+  workflow_dispatch:
+  push:
+    paths: [.github/workflows/vinahost-sales-live.yml]
+permissions:
+  contents: read
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          curl -fsS https://tool-sales-bot.onrender.com/ | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["retired"] and not j["telegram_sender"]'
+          docker exec kq247-sales-bot-primary node -e "const token=process.env.TELEGRAM_SALES_BOT_TOKEN;fetch('https://api.telegram.org/bot'+token+'/deleteWebhook',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({drop_pending_updates:false})}).then(r=>r.json()).then(j=>{if(!j.ok)process.exit(1);console.log('OLD_WEBHOOK_OFF=YES')}).catch(()=>process.exit(1))"
+          docker rm -f kq247-sales-bot-primary
+          docker run -d --name kq247-sales-bot-primary --restart unless-stopped --env-file /opt/kq247/.bot-secrets/sales-primary.env -e KQ247_SALES_BOT_ACTIVE=1 -p 127.0.0.1:18087:3032 kq247/sales-bot-primary:local
+          sleep 35
+          curl -fsS http://127.0.0.1:18087/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["active"] and j["lastPoll"] and not j["lastError"]; print("VPS_SALES_BOT_LIVE=YES")'
+          REMOTE
