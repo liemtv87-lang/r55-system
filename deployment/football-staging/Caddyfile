@@ -1,20 +1,24 @@
 :18080 {
+  encode zstd gzip
   @health path /_kq247/health
-  respond @health "KQ247 R55 VPS staging proxy OK" 200
+  respond @health "KQ247 R55 VPS running" 200
 
   handle /_kq247/cache-health {
     rewrite * /healthz
     reverse_proxy football-cache:3000
   }
+  handle /_kq247/native-health {
+    rewrite * /healthz
+    reverse_proxy football-native:3001
+  }
   handle /api/main-football {
-    reverse_proxy football-cache:3000
+    reverse_proxy football-native:3001
+  }
+  handle /api/health {
+    reverse_proxy football-native:3001
   }
   handle {
-    reverse_proxy https://kq247-r55-football.hatchable.site {
-      header_up Host kq247-r55-football.hatchable.site
-      transport http {
-        tls_server_name kq247-r55-football.hatchable.site
-      }
-    }
+    root * /srv
+    file_server
   }
 }
