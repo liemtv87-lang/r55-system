@@ -1,0 +1,42 @@
+name: Audit Existing VPS Telegram Bot Rights In Both Groups
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-telegram-both-groups-readonly.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify current VPS bot permissions without publishing anything
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          docker exec -i kq247-lottery-bot python - <<'PY'
+          import os,json,urllib.request,urllib.parse
+          token=os.environ.get('TELEGRAM_LOTTERY_BOT_TOKEN','')
+          assert token,'missing_vps_group_bot_token'
+          def call(method,args=None):
+              endpoint='https://api.telegram.org/bot'+token+'/'+method
+              if args:endpoint+='?'+urllib.parse.urlencode(args)
+              with urllib.request.urlopen(endpoint,timeout=15) as r:return json.load(r)
+          me=call('getMe')
+          assert me.get('ok') and me['result'].get('username','').casefold()=='liemthongbaonhom_bot'
+          for group in ['-1004320899120','@keochuyengia79']:
+              d=call('getChatMember',{'chat_id':group,'user_id':me['result']['id']})
+              role=d.get('result',{}).get('status','unknown')
+              print('TELEGRAM_VPS_BOT_GROUP_'+('XS' if group.startswith('-') else 'BD')+'_ROLE='+role)
+              assert d.get('ok') and role in ('administrator','creator'),group+'__not_admin'
+          print('ONE_VPS_BOT_BOTH_GROUPS_ADMIN=PASS')
+          PY
+          REMOTE
