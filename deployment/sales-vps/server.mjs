@@ -7,12 +7,14 @@ const HOST='0.0.0.0';
 const ORIGIN='https://64-120-92-172.sslip.io';
 const CLIENT={football:ORIGIN+'/client.html',lottery:ORIGIN+'/xoso-khach?region=xsmb'};
 const PRODUCTS=['football','lottery','vietlott'];
-const DB=process.env.NEON_DATABASE_URL||'';
+const DB=process.env.SALES_DATABASE_URL||process.env.NEON_DATABASE_URL||'';
+const DB_HOST=(()=>{try{return new URL(DB).hostname}catch{return ''}})();
+const LOCAL_DATABASE=['football-db','localhost','127.0.0.1','kq247-r55-postgres'].includes(DB_HOST);
 const TOKEN=process.env.TELEGRAM_SALES_BOT_TOKEN||'';
 const WEBHOOK_SECRET=process.env.TELEGRAM_SALES_WEBHOOK_SECRET||'';
 const ACTIVE=process.env.SALES_BOT_ACTIVE==='1'&&!!DB&&!!TOKEN&&!!WEBHOOK_SECRET;
-const pool=DB?new Pool({connectionString:DB,ssl:{rejectUnauthorized:true},max:3,idleTimeoutMillis:10000,connectionTimeoutMillis:6500}):null;
-let lastError=null,lastHandled=null,dbOK=false;
+const pool=DB?new Pool({connectionString:DB,ssl:LOCAL_DATABASE?false:{rejectUnauthorized:true},max:3,idleTimeoutMillis:10000,connectionTimeoutMillis:6500}):null;
+let lastError=null,lastHandled=null,dbOK=false,licensesCount=null;
 const sanitize=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const locale=v=>v?new Date(v).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}):'Chưa kích hoạt';
 function remaining(value){
@@ -101,8 +103,8 @@ const respond=(res,code,payload)=>{res.writeHead(code,{'content-type':'applicati
 const app=http.createServer(async(req,res)=>{
  try{
   if(req.method==='GET'&&req.url==='/healthz'){
-   if(pool){try{await query('SELECT 1');dbOK=true}catch(e){dbOK=false;lastError=String(e.message).slice(0,120)}}
-   return respond(res,200,{ok:true,service:'kq247-sales-vps',standby:!ACTIVE,active:ACTIVE,database_ready:dbOK,telegram_configured:!!TOKEN,webhook_protected:!!WEBHOOK_SECRET,payos_active:false,lastHandled,lastError});
+   if(pool){try{const data=await query('SELECT count(*)::int AS n FROM sales_licenses');licensesCount=Number(data[0]?.n??0);dbOK=licensesCount>0}catch(e){dbOK=false;licensesCount=null;lastError=String(e.message).slice(0,120)}}
+   return respond(res,200,{ok:true,service:'kq247-sales-vps',standby:!ACTIVE,active:ACTIVE,database_ready:dbOK,local_database:LOCAL_DATABASE,licenses_count:licensesCount,telegram_configured:!!TOKEN,webhook_protected:!!WEBHOOK_SECRET,payos_active:false,lastHandled,lastError});
   }
   if(req.method!=='POST'||req.url!=='/telegram')return respond(res,404,{ok:false,error:'not_found'});
   if(!ACTIVE)return respond(res,503,{ok:false,error:'sales_vps_standby'});
