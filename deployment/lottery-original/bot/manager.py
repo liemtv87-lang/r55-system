@@ -33,7 +33,7 @@ def prepare_git():
         subprocess.run(["git","-C",str(APP),"config","user.email","kq247-vps@localhost"],check=True)
         subprocess.run(["git","-C",str(APP),"config","user.name","KQ247-VPS-XS"],check=True)
         subprocess.run(["git","-C",str(APP),"remote","add","origin",str(bare)],check=True)
-        subprocess.run(["git","-C",str(APP),"add","-A","lottery-bot/state"],check=True)
+        subprocess.run(["git","-C",str(APP),"add","-A"],check=True)
         subprocess.run(["git","-C",str(APP),"commit","--allow-empty","-m","Initial sender ledger"],check=True,stdout=subprocess.DEVNULL)
         subprocess.run(["git","-C",str(APP),"push","-u","origin","main"],check=True,stdout=subprocess.DEVNULL)
 def schedule_loop():
