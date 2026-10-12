@@ -22,6 +22,7 @@ jobs:
           sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           echo KQ247_VPS_PAYOS_PREFLIGHT=START
+          echo KQ247_VPS_PAYOS_POST_DEPLOY_CHECK=YES
           if test -s /opt/kq247/.bot-secrets/r55-transfer-private.pem; then echo VPS_SEALED_KEY_AVAILABLE=YES;else echo VPS_SEALED_KEY_AVAILABLE=NO;fi
           if command -v nginx >/dev/null;then echo NGINX_BIN=YES;nginx -t 2>&1 | tail -3;else echo NGINX_BIN=NO;fi
           if test -d /etc/nginx/sites-enabled;then for f in /etc/nginx/sites-enabled/*;do echo "NGINX_SITE=$f";grep -E 'server_name|listen |location |proxy_pass' "$f" | head -35 || true;done;fi
