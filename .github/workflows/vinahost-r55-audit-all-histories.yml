@@ -1,0 +1,36 @@
+name: R55 Audit All Bongdalu AH OU Histories
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-audit-all-histories.yml
+permissions:
+  contents: read
+concurrency:
+  group: kq247-r55-full-history-audit
+  cancel-in-progress: false
+jobs:
+  history-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Audit and archive each Bongdalu match with AH or OU
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=8 \
+            root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node worker.mjs history-all'
+      - name: Verify exact persisted coverage in PostgreSQL
+        if: always()
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-db psql -U r55app -d r55 -c "SELECT status,count(*) AS fixtures,MIN(home_games) AS min_home,MIN(away_games) AS min_away,MAX(home_games) AS max_home,MAX(away_games) AS max_away FROM r55_fixture_history WHERE day=(now() AT TIME ZONE '\''Asia/Ho_Chi_Minh'\'')::date GROUP BY status ORDER BY status"'
