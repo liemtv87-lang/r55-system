@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node worker.mjs",
-    "check": "node --check worker.mjs && node --check payos-orders.mjs",
+    "check": "node --check worker.mjs && node --check payos-orders.mjs && node --check confirm-payos.mjs",
     "test": "node --test sales-bot.test.mjs"
   },
   "dependencies": {
