@@ -20,6 +20,7 @@ jobs:
           node --check worker.mjs
           node --check payos-orders.mjs
           node --check confirm-payos.mjs
+          bash -n store-payos-env.sh
           npm install --omit=dev --no-audit --no-fund
           npm test
           node --input-type=module -e "import {PayOS} from '@payos/node';if(typeof PayOS!=='function')process.exit(1);console.log('PAYOS_SDK_IMPORT=PASS')"
@@ -34,7 +35,7 @@ jobs:
           test -n "$SSHPASS"
           host=root@64.120.92.172
           sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$host" "mkdir -p /opt/kq247/sales-stage && chmod 700 /opt/kq247/sales-stage"
-          sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/sales-bot/worker.mjs deployment/sales-bot/payos-orders.mjs deployment/sales-bot/confirm-payos.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile "$host":/opt/kq247/sales-stage/
+          sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/sales-bot/worker.mjs deployment/sales-bot/payos-orders.mjs deployment/sales-bot/confirm-payos.mjs deployment/sales-bot/store-payos-env.sh deployment/sales-bot/package.json deployment/sales-bot/Dockerfile "$host":/opt/kq247/sales-stage/
           sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$host" 'bash -se' <<'REMOTE'
           set -euo pipefail
           curl -fsS --max-time 8 http://127.0.0.1:18087/healthz >/dev/null
