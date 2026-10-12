@@ -45,7 +45,11 @@ def schedule_loop():
         slot=now.strftime("%Y-%m-%d %H:%M")
         # Work every ten-minute window at +10, +20, etc. Original code's
         # 'due' window validates correct miền/date. It can retry on next poll.
-        if enabled() and now.minute%10==0 and last_slot!=slot:
+        # VN result summaries: MN 17:00-17:05, MT 18:00-18:05, MB 20:00-20:05.
+        # Try each minute in the strict result window; do not post later.
+        is_result_window=now.hour in (17,18,20) and now.minute<=5
+        is_pre_window=now.hour in (16,17,18) and now.minute in (10,12,14)
+        if enabled() and (is_result_window or is_pre_window) and last_slot!=slot:
             last_slot=slot
             try:
                 prepare_git()
