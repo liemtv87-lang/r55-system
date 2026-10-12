@@ -1,0 +1,76 @@
+name: KQ247 Vietlott Main Stats Hard Cap Display
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-main-stats-caps.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m json.tool deployment/vietlott/limits/main-page-final-stats-sections.json >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Update exact mobile UI functions only, preserve links, no container restart
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/caps-220k-650k'
+          sshpass -e scp "${opts[@]}" deployment/vietlott/limits/main-page-final-stats-sections.json "$host":/opt/kq247/vietlott/versions/caps-220k-650k/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/kq247/vietlott
+          path="$root/public/index.html"
+          backup="$root/versions/caps-220k-650k/index-before-final-stats.html"
+          cp "$path" "$backup"
+          before=$(sha256sum "$root/public/state.json" | awk '{print $1}')
+          python3 - <<'PY'
+          import json,re
+          from pathlib import Path
+          source=Path('/opt/kq247/vietlott/versions/caps-220k-650k/main-page-final-stats-sections.json')
+          p=json.loads(source.read_text())
+          h=Path('/opt/kq247/vietlott/public/index.html')
+          text=h.read_text()
+          boundaries={
+            'render30Detail':('function render30Detail(p,r){','function renderStatsBox(p,box,elId,label,reducedBox=null){'),
+            'renderStatsBox':('function renderStatsBox(p,box,elId,label,reducedBox=null){','function renderBacktestSummary(p,b){'),
+            'renderBacktestSummary':('function renderBacktestSummary(p,b){','function jackpotTickets(p,c){'),
+            'renderAnalytics':('function renderAnalytics(p){','function setMsg(id,t,bad=false)')
+          }
+          for key,(a,b) in boundaries.items():
+              i=text.find(a);j=text.find(b,i+len(a))
+              if i<0 or j<=i:raise RuntimeError('unrecognized main dashboard '+key)
+              text=text[:i]+p['sections'][key]+text[j:]
+          assert 'R17_USER32_ALL_METHODS_SAME_DAY_30DRAWS_60DRAWS_365D' in text
+          assert 'CHỈ DÀN CUỐI' in text and '220000' in text and '650000' in text
+          assert 'kq247-draw-windows-link' in text
+          for js in re.findall(r'<script\\b[^>]*>(.*?)</script>',text,re.S|re.I):
+              if js.strip():
+                  Path('/opt/kq247/vietlott/versions/caps-220k-650k/ui-check.js').write_text(js)
+          h.write_text(text)
+          print('MAIN_DASHBOARD_30_60_150_1500_FINAL_ONLY_PATCHED=YES')
+          PY
+          rollback(){
+            cp "$backup" "$path"
+            echo MAIN_DASHBOARD_ROLLBACK=YES
+          }
+          trap rollback ERR
+          docker cp "$root/versions/caps-220k-650k/ui-check.js" kq247-vietlott-vps:/tmp/kq247-ui-check.js
+          docker exec kq247-vietlott-vps node --check /tmp/kq247-ui-check.js
+          after=$(sha256sum "$root/public/state.json" | awk '{print $1}')
+          test "$before" = "$after"
+          curl -fsS --max-time 15 http://127.0.0.1:18088/ -o /tmp/kq247-capped-index.html
+          grep -q 'CHỈ DÀN CUỐI' /tmp/kq247-capped-index.html
+          curl -fsS --max-time 15 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"]'
+          trap - ERR
+          echo MAIN_DASHBOARD_TICKET_CAPS_220K_650K=PASS
+          echo CUSTOMER_SNAPSHOTS_UNCHANGED=YES
+          REMOTE
