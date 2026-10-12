@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd /opt/kq247/deployment/football-staging
+# On failed deployments collect container state and recent sanitized diagnostics.
+# Preserve the original exit code; never print the private .env file.
+deploy_diagnostics() {
+  code=$?
+  if [ "$code" -ne 0 ]; then
+    echo "R55_DEPLOY_FAILED_EXIT=$code" >&2
+    docker compose ps >&2 || true
+    docker compose logs --no-color --tail=60 football-db football-native football-cache football-staging >&2 || true
+  fi
+}
+trap deploy_diagnostics EXIT
 umask 077
 if [ ! -s .env ]; then
   printf 'R55_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env
