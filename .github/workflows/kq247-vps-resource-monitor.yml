@@ -1,0 +1,68 @@
+name: KQ247 VPS Monthly Resource Monitor
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vps-resource-monitor.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install lightweight 2-hour VPS traffic and capacity counter
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          dir=/opt/kq247/ops/resource-monitor
+          mkdir -p "$dir"
+          chmod 700 "$dir"
+          cat > "$dir/check.sh" <<'SCRIPT'
+          #!/bin/bash
+          set -euo pipefail
+          export TZ=Asia/Ho_Chi_Minh
+          dir=/opt/kq247/ops/resource-monitor
+          mkdir -p "$dir"
+          iface=$(ip route show default | awk '/default/ {print $5;exit}')
+          test -n "$iface"
+          test -f "/sys/class/net/$iface/statistics/tx_bytes"
+          tx=$(cat "/sys/class/net/$iface/statistics/tx_bytes")
+          rx=$(cat "/sys/class/net/$iface/statistics/rx_bytes")
+          month=$(date +%Y-%m)
+          ts=$(date +%Y-%m-%dT%H:%M:%S%z)
+          base="$dir/counters-$month.txt"
+          if test -s "$base"; then
+            read -r oldtx oldrx sumtx sumrx < "$base"
+            if test "$tx" -ge "$oldtx"; then sumtx=$((sumtx+tx-oldtx)); fi
+            if test "$rx" -ge "$oldrx"; then sumrx=$((sumrx+rx-oldrx)); fi
+          else
+            sumtx=0
+            sumrx=0
+          fi
+          printf '%s %s %s %s\n' "$tx" "$rx" "$sumtx" "$sumrx" > "$base"
+          disk=$(df -P / | awk 'NR==2 {gsub(/%/,"",$5);print $5}')
+          mem=$(awk '/MemTotal:/{t=$2}/MemAvailable:/{a=$2}END{if(t>0)printf "%.1f",100*(t-a)/t;else print "0"}' /proc/meminfo)
+          log="$dir/usage-$month.csv"
+          test -e "$log" || echo 'timestamp,interface,tx_bytes_counted,rx_bytes_counted,disk_used_pct,ram_used_pct' > "$log"
+          echo "$ts,$iface,$sumtx,$sumrx,$disk,$mem" >> "$log"
+          if [ "$disk" -ge 80 ]; then echo "WARNING_DiskAtLeast80Percent"; fi
+          echo "MONTHLY_RESOURCE_AUDIT=OK MONTH=$month INTERFACE=$iface TX_GB=$(awk -v n="$sumtx" 'BEGIN{printf "%.3f",n/1000000000}') RX_GB=$(awk -v n="$sumrx" 'BEGIN{printf "%.3f",n/1000000000}') DISK_USED_PCT=$disk RAM_USED_PCT=$mem"
+          find "$dir" -maxdepth 1 -type f -name 'usage-*.csv' -mtime +65 -delete
+          SCRIPT
+          chmod 700 "$dir/check.sh"
+          "$dir/check.sh"
+          if command -v crontab >/dev/null 2>&1; then
+            { crontab -l 2>/dev/null | grep -v '/opt/kq247/ops/resource-monitor/check.sh' || true
+              echo '12 */2 * * * /opt/kq247/ops/resource-monitor/check.sh >> /opt/kq247/ops/resource-monitor/monitor.log 2>&1'
+            } | crontab -
+            echo VPS_RESOURCE_MONITOR_CRON=EVERY_2_HOURS
+          else
+            echo VPS_RESOURCE_MONITOR_CRON=UNAVAILABLE
+          fi
+          REMOTE
