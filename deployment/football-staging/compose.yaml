@@ -115,10 +115,13 @@ services:
       - football-original
     ports:
       - "127.0.0.1:18080:18080"
-      - "80:18080"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ../football-original/public:/srv:ro
+      - football-caddy-data:/data
+      - football-caddy-config:/config
     mem_limit: 256m
     pids_limit: 100
     cpus: "0.50"
@@ -128,3 +131,5 @@ volumes:
   football-native-data:
   football-db-data:
   football-cache-data:
+  football-caddy-data:
+  football-caddy-config:
