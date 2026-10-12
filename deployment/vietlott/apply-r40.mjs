@@ -22,10 +22,20 @@ replaceOptional("renderStatsBox(p,s60,'stats','60 ngày',b.reduced_stats60||null
 replaceOptional('ĐANG HỒI KIỂM 50 KỲ / 150 KỲ / TOÀN LỊCH SỬ','ĐANG HỒI KIỂM 30 / 60 / 150 / 1.500 KỲ');
 const start=html.indexOf('function renderBacktestSummary(p,b){');
 const end=html.indexOf('\nfunction jackpotTickets(',start);
-if(start<0||end<=start)throw Error('renderer missing');
-html=html.slice(0,start)+p.uiRenderer+html.slice(end);
-if(!html.includes('[30,60,150,1500].map(row)')||!html.includes(p.schemaNew))throw Error('UI validation failed');
+if(start>=0&&end>start)html=html.slice(0,start)+p.uiRenderer+html.slice(end);
+else{
+ if(!html.includes('id="kq247-draw-windows"')){
+  if(!html.includes('</body>'))throw Error('HTML closing body missing');
+  html=html.replace('</body>',p.uiAddon+'\n</body>');
+ }
+}
+if(!html.includes('[30,60,150,1500].map(row)')&&!html.includes('kq247DrawStatsLoad()'))throw Error('UI addition failed');
 server=server.replace(match[0],`const INDEX_HTML=${JSON.stringify(html)};`);
+const routeAnchor="if(req.method==='GET'&&url.pathname==='/status')return send(res,200,current);";
+if(!server.includes("/api/draw-window-stats")){
+ if(!server.includes(routeAnchor))throw Error('HTTP route anchor missing');
+ server=server.replace(routeAnchor,p.apiRoute+'\n  '+routeAnchor);
+}
 if(server.includes(p.serverRuntimeOld))server=server.replace(p.serverRuntimeOld,p.serverRuntimeNew);
 if(!server.includes(p.serverRuntimeNew))throw Error('unknown server runtime, patch refused');
 for(const [file,data] of [[mergeFile,merge],[serverFile,server]]){const temp=file+'.r40tmp';fs.writeFileSync(temp,data);fs.renameSync(temp,file)}
