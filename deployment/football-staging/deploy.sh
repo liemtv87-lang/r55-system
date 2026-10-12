@@ -109,12 +109,12 @@ done
 curl -fsS --max-time 12 'http://127.0.0.1:18080/xoso-khach?region=xsmb' -o /tmp/kq247-xs-client.html
 cmp /tmp/kq247-xs-client.html /opt/kq247/deployment/lottery-original/public/client-vps.html
 echo 'KQ247_XS_CLIENT_ORIGINAL_NEON_AUTH=PASS'
-# Verify original XS Telegram sender is installed, but cannot double-post
-# while Hatchable remains the active sender.
+# Original XS Telegram sender is now primary on VPS; Hatchable crons were removed in release 119.
+# Never arm without the VPS private token and exact one-sender health check.
 for i in $(seq 1 12); do
   if curl -fsS --max-time 3 http://127.0.0.1:18085/healthz -o /tmp/kq247-xs-bot-health.json; then break; fi
   sleep 2
 done
-python3 -c 'import json;d=json.load(open("/tmp/kq247-xs-bot-health.json"));assert d["ok"] and d["service"]=="kq247-vps-original-xs-bot" and d["source"]=="exact original github lottery-bot/sender.py" and not d["active"];print("KQ247_XS_ORIGINAL_TELEGRAM_VPS_STANDBY=PASS")'
+python3 -c 'import json;d=json.load(open("/tmp/kq247-xs-bot-health.json"));assert d["ok"] and d["service"]=="kq247-vps-original-xs-bot" and d["source"]=="exact original github lottery-bot/sender.py" and d["active"] and d["has_token"];print("KQ247_XS_VPS_TELEGRAM_PRIMARY_ARMED=PASS")'
 docker compose ps
 echo 'R55_NATIVE_DEPLOY_VERIFIED=YES'

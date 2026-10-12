@@ -161,8 +161,8 @@ services:
     env_file:
       - /opt/kq247/.bot-secrets/xs.env
     environment:
-      DRY_RUN: "1"
-      KQ247_LOTTERY_CUTOVER: "disabled"
+      DRY_RUN: "0"
+      KQ247_LOTTERY_CUTOVER: "enabled"
       NODE_ENV: production
     ports:
       - "127.0.0.1:18085:3005"
