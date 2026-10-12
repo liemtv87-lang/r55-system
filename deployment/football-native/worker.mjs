@@ -103,6 +103,12 @@ async function run(){
   if(p.ready<1||p.results.every(x=>!x.prediction))throw Error('native_bongdalu_h2h_or_model_not_ready');
   return;
  }
+ if(cmd==='history-all'){
+  const {auditAllMarketHistories}=await import('./historyAudit.mjs');
+  const audit=await auditAllMarketHistories();
+  if(!audit.complete)process.exitCode=3;
+  return;
+ }
  if(cmd==='model-batch'){
   // Exhaustive audit: every Bongdalu fixture in the validated feed gets an
   // individual H2H/form history attempt. Only fixtures with actual AH/OU odds
