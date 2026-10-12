@@ -1,0 +1,42 @@
+name: Audit VPS Telegram Group Bot Identity
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-bot-identity-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check Telegram identity and matching token without showing secrets
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          docker inspect -f 'VPS_LOTTERY_BOT_STATUS={{.State.Status}}' kq247-lottery-bot
+          docker exec kq247-lottery-bot python - <<'PY'
+          import os,hashlib,json,urllib.request
+          token=os.environ.get('TELEGRAM_LOTTERY_BOT_TOKEN','')
+          print('TOKEN_CONFIGURED='+str(bool(token)))
+          digest=hashlib.sha256(token.encode()).hexdigest()
+          print('TOKEN_MATCHES_NEW='+str(digest=='ee57fc5176e5dbe70d7bb2e68336e9a7e0b26ebb1d941f28692164fca175b9d2'))
+          if not token:raise SystemExit('TOKEN_MISSING')
+          try:
+              with urllib.request.urlopen('https://api.telegram.org/bot'+token+'/getMe',timeout=15) as r:j=json.load(r)
+              print('BOT_USERNAME='+str(j.get('result',{}).get('username')))
+              u=j['result']['id']
+              with urllib.request.urlopen('https://api.telegram.org/bot'+token+'/getChatMember?chat_id=-1004320899120&user_id='+str(u),timeout=15) as r:z=json.load(r)
+              print('GROUP_ROLE='+str(z.get('result',{}).get('status')))
+          except Exception as e:raise SystemExit('TELEGRAM_CHECK_FAILED_'+type(e).__name__)
+          PY
+          curl -fsS --max-time 12 http://127.0.0.1:18085/healthz | python3 -c 'import sys,json; x=json.load(sys.stdin);print("HEALTH_OK="+str(x.get("ok")));print("SCHEDULER_ACTIVE="+str(x.get("active")));print("LAST_RUN="+str(x.get("last_run")));print("LAST_EXIT="+str(x.get("last_exit")));print("LAST_ERROR="+str(x.get("last_error")))'
+          VPS
