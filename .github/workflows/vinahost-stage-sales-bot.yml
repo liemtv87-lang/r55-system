@@ -18,11 +18,16 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
       - name: Stage sales bot files on VPS without changing the existing production bot
         env:
-          SSHPASS: \${{ secrets.VPS_ROOT_PASSWORD }}
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
+          if sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 "curl -fsS --max-time 5 http://127.0.0.1:18086/healthz >/dev/null 2>&1"; then
+            echo KQ247_EXISTING_SALES_SHADOW=PASS
+            echo KQ247_SKIP_SECOND_STANDBY_DEPLOYMENT=YES
+            exit 0
+          fi
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247/deployment/sales-bot && chmod 700 /opt/kq247/deployment/sales-bot'
           sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/sales-bot/worker.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile root@64.120.92.172:/opt/kq247/deployment/sales-bot/
           sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
