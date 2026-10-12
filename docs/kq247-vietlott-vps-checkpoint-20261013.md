@@ -50,3 +50,12 @@
 - IMPORTANT: At fixed number of distinct lottery tickets with fair equiprobable draws, expected exact-five G1 wins PER DRAW are Mega 200,000*(6*39)/8,145,060 ≈5.746; Power 600,000*(6*48)/28,989,675 ≈5.961. Over 30 draws EACH, combined expectation ≈351.2 G1, independent of which ticket numbers are selected. 2,000 G1/30 draws each is therefore far above expectation; no genuine optimization guarantees it. These are mathematical expectations, not predicted results.
 - In progress: GitHub Actions `kq247-vietlott-rule-ablation.yml` run 38315939129 evaluates original 32 rules against relaxed variants on 30 historical draws and a holdout segment, without modifying live snapshots. Follow its result before promoting any rule changes.
 - Do NOT disable or modify old official (locked) Mega/Power pools just to improve historic score; only promote changes demonstrated on strictly held-out draws with unchanged 200k/600k counts.
+
+
+## Additional study — 32-rule ablation vs historic eligible winning tickets
+- GitHub Actions workflow `kq247-vietlott-rule-ablation.yml`, run 38315939129: SUCCESS. Tested 30 historical drawings per product, with a separated last 11-draw holdout; zero missing same-day regional records. No production snapshot changed.
+- Mega 6/45: baseline historical jackpot-eligible combinations 3 and G1-eligible combinations 591; relaxing sum and 2/3-head requirements gives 6 JP, 998 G1; wider candidate relaxation gives 6 JP and 1,267 G1.
+- Power 6/55: baseline 3 JP1 + 12 JP2, 904 G1; soft sum/head yields 3 JP1 + 21 JP2, 1,464 G1; wider relaxation yields 4 JP1 + 35 JP2 and 2,064 G1.
+- **These are eligibility counts in the full expanded rule-filtered universe**, NOT historical prizes in the final exact 200k/600k portfolios. No method has demonstrated 5 JP and 2000 G1 in the actual reduced portfolios. Do not promote by those upper bounds alone.
+- An important parity check is under way (`kq247-vietlott-reducer-parity.yml`, run 38316312836): current VPS daily final pools use `reduceCoveragePool` (five-subset coverage) whereas historical `scanPoolOutcome` reduces by highest score; do not present the latter as exact replay of live final reducer until tested and aligned. In the future standardize the reduction algorithm for genuine walk-forward historical grading.
+- Progress note: original parity run hit missing `reduce-coverage.mjs` within the VPS container; rerun now stages original reducer into research namespace, without altering official pools.
