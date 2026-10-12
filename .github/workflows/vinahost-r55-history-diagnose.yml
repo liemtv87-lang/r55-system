@@ -1,0 +1,23 @@
+name: Diagnose R55 Historical Form Gaps
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-history-diagnose.yml
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Investigate incomplete original Bongdalu history pages
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/football-native/historyDiagnose.mjs root@64.120.92.172:/tmp/kq247-historyDiagnose.mjs
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker cp /tmp/kq247-historyDiagnose.mjs kq247-football-native:/app/historyDiagnose.mjs && docker exec kq247-football-native node /app/historyDiagnose.mjs'
