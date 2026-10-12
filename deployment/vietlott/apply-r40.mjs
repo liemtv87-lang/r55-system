@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-const p=JSON.parse(fs.readFileSync('deployment/vietlott/r40-windows-patch.json','utf8'));
+const p=JSON.parse(fs.readFileSync(new URL('./r40-windows-patch.json',import.meta.url),'utf8'));
 const [mergeFile,serverFile]=process.argv.slice(2);
 if(!mergeFile||!serverFile)throw Error('pass merge and server paths');
 let merge=fs.readFileSync(mergeFile,'utf8');
