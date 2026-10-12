@@ -175,6 +175,29 @@ services:
     cpus: "0.35"
     security_opt:
       - no-new-privileges:true
+  # Shadow-only sales bot; never consumes Telegram updates or PayOS
+  # until secrets, 80 customer licenses, webhook and payment tests pass.
+  sales-vps:
+    build:
+      context: ..
+      dockerfile: sales-vps/Dockerfile
+    image: kq247/sales-vps:staging
+    container_name: kq247-sales-vps
+    restart: unless-stopped
+    environment:
+      SALES_BOT_ACTIVE: "0"
+      NODE_ENV: production
+      PORT: "3010"
+    ports:
+      - "127.0.0.1:18086:3010"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: 192m
+    pids_limit: 90
+    cpus: "0.35"
+    security_opt:
+      - no-new-privileges:true
   football-staging:
     image: caddy:2.10-alpine
     container_name: kq247-football-staging
