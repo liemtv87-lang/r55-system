@@ -17,11 +17,9 @@
     path /api/main-football
     query data=1
   }
-  route {
-    handle @original_main {
-      reverse_proxy football-original:3002
-    }
-    handle /api/main-football {
+  handle /api/main-football {
+    route {
+      reverse_proxy @original_main football-original:3002
       reverse_proxy football-native:3001
     }
   }
