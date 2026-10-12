@@ -1,0 +1,67 @@
+name: KQ247 Sales VPS Secure Standby Install
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-sales-vps-secure-install.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Transfer encrypted materials and deploy inactive sales VPS container
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 "mkdir -p /opt/kq247/deployment/sales-bot/secrets /opt/kq247/.bot-secrets; chmod 700 /opt/kq247/.bot-secrets"
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/sales-bot/worker.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile root@64.120.92.172:/opt/kq247/deployment/sales-bot/
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/sales-bot/secrets/*.oaep.txt root@64.120.92.172:/opt/kq247/deployment/sales-bot/secrets/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          umask 077
+          src=/opt/kq247/deployment/sales-bot
+          dst=/opt/kq247/.bot-secrets/sales-primary.env
+          key=/opt/kq247/.bot-secrets/r55-transfer-private.pem
+          test -s "$key"
+          decode() {
+            base64 -d "$src/secrets/$1" | openssl pkeyutl -decrypt -inkey "$key" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
+          }
+          { printf 'TELEGRAM_SALES_BOT_TOKEN=%s\n' "$(decode sales-telegram.oaep.txt)"; printf 'NEON_DATABASE_URL=%s\n' "$(decode sales-neon.oaep.txt)"; } > "$dst.tmp"
+          test -s "$dst.tmp"
+          chmod 600 "$dst.tmp"
+          mv -f "$dst.tmp" "$dst"
+          # Destroy ciphertext copies on VPS once decrypted; secret never enters git plaintext.
+          rm -f "$src/secrets/"*.oaep.txt
+          cd "$src"
+          docker build -q -t kq247/sales-bot-primary:local . >/dev/null
+          if docker ps -a --format '{{.Names}}' | grep -qx kq247-sales-bot-primary; then
+            docker rm -f kq247-sales-bot-primary >/dev/null
+          fi
+          docker run -d --name kq247-sales-bot-primary --restart unless-stopped --env-file "$dst" -e KQ247_SALES_BOT_ACTIVE=0 -p 127.0.0.1:18087:3032 kq247/sales-bot-primary:local >/dev/null
+          sleep 3
+          curl -fsS --max-time 10 http://127.0.0.1:18087/healthz | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s["ok"] and not s["active"] and s["tokenConfigured"] and s["databaseConfigured"]; print("VPS_SALES_STANDBY_CREDENTIALS=PASS")'
+          docker exec -i kq247-sales-bot-primary node --input-type=module - <<'JS'
+          import pg from 'pg';
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:9000});
+          try{
+            const {rows}=await pool.query("SELECT count(*)::int n FROM sales_licenses");
+            if(rows[0].n<81)throw Error('customer_codes_missing');
+            console.log('VPS_SALES_CUSTOMER_LICENSES='+rows[0].n);
+            const r=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_SALES_BOT_TOKEN+'/getMe');
+            const j=await r.json();
+            if(!j.ok||j.result.username!=='muatool_du_doan_bot')throw Error('wrong_bot_identity');
+            console.log('VPS_SALES_BOT_IDENTITY=PASS');
+            const wh=await fetch('https://api.telegram.org/bot'+process.env.TELEGRAM_SALES_BOT_TOKEN+'/getWebhookInfo');
+            const w=await wh.json();
+            console.log('OLD_RENDER_WEBHOOK_PRESENT='+Boolean(w.result?.url));
+          }finally{await pool.end()}
+          JS
+          echo 'VPS_SALES_STAGED_NO_DOUBLE_POLLER=PASS'
+          VPS
