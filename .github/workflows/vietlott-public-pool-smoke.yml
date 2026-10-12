@@ -1,0 +1,31 @@
+name: Vietlott Public Pool Integrity Audit
+on:
+  push:
+    paths: [.github/workflows/vietlott-public-pool-smoke.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify public VPS state and exported pool metadata without changing anything
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json
+          origin='https://vietlott.64-120-92-172.sslip.io'
+          for path in ['/health','/status','/api/state','/filtered-pool-mega645.json','/filtered-pool-power655.json','/reduced-pool-mega645.json','/reduced-pool-power655.json']:
+            try:
+              req=urllib.request.Request(origin+path,headers={'User-Agent':'KQ247-Pool-Audit-ReadOnly/20261013'})
+              with urllib.request.urlopen(req,timeout=45) as r:
+                raw=r.read(35000000)
+                data=json.loads(raw)
+                fields={k:v for k,v in data.items() if k in ('ok','status','type','error','generated_at','schema_version','count','total','valid_total','reduction_target','target','target_date','locked','reduced_count','combo_count','selected_count','candidates','products') and k!='products'}
+                print('VIETLOTT_AUDIT',path,'HTTP',r.status,'BYTES',len(raw),'KIND',type(data).__name__,'ITEMS',len(data),'INFO',str(fields)[:450])
+                if path=='/api/state':
+                  print('VIETLOTT_STATE_RULE_COUNT',len(data.get('hard_rules',[])),'SNAPSHOT',str(data.get('snapshot',{}))[:400])
+            except Exception as e:
+              print('VIETLOTT_AUDIT_ERROR',path,type(e).__name__,str(e)[:140])
+          PY
