@@ -1,4 +1,5 @@
 name: KQ247 Deploy Sales PayOS Bridge To Existing VPS
+# Promote v2: Neon single-use tickets and VPS-only customer notifications.
 on:
   push:
     paths:
