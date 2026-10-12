@@ -26,7 +26,7 @@ footer{padding:18px 3px 25px;text-align:center;font-size:13px;font-weight:850;co
 <nav class="filters" aria-label="Lọc trận">
 <button data-count="all" class="active">TOÀN BỘ</button><button data-count="30">30 TRẬN</button>
 <button data-count="20">20 TRẬN</button><button id="archive">TRẬN ĐÃ BẮT ĐẦU</button>
-<button id="reload">TẢI LẠI</button>
+<button id="native-preview">DỰ ĐOÁN MỚI VPS</button><button id="reload">TẢI LẠI</button>
 </nav><div id="status" class="small" role="status" aria-live="polite"></div>
 <section id="matches" class="list"></section>
 <div class="note">Dự đoán được tạo trước trận bằng dữ liệu Bongdalu, không bảo đảm kết quả. Những trận đã bắt đầu được ẩn mặc định; bấm “Trận đã bắt đầu” để xem lại danh sách đã khóa.</div>
@@ -35,7 +35,7 @@ footer{padding:18px 3px 25px;text-align:center;font-size:13px;font-weight:850;co
 </main>
 <script>
 const root=document.querySelector('#matches'),status=document.querySelector('#status'),summary=document.querySelector('#summary'),src=document.querySelector('#source');
-const state={count:'all',history:false};
+const state={count:'all',history:false,preview:false};
 const h=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 function fmt(ts){return Number.isFinite(Number(ts))&&Number(ts)>0?new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(Number(ts))):'Chưa rõ giờ'}
 function selection(p){
@@ -54,12 +54,12 @@ function card(p){
 async function load(){
  status.textContent='Đang cập nhật danh sách trận...';root.replaceChildren();
  try{
-  const params=new URLSearchParams({mode:'all',limit:state.count,from_ts:state.history?'0':'1'});
+  const params=new URLSearchParams({mode:'all',limit:state.count,from_ts:state.history?'0':'1',preview:state.preview?'1':'0'});
   const r=await fetch('/api/main-football?'+params,{cache:'no-store'});
   const d=await r.json();if(!r.ok||!d.ok||!Array.isArray(d.predictions))throw Error(d.error||'Không lấy được dữ liệu');
   const count=d.predictions.length;
-  summary.textContent='NGÀY '+h(d.date)+' • '+d.snapshot_total+' DỰ ĐOÁN ĐÃ KHÓA • ĐANG HIỆN '+count+' TRẬN';
-  src.textContent='Nguồn: Bongdalu • '+(d.legacyFallback?'Dữ liệu khóa đã có — bộ xử lý VPS đang đồng bộ':'Động cơ R55 VPS độc lập')+
+  summary.textContent='NGÀY '+h(d.date)+' • '+d.snapshot_total+(d.preview?' DỰ ĐOÁN MỚI (CHƯA KHÓA)':' DỰ ĐOÁN ĐÃ KHÓA')+' • ĐANG HIỆN '+count+' TRẬN';
+  src.textContent='Nguồn: Bongdalu • '+(d.preview?'Tính mới trên VPS, chỉ tham khảo, không thay snapshot đã khóa':d.legacyFallback?'Dữ liệu khóa đã có — bộ xử lý VPS đang đồng bộ':'Động cơ R55 VPS độc lập')+
    (d.coverage!=null?' • Tỷ lệ phủ '+d.coverage+'%':'');
   status.textContent=(state.history?'Bao gồm trận đã bắt đầu':'Chỉ hiển thị trận chưa bắt đầu')+' • '+count+' trận';
   root.innerHTML=d.predictions.map(card).join('')||'<p>Chưa có trận phù hợp trong thời điểm này.</p>';
@@ -69,6 +69,7 @@ document.querySelectorAll('button[data-count]').forEach(b=>b.addEventListener('c
  state.count=b.dataset.count;document.querySelectorAll('button[data-count]').forEach(x=>x.classList.toggle('active',x===b));load();
 }));
 document.querySelector('#archive').addEventListener('click',e=>{state.history=!state.history;e.currentTarget.classList.toggle('active',state.history);load()});
+document.querySelector('#native-preview').addEventListener('click',e=>{state.preview=!state.preview;e.currentTarget.classList.toggle('active',state.preview);load()});
 document.querySelector('#reload').addEventListener('click',load);load();
 setInterval(load,120000);
 </script></body></html>
