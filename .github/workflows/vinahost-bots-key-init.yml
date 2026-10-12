@@ -1,0 +1,21 @@
+name: KQ247 VPS Bot Secure Key Setup
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-bots-key-init.yml
+permissions:
+  contents: read
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Provision isolated VPS key pair and print PUBLIC key only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          sshpass -e ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'set -eu; umask 077; mkdir -p /opt/kq247/.bot-secrets; if [ ! -s /opt/kq247/.bot-secrets/r55-transfer-private.pem ]; then openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /opt/kq247/.bot-secrets/r55-transfer-private.pem >/dev/null 2>&1; fi; chmod 600 /opt/kq247/.bot-secrets/r55-transfer-private.pem; openssl pkey -in /opt/kq247/.bot-secrets/r55-transfer-private.pem -pubout; echo KQ247_BOT_ENCRYPTION_KEY_READY=YES'
