@@ -1,0 +1,88 @@
+name: KQ247 Vietlott R40 Exact Draw Stats
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r40-drawstats-deploy.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-draw-window-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Stage validated R40 stats patch on existing VPS
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/r40 && chmod 700 /opt/kq247/vietlott/versions/r40'
+          sshpass -e scp "${opts[@]}" deployment/vietlott/apply-r40.mjs deployment/vietlott/r40-windows-patch.json "$host":/opt/kq247/vietlott/versions/r40/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          root=/opt/kq247/vietlott
+          base="$root/versions/r40"
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test -s "$root/scripts/merge-backtest-60.mjs"
+          test -s "$root/snapdeploy-server.mjs"
+          cp "$root/scripts/merge-backtest-60.mjs" "$base/merge-before-r40.mjs"
+          cp "$root/snapdeploy-server.mjs" "$base/server-before-r40.mjs"
+          docker cp "$name":/app/public/backtest-60.json "$base/backtest-before-r40.json"
+          test -s "$base/backtest-before-r40.json"
+          restore() {
+            cp "$base/merge-before-r40.mjs" "$root/scripts/merge-backtest-60.mjs"
+            cp "$base/server-before-r40.mjs" "$root/snapdeploy-server.mjs"
+            docker cp "$base/merge-before-r40.mjs" "$name":/app/scripts/merge-backtest-60.mjs
+            docker cp "$base/server-before-r40.mjs" "$name":/app/snapdeploy-server.mjs
+            cp "$base/backtest-before-r40.json" "$root/public/backtest-60.json"
+            docker restart "$name" >/dev/null
+            echo VIETLOTT_R40_ROLLBACK_RESTORED=YES
+          }
+          trap restore ERR
+          cd "$root"
+          node "$base/apply-r40.mjs" scripts/merge-backtest-60.mjs snapdeploy-server.mjs
+          node --check scripts/merge-backtest-60.mjs
+          node --check snapdeploy-server.mjs
+          docker cp scripts/merge-backtest-60.mjs "$name":/app/scripts/merge-backtest-60.mjs
+          docker cp snapdeploy-server.mjs "$name":/app/snapdeploy-server.mjs
+          docker exec "$name" node scripts/merge-backtest-60.mjs >/tmp/kq247-r40-merge.log
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/opt/kq247/vietlott/public/backtest-60.json'))
+          for p in ['mega645','power655']:
+              v=data['products'][p]
+              for n in [30,60,150,1500]:
+                  z=v['reduced_stats'+str(n)]
+                  assert z['requested_draws']==n
+                  assert z['draws_tested']==z['available_draws']
+                  assert z['missing_draws']==max(0,n-z['available_draws'])
+                  assert z['complete']==(z['available_draws']==n)
+                  c=z.get('prize_counts') or {}
+                  jp=c.get('Jackpot',0)+c.get('Jackpot 1',0)+c.get('Jackpot 2',0)
+                  print('R40_DRAW_WINDOW_'+p+'_'+str(n)+'='+str(z['available_draws'])+'/'+str(n)+'_JP_'+str(jp)+'_G1_'+str(c.get('Giải nhất',0))+'_COMPLETE_'+str(z['complete']))
+          PY
+          docker restart "$name" >/dev/null
+          ok=0
+          for j in $(seq 1 22); do
+             if curl -fsS --max-time 8 http://127.0.0.1:18088/health >/tmp/r40-health.json;then
+                if python3 -c 'import json;h=json.load(open("/tmp/r40-health.json"));assert h.get("ok") and h.get("runtime","").startswith("R40_")';then ok=1;break;fi
+             fi
+             sleep 2
+          done
+          test "$ok" -eq 1
+          curl -fsS --max-time 10 http://127.0.0.1:18088/ | grep -q 'Hồi kiểm 30 / 60 / 150 / 1.500 kỳ'
+          trap - ERR
+          docker commit "$name" kq247-vietlott-vps:r40-draw-stats >/dev/null
+          echo VIETLOTT_R40_LIVE_STATS=YES
+          echo VIETLOTT_R40_PRODUCTION_SNAPSHOTS_UNCHANGED=YES
+          REMOTE
