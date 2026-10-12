@@ -1,0 +1,38 @@
+name: XS VPS Hard Deadline and Secure Token Test
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-exact-deadline-smoke.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Verify real VPS container and exact 17-18-20 deadlines without sending
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          cd /opt/kq247/deployment/football-staging
+          curl -fsS --max-time 8 http://127.0.0.1:18085/healthz | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] and d["has_token"] and not d["active"]; print("XS_VPS_SECRET_CONFIGURED=PASS"); print("XS_VPS_GROUP_SINGLE_SENDER_SAFE=PASS")'
+          docker compose exec -T lottery-bot python - <<'PY'
+          import sys
+          sys.path.insert(0,'/app/lottery-bot')
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          from sender import due,REGIONS
+          vn=ZoneInfo('Asia/Ho_Chi_Minh')
+          for reg,hour in [('mn',17),('mt',18),('mb',20)]:
+              assert (REGIONS[reg]['after'].hour,REGIONS[reg]['after'].minute)==(hour,0)
+              for minute,second,want in [(0,0,True),(4,59,True),(5,0,True),(5,1,False),(6,0,False)]:
+                  assert due(datetime(2026,10,13,hour,minute,second,tzinfo=vn),reg,'result')==want,(reg,minute,second)
+              print('XS_VPS_ROUNDUP_'+reg.upper()+'_'+str(hour)+':00_TO_'+str(hour)+':05=PASS')
+          PY
+          VPS
