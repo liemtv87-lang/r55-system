@@ -1,0 +1,22 @@
+name: Vietlott VPS Failure Details
+on:
+  push:
+    paths: [.github/workflows/vietlott-vps-failure-details.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read current job failure messages only
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request
+          u='https://vietlott.64-120-92-172.sslip.io/status'
+          with urllib.request.urlopen(u,timeout=20) as f:d=json.load(f)
+          print('VIETLOTT_JOB_ID',d.get('id'),'TYPE',d.get('type'),'STATUS',d.get('status'),'ERROR',d.get('error'))
+          for row in d.get('logs',[])[-36:]:
+            print('VIETLOTT_LOG',str(row)[:750])
+          PY
