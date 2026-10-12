@@ -3,7 +3,7 @@ import {db} from 'hatchable';
 const getVNDay=()=>new Intl.DateTimeFormat('en-CA',{
   year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Ho_Chi_Minh'
 }).format(new Date());
-const toInt=(s,d)=>Number.isFinite(Number(s))?Math.min(5000,Math.max(1,Math.trunc(Number(s)))):d;
+const toInt=(s,d)=>s==='all'?5000:Number.isFinite(Number(s))?Math.min(5000,Math.max(1,Math.trunc(Number(s)))):d;
 const makePick=m=>{
  const k=m.market||{},ts=Number(m.ts)||Date.parse(m.kickoff||''),top=Number(m.priority)>=175;
  return {id:m.id,ts,home:m.home,away:m.away,league:m.league,country:m.country,
