@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>KQ247 • R55 Bóng Đá</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;background:#0b1220;color:#e8eefb;font-size:14px}
+*{box-sizing:border-box}body{margin:0;min-width:320px}main{max-width:1100px;margin:auto;padding:14px}
+header{padding:15px;border-radius:13px;background:linear-gradient(125deg,#172c51,#111d34);border:1px solid #263a58}
+h1{font-size:25px;margin:0 0 8px;color:#ff4b55;font-weight:900}h2{font-size:15px;margin:0;font-weight:850;color:#ff5963}
+.small{font-size:12px;color:#b3c0d5}.summary{margin:9px 0 0;font-weight:600}
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.filters button{appearance:none;background:#182b46;border:1px solid #324e6d;color:#e7f1ff;border-radius:8px;padding:9px 12px;font-weight:800;font-size:13px;cursor:pointer}
+.filters button.active{background:#134c3b;border-color:#29cb91;color:#fff}.filters button:focus-visible{outline:2px solid #8ae8cb}
+#status{padding:0 2px 10px;min-height:16px}.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:9px}
+.match{background:#141f32;border-radius:10px;border:1px solid #253651;padding:12px}
+.headline{display:flex;gap:5px;justify-content:space-between;align-items:center;margin-bottom:9px}.league{font-size:12px;color:#b0c9e8;font-weight:650}
+.when{font-size:12px;white-space:nowrap;color:#d3d8e8}
+.teams{color:#ff535d;font-size:17px;line-height:1.45;font-weight:900;overflow-wrap:anywhere}
+.market{margin-top:9px;background:#10291f;border:1px solid #245b42;padding:10px;border-radius:8px;color:#28e58c;font-weight:950;font-size:18px}
+.market small{display:block;font-size:11px;color:#b4ecd3;font-weight:550;margin-top:5px}
+.meta{font-size:11px;color:#b8c6da;margin-top:8px}.note{font-size:12px;color:#a6b3c8;padding:12px 4px 0}.warn{color:#ffca7a}
+footer{padding:18px 3px 25px;text-align:center;font-size:13px;font-weight:850;color:#398cff}footer a{color:#ff555b;text-decoration:underline;font-weight:900}
+@media(max-width:500px){main{padding:9px}.list{grid-template-columns:1fr}h1{font-size:23px}.teams{font-size:16px}}
+</style></head><body><main>
+<header><h1>KQ247 • DỰ ĐOÁN BÓNG ĐÁ R55</h1><div id="summary" class="summary">Đang lấy dữ liệu Bongdalu...</div>
+<div id="source" class="small">Dự đoán độc lập AH / Tài Xỉu • 1 kèo cho mỗi trận</div></header>
+<nav class="filters" aria-label="Lọc trận">
+<button data-count="all" class="active">TOÀN BỘ</button><button data-count="30">30 TRẬN</button>
+<button data-count="20">20 TRẬN</button><button id="archive">TRẬN ĐÃ BẮT ĐẦU</button>
+<button id="reload">TẢI LẠI</button>
+</nav><div id="status" class="small" role="status" aria-live="polite"></div>
+<section id="matches" class="list"></section>
+<div class="note">Dự đoán được tạo trước trận bằng dữ liệu Bongdalu, không bảo đảm kết quả. Những trận đã bắt đầu được ẩn mặc định; bấm “Trận đã bắt đầu” để xem lại danh sách đã khóa.</div>
+<footer>NHÓM PHÂN TÍCH: <a target="_blank" rel="noreferrer" href="https://t.me/keochuyengia79">@keochuyengia79</a>
+ • TOOL KQ247: <a target="_blank" rel="noreferrer" href="https://t.me/muatool_du_doan_bot">@muatool_du_doan_bot</a></footer>
+</main>
+<script>
+const root=document.querySelector('#matches'),status=document.querySelector('#status'),summary=document.querySelector('#summary'),src=document.querySelector('#source');
+const state={count:'all',history:false};
+const h=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+function fmt(ts){return Number.isFinite(Number(ts))&&Number(ts)>0?new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(Number(ts))):'Chưa rõ giờ'}
+function selection(p){
+ if(p.ah){const n=Number(p.ah.line);return {display:'KÈO AH • '+h(p.ah.pick)+' '+(n>=0?'+':'')+h(n),price:p.ah.price}}
+ if(p.ou)return{display:'KÈO TÀI/XỈU • '+h(p.ou.pick)+' '+h(p.ou.line),price:p.ou.price};
+ return{display:'Chưa có kèo xác minh',price:null};
+}
+function card(p){
+ const k=selection(p),major=p.top?' • TRẬN LỚN':'',book=p.bookmaker_count?('Nhà cái: '+h(p.bookmaker_count)):'';
+ const price=k.price?(' • Giá '+h(k.price)):'';
+ return '<article class="match"><div class="headline"><span class="league">'+h(p.league||'Bongdalu')+h(major)+'</span><span class="when">'+h(fmt(p.ts))+'</span></div>'+
+  '<div class="teams">'+h(p.home)+' — '+h(p.away)+'</div>'+
+  '<div class="market">'+k.display+'<small>'+book+price+'</small></div>'+
+  '<div class="meta">'+h(p.country||'')+'</div></article>';
+}
+async function load(){
+ status.textContent='Đang cập nhật danh sách trận...';root.replaceChildren();
+ try{
+  const params=new URLSearchParams({mode:'all',limit:state.count,from_ts:state.history?'0':'1'});
+  const r=await fetch('/api/main-football?'+params,{cache:'no-store'});
+  const d=await r.json();if(!r.ok||!d.ok||!Array.isArray(d.predictions))throw Error(d.error||'Không lấy được dữ liệu');
+  const count=d.predictions.length;
+  summary.textContent='NGÀY '+h(d.date)+' • '+d.snapshot_total+' DỰ ĐOÁN ĐÃ KHÓA • ĐANG HIỆN '+count+' TRẬN';
+  src.textContent='Nguồn: Bongdalu • '+(d.legacyFallback?'Dữ liệu khóa đã có — bộ xử lý VPS đang đồng bộ':'Động cơ R55 VPS độc lập')+
+   (d.coverage!=null?' • Tỷ lệ phủ '+d.coverage+'%':'');
+  status.textContent=(state.history?'Bao gồm trận đã bắt đầu':'Chỉ hiển thị trận chưa bắt đầu')+' • '+count+' trận';
+  root.innerHTML=d.predictions.map(card).join('')||'<p>Chưa có trận phù hợp trong thời điểm này.</p>';
+ }catch(e){status.textContent='Không tải được dữ liệu: '+String(e.message||e);root.replaceChildren();}
+}
+document.querySelectorAll('button[data-count]').forEach(b=>b.addEventListener('click',()=>{
+ state.count=b.dataset.count;document.querySelectorAll('button[data-count]').forEach(x=>x.classList.toggle('active',x===b));load();
+}));
+document.querySelector('#archive').addEventListener('click',e=>{state.history=!state.history;e.currentTarget.classList.toggle('active',state.history);load()});
+document.querySelector('#reload').addEventListener('click',load);load();
+setInterval(load,120000);
+</script></body></html>
