@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1261be"><meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta name="robots" content="noindex,nofollow"><title>KQ247 • Xổ số bản khách Neon</title>
+
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Arial,sans-serif;background:#eef3f8;color:#1b2a40}
+.warn{background:#fff0f0;color:#a4212b;padding:8px;text-align:center;font-size:12px;font-weight:800}
+.bar{display:flex;align-items:center;justify-content:space-between;background:#fff;padding:10px;gap:8px;border-bottom:1px solid #dae3ee}
+.brand{font-size:15px;font-weight:900;color:#1551a0}.small{font-size:12px;color:#5b708b}
+.tabs{display:flex;gap:7px}.tab{border:none;background:#e4efff;color:#1754a0;border-radius:7px;padding:8px;font-size:12px;font-weight:800}.tab.sel{background:#095fc5;color:white}
+#expiry{display:none;background:#e9fff4;color:#125a42;text-align:center;padding:6px;font-size:12px;font-weight:800}
+#frame{width:100%;height:calc(100dvh - 112px);border:0;display:none;background:#fff}
+.gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#eff4f9;padding:14px;z-index:99}
+.gate.hidden{display:none}.panel{width:min(440px,100%);padding:22px;border-radius:15px;background:white;box-shadow:0 10px 28px #13243a20}
+h1{font-size:21px;color:#104c9c;margin:0 0 8px}.hint{font-size:13px;line-height:1.6;color:#617184}
+input{width:100%;padding:13px;border:1px solid #bacde5;border-radius:10px;font-size:16px;text-transform:uppercase;margin:12px 0}
+.btn{background:#075cbd;color:white;font-weight:850;padding:12px;border-radius:9px;border:none;cursor:pointer}
+.row{display:flex;gap:8px}.row button{flex:1}.secondary{background:#e9f1fc;color:#16509c}
+#msg{min-height:21px;margin:9px 0;color:#bd2331;font-size:13px}.links{font-size:13px;line-height:2;margin-top:12px}
+.links a{color:#d31920;font-weight:850;text-decoration:none}
+</style></head><body>
+<div class="warn">Dự đoán chỉ mang tính tham khảo. Không đảm bảo kết quả.</div>
+<div class="bar"><div><div class="brand">KQ247 • BẢN KHÁCH NEON</div><div class="small">Mã và hạn sử dụng giữ nguyên</div></div>
+<div class="tabs"><button class="tab" data-region="xsmb">MB</button><button class="tab" data-region="xsmt">MT</button><button class="tab" data-region="xsmn">MN</button></div></div>
+<div id="expiry"></div><iframe id="frame" referrerpolicy="no-referrer" title="Dự đoán xổ số Neon đã khóa đầy đủ"></iframe>
+<div class="gate" id="gate"><div class="panel">
+<h1>Tool xổ số XSMB • XSMT • XSMN</h1>
+<div class="hint">Dùng mã đã cấp trước đây. Không cần mua mã mới. Mỗi mã được khóa với thiết bị kích hoạt ban đầu.</div>
+<input id="code" placeholder="Nhập mã XS-..." autocomplete="off" autocapitalize="characters">
+<div class="row"><button id="activate" class="btn">KÍCH HOẠT</button><button id="retry" class="btn secondary">KIỂM TRA LẠI</button></div>
+<div id="msg"></div>
+<div class="links">Mua tool: <a href="https://t.me/muatool_du_doan_bot">Bot KQ247</a><br>Nhóm dự đoán: <a href="https://t.me/xsbm999">Xổ số KQ247</a></div>
+</div></div>
+<script>
+'use strict';
+const API='https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/';
+const qs=new URLSearchParams(location.search);
+const PRODUCT=qs.get('product')==='vietlott'?'vietlott':'lottery';
+const MAIN=PRODUCT==='vietlott'?'https://vietlott-r32-runner-free.onrender.com/?client=1':'https://64-120-92-172.sslip.io/xoso';
+const CODE_KEY=PRODUCT==='vietlott'?'kq247_vietlott_code':'kq247_lottery_code',DEVICE_KEY='kq247_dev',ACCESS_KEY=PRODUCT==='vietlott'?'kq247_vietlott_verified_v1':'kq247_lottery_verified_v1',TTL=8*60*60*1000;
+const el=id=>document.getElementById(id);
+const region=['xsmb','xsmt','xsmn'].includes(qs.get('region'))?qs.get('region'):'xsmb';
+if(PRODUCT==='vietlott'){document.title='KQ247 • Vietlott bản khách';document.querySelector('.brand').textContent='KQ247 • VIETLOTT KHÁCH NEON';document.querySelector('.panel h1').textContent='Tool Vietlott Mega 6/45 • Power 6/55';document.querySelector('.tabs').style.display='none';el('code').placeholder='Nhập mã Vietlott đã cấp';}
+const errors={invalid_code:'Mã không hợp lệ',expired:'Mã đã hết hạn',device_mismatch:'Mã đã khóa trên thiết bị khác',device_has_active_license:'Thiết bị đang dùng mã khác còn hạn',trial_already_used:'Thiết bị đã dùng thử 10 ngày',invalid_request:'Dữ liệu kích hoạt không hợp lệ'};
+async function sha(v){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v));return Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('')}
+function device(){let d=localStorage.getItem(DEVICE_KEY);if(!d){d=crypto.randomUUID();localStorage.setItem(DEVICE_KEY,d)}return d}
+async function ids(){const d=device(),traits=[navigator.userAgent,navigator.language,screen.width+'x'+screen.height,Intl.DateTimeFormat().resolvedOptions().timeZone].join('|');return{device_hash:await sha(d),fingerprint_hash:await sha('kq247-client-v2|'+d+'|'+traits)}}
+function where(){if(PRODUCT==='vietlott')return MAIN;const u=new URL(MAIN);for(const k of ['region','station','date','target'])if(qs.get(k))u.searchParams.set(k,qs.get(k));if(!u.searchParams.get('region'))u.searchParams.set('region',region);return u.toString()}
+function show(access){
+  const exp=new Date(access.expires_at||access.session_expires_at);
+  if(!Number.isFinite(exp.getTime())||exp.getTime()<=Date.now()){el('msg').textContent='Mã đã hết hạn';return false}
+  el('gate').classList.add('hidden');el('expiry').style.display='block';
+  const left=exp.getTime()-Date.now();
+  el('expiry').textContent='Còn '+(left<86400000?Math.ceil(left/3600000)+' giờ':Math.ceil(left/86400000)+' ngày')+' • Hết hạn '+exp.toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});
+  const frame=el('frame');if(frame.src!==where())frame.src=where();frame.style.display='block';
+  return true;
+}
+function remember(r){const exp=Date.parse(r.expires_at||'');if(Number.isFinite(exp)&&exp>Date.now()){localStorage.setItem(ACCESS_KEY,JSON.stringify({code:localStorage.getItem(CODE_KEY),device:device(),exp,verified:Date.now()}))}}
+function cached(){
+  try{const c=JSON.parse(localStorage.getItem(ACCESS_KEY)||'null'),now=Date.now();
+    return c&&c.code===localStorage.getItem(CODE_KEY)&&c.device===device()&&c.exp>now&&c.verified<=now&&now-c.verified<TTL&&show({expires_at:new Date(c.exp).toISOString()});
+  }catch{return false}
+}
+async function call(action,body){
+ try{const r=await fetch(API+'?action='+action,{method:'POST',headers:{'content-type':'application/json'},cache:'no-store',body:JSON.stringify(body),signal:AbortSignal.timeout(12000)});return{status:r.status,data:await r.json()}}
+ catch{return{status:503,data:{ok:false,error:'service_unavailable'}}}
+}
+async function activate(){
+ const raw=el('code').value.trim().toUpperCase();if(!raw){el('msg').textContent='Nhập mã đã cấp.';return}
+ el('msg').textContent='Đang xác thực...';
+ const code_hash=await sha(raw),payload={product:PRODUCT,code_hash,...await ids()},v=await call('activate',payload);
+ if(v.data.ok){localStorage.setItem(CODE_KEY,code_hash);localStorage.setItem('kq247_lottery_session',v.data.session_token||'');remember(v.data);show(v.data);el('msg').textContent=''}
+ else el('msg').textContent=errors[v.data.reason||v.data.error]||v.data.error||'Chưa xác thực được';
+}
+async function check(){
+ const hash=localStorage.getItem(CODE_KEY);if(!hash)return;
+ const proof=cached();
+ const v=await call('check',{product:PRODUCT,code_hash:hash,...await ids()});
+ if(v.data.ok){localStorage.setItem('kq247_lottery_session',v.data.session_token||'');remember(v.data);show(v.data);el('msg').textContent='';return}
+ const temporary=v.status>=500||v.status===429||v.status===402||v.data.error==='service_unavailable';
+ if(proof&&temporary)return;
+ el('gate').classList.remove('hidden');el('frame').style.display='none';el('expiry').style.display='none';
+ el('msg').textContent=temporary?'Không kết nối được xác thực, dữ liệu mã và thiết bị vẫn được giữ nguyên. Hãy thử lại.':(errors[v.data.reason||v.data.error]||v.data.error||'Mã chưa hợp lệ');
+}
+el('activate').addEventListener('click',activate);
+el('retry').addEventListener('click',check);
+el('code').addEventListener('keydown',e=>{if(e.key==='Enter')activate()});
+for(const b of document.querySelectorAll('[data-region]')){b.classList.toggle('sel',b.dataset.region===region);b.addEventListener('click',()=>{const u=new URL(location.href);u.searchParams.set('region',b.dataset.region);location.assign(u.toString())})}
+if(location.hash.startsWith('#kq247=')){try{const str=location.hash.slice(7).replace(/-/g,'+').replace(/_/g,'/');const d=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(str),v=>v.charCodeAt(0))));if(d.dev)localStorage.setItem(DEVICE_KEY,String(d.dev));if(d.code)localStorage.setItem(CODE_KEY,String(d.code));if(d.session)localStorage.setItem('kq247_lottery_session',String(d.session));if(d.access)localStorage.setItem(ACCESS_KEY,JSON.stringify(d.access))}catch{}history.replaceState(null,'',location.pathname+location.search)}
+if(localStorage.getItem(CODE_KEY))check();
+</script></body></html>
