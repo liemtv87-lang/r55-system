@@ -37,7 +37,8 @@ jobs:
           tar -xzf /tmp/kq247-r55-stage.tgz -C /opt/kq247
           cd /opt/kq247/deployment/football-staging
           docker compose config -q
-          docker compose up -d
+          docker compose up --build -d
+          docker compose up -d --force-recreate football-staging
           for i in 1 2 3 4 5; do
             if curl --fail --silent --max-time 8 http://127.0.0.1:18080/_kq247/health; then break; fi
             sleep 2
