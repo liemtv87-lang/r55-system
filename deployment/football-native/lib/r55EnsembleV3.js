@@ -79,14 +79,21 @@ export function chooseR55Ensemble(row,h,native){
   const modelStable=worst>.025&&best-worst<.25&&ev>.085&&ev<.24;
   const accept=q.ok&&modelStable&&!risk&&Number(row.priority)>=175&&!(x.type==="AH"&&Math.abs(x.line)>1.25)&&
        !(x.type==="OU"&&x.line>=4);
+  // Model-only edges above 24% and very deep Asian lines caused the
+  // unverified 12-Oct losses. For shadow picks, prefer less fragile markets
+  // rather than chasing exaggerated expected returns. This is NOT a win guarantee.
+  const fragile=(x.type==="AH"&&Math.abs(x.line)>1.25?10:0)+
+   (ev>.24?6:0)+(worst<-.05?4:0)+(best-worst>.25?3:0)+
+   (x.type==="OU"&&x.line>=4?4:0)+(risk?10:0);
   return {...x,ev:round(ev,4),worstEV:round(worst,4),spreadEV:round(best-worst,4),
-   agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
+   fragility:fragile,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
    researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":Number(row.priority)<175?"competition_below_priority_floor":!modelStable?"ensemble_edge_not_robust":
       x.type==="AH"&&Math.abs(x.line)>1.25?"deep_ah":x.type==="OU"&&x.line>=4?"extreme_total":"accepted"};
  });
  if(!scored.length)return null;
- scored.sort((a,b)=>Number(a.researchOnly)-Number(b.researchOnly)||b.ev-a.ev||
-    b.worstEV-a.worstEV||Number(b.nativeAligned)-Number(a.nativeAligned));
+ scored.sort((a,b)=>Number(a.researchOnly)-Number(b.researchOnly)||
+    a.fragility-b.fragility||b.worstEV-a.worstEV||
+    Number(b.nativeAligned)-Number(a.nativeAligned)||b.ev-a.ev);
  const chosen=scored[0];
  const method="r55_ensemble_v3_"+chosen.type.toLowerCase();
  return {type:chosen.type,pick:chosen.pick,line:chosen.line,odds:chosen.odds,
