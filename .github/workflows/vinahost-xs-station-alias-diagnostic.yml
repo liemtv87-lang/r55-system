@@ -1,0 +1,44 @@
+name: XS Station Alias Diagnostic - Read Only
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-station-alias-diagnostic.yml
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install -q beautifulsoup4==4.13.5
+      - name: Compare exact Neon scheduled stations versus verified draw station names
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0,'lottery-bot')
+          import sender as s
+          for day in ['2026-10-12']:
+            for region in ['mn','mt','mb']:
+              try:
+                expected,_=s.read_snapshot(day,region)
+                print('EXPECTED_STATIONS',region,sorted(expected))
+                from datetime import datetime
+                dt=datetime.strptime(day,'%Y-%m-%d')
+                url='https://www.minhngoc.net.vn/ket-qua-xo-so/'+s.REGIONS[region]['path']+'/'+dt.strftime('%d-%m-%Y')+'.html'
+                html=s.get_html(url)
+                soup=s.BeautifulSoup(html,'html.parser')
+                blocks=soup.select('table.bkqtinhmienbac') if region=='mb' else soup.select('table.rightcl')
+                raw=[]
+                for block in blocks:
+                  a=block.select_one('td.tinh a')
+                  name='XSMB' if region=='mb' else (a.get_text(' ',strip=True) if a else '')
+                  if name and name not in raw:raw.append(name)
+                print('SOURCE_STATIONS',region,raw[:30])
+                try:
+                  v=s.draw_results(day,region,expected)
+                  print('DRAW_MATCH',region,sorted(v))
+                except Exception as e:print('DRAW_MISMATCH',region,str(e)[:170])
+              except Exception as e:print('SOURCE_FAILURE',region,type(e).__name__,str(e)[:160])
+          PY
