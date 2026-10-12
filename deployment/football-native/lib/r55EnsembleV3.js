@@ -52,6 +52,15 @@ function estimates(row,h,native){
  const anchorH=bounded((total+diff)/2,.2,4.3),anchorA=bounded((total-diff)/2,.2,4.3);
  return [[mh,ma],[formH,formA],[anchorH,anchorA]];
 }
+function nativeSide(row,native,type){
+ const raw=String(type==="AH"?native?.ah?.pick:native?.ou?.pick).trim().toUpperCase();
+ if(!raw)return null;
+ if(type==="OU")return ["OVER","TÀI","TAI"].includes(raw)?"OVER":
+   ["UNDER","XỈU","XIU"].includes(raw)?"UNDER":null;
+ if(["HOME","CHỦ","1",String(row?.home||"").trim().toUpperCase()].includes(raw))return "HOME";
+ if(["AWAY","KHÁCH","2",String(row?.away||"").trim().toUpperCase()].includes(raw))return "AWAY";
+ return null;
+}
 export function chooseR55Ensemble(row,h,native){
  const mk=row?.market||{},q=quality(row,h,native);
  if(!native?.model||!q.ok&&q.reasons.includes("invalid_form_xg"))return null;
@@ -69,16 +78,17 @@ export function chooseR55Ensemble(row,h,native){
  const scored=options.map(x=>{
   const evs=models.map(([a,b])=>expectedReturn(x.type,x.pick,x.line,x.odds,a,b));
   const ev=evs.reduce((s,n)=>s+n,0)/evs.length,worst=Math.min(...evs),best=Math.max(...evs);
-  const nativePick=x.type==="AH"?(native?.ah?.pick===row.home?"HOME":"AWAY"):
-      (String(native?.ou?.pick).toUpperCase()==="OVER"?"OVER":"UNDER");
-  const sameNative=x.pick===nativePick;
+  const expectedNativePick=nativeSide(row,native,x.type);
+  const sameNative=expectedNativePick===null?null:x.pick===expectedNativePick;
   const signal=Number(x.type==="AH"?native?.ah?.signal_score:native?.ou?.signal_score)||0;
   const risk=x.type==="OU"&&x.pick==="OVER"&&Math.abs(x.line-1.75)<.001&&native?.market_risk?.low_total_175?.over_blocked;
   // Huge modeled returns are often caused by stale form or market misalignment.
   // Quarantine them rather than advertising implausibly certain outcomes.
   const modelStable=worst>.025&&best-worst<.25&&ev>.085&&ev<.24;
-  const accept=q.ok&&modelStable&&!risk&&Number(row.priority)>=175&&!(x.type==="AH"&&Math.abs(x.line)>1.25)&&
-       !(x.type==="OU"&&x.line>=4);
+  // Release only where independent R55 source-direction and scenario EV agree.
+  // Keep other picks visible as research-only; never fabricate coverage/accuracy.
+  const accept=q.ok&&modelStable&&sameNative===true&&signal>=64&&!risk&&Number(row.priority)>=175&&
+       !(x.type==="AH"&&Math.abs(x.line)>1.25)&&!(x.type==="OU"&&x.line>=4);
   // Model-only edges above 24% and very deep Asian lines caused the
   // unverified 12-Oct losses. For shadow picks, prefer less fragile markets
   // rather than chasing exaggerated expected returns. This is NOT a win guarantee.
@@ -92,14 +102,14 @@ export function chooseR55Ensemble(row,h,native){
  });
  if(!scored.length)return null;
  scored.sort((a,b)=>Number(a.researchOnly)-Number(b.researchOnly)||
-    a.fragility-b.fragility||b.worstEV-a.worstEV||
-    Number(b.nativeAligned)-Number(a.nativeAligned)||b.ev-a.ev);
+    a.fragility-b.fragility||Number(b.nativeAligned===true)-Number(a.nativeAligned===true)||
+    b.worstEV-a.worstEV||b.ev-a.ev);
  const chosen=scored[0];
  const method="r55_ensemble_v3_"+chosen.type.toLowerCase();
  return {type:chosen.type,pick:chosen.pick,line:chosen.line,odds:chosen.odds,
   method,ev:chosen.ev,worstEV:chosen.worstEV,modelSpread:chosen.spreadEV,agree:chosen.agree,
   researchOnly:chosen.researchOnly,reason:chosen.reason,bookmakers:q.books,
-  evidence:chosen.nativeSignal,modelVersion:"ensemble_poisson_three_scenarios_v3",
+  evidence:chosen.nativeSignal,modelVersion:"ensemble_poisson_three_scenarios_v4_native_agreement",
   sample:{home:q.nh,away:q.na,h2h:q.nH2H},
   candidateCount:scored.length,confidence:null};
 }
