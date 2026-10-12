@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS football_ingest_audit (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), day date NOT NULL, source text NOT NULL, received_count integer NOT NULL, accepted_count integer NOT NULL, rejected_count integer NOT NULL, outcome text NOT NULL, created_at timestamptz NOT NULL DEFAULT now())

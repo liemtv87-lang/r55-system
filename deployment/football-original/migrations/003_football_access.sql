@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS football_customer_access (code_hash text PRIMARY KEY CHECK(length(code_hash)=64), device_hash text CHECK(device_hash IS NULL OR length(device_hash)=64), expires_at timestamptz NOT NULL, active boolean NOT NULL DEFAULT true, source text NOT NULL DEFAULT 'one-time-migration', imported_at timestamptz NOT NULL DEFAULT now(), last_seen_at timestamptz)

@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS football_snapshots (day date PRIMARY KEY, payload jsonb NOT NULL, source text NOT NULL, locked_at timestamptz NOT NULL DEFAULT now())
