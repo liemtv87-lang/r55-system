@@ -6,8 +6,8 @@ import {payosStatus,createPayosCheckout,processPayosWebhook} from './payos-order
 const src=readFileSync(new URL('./worker.mjs',import.meta.url),'utf8');
 const moduleCode=readFileSync(new URL('./payos-orders.mjs',import.meta.url),'utf8');
 
-test('Bot has copy code, copy URL and three purchase term handlers',()=>{
- for(const part of ['copy_text:{text:', 'SAO CHÉP MÃ', 'SAO CHÉP LINK', "[30,'1 THÁNG'],[365,'1 NĂM'],[730,'2 NĂM']",
+test('Bot has copy code, copy URL and four purchase term handlers',()=>{
+ for(const part of ['copy_text:{text:', 'SAO CHÉP MÃ', 'SAO CHÉP LINK', "[30,'1 THÁNG'],[180,'6 THÁNG'],[365,'1 NĂM'],[730,'2 NĂM']",
    "callback_data:'buy:'", "cmd.startsWith('buy:')", "callback_data:'mycodes'", "validClientUrl(product)"]){
   assert.ok(src.includes(part),'missing '+part);
  }
@@ -40,5 +40,6 @@ test('Webhook issuance checks authenticity, amount and database transaction/idem
   assert.ok(moduleCode.includes(phrase),'missing '+phrase);
  }
  assert.ok(src.includes("validClientUrl(product)"),'customer link resolver required');
+ assert.ok(moduleCode.includes('new Set([30,180,360,365,720,730])'),'six month checkout must be allowed');
  assert.ok(!src.includes('process.env.PAYOS_CHECKSUM_KEY||'), 'checksum must not be hardcoded in worker');
 });
