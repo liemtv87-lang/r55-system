@@ -28,50 +28,11 @@ jobs:
           tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging deployment/football-native
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247'
           sshpass -e scp -o StrictHostKeyChecking=accept-new /tmp/kq247-r55-stage.tgz root@64.120.92.172:/tmp/kq247-r55-stage.tgz
-      - name: Start read-only proxy and check upstream
+      - name: Execute on-VPS deployment script and verify native R55
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         run: |
           set -euo pipefail
-          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
-          set -euo pipefail
-          tar -xzf /tmp/kq247-r55-stage.tgz -C /opt/kq247
-          cd /opt/kq247/deployment/football-staging
-          umask 077
-          if [ ! -s .env ]; then
-            printf 'R55_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env
-          fi
-          docker compose config -q
-          docker compose up -d football-db
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            if docker compose exec -T football-db pg_isready -U r55app -d r55 >/dev/null 2>&1; then break; fi
-            sleep 3
-          done
-          for sql in /docker-entrypoint-initdb.d/01-r55.sql /docker-entrypoint-initdb.d/02-native-runs.sql; do
-            docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -f "$sql" >/dev/null
-          done
-          docker compose up --build -d
-          docker compose up -d --force-recreate football-staging
-          for i in 1 2 3 4 5; do
-            if curl --fail --silent --max-time 8 http://127.0.0.1:18080/_kq247/health; then break; fi
-            sleep 2
-          done
-          echo
-          curl --fail --silent --show-error --max-time 30 http://127.0.0.1:18080/api/health | python3 -c 'import json,sys; d=json.load(sys.stdin); print("R55_UPSTREAM_OK="+str(d.get("ok"))); print("R55_SOURCE="+str(d.get("source"))); print("R55_LOCKED_MATCHES="+str(d.get("lockedMatches"))) ; assert d.get("ok") is True'
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl --fail --silent --max-time 5 http://127.0.0.1:18080/_kq247/cache-health >/tmp/r55-cache-health.json; then break; fi
-            sleep 3
-          done
-          python3 -c 'import json; d=json.load(open("/tmp/r55-cache-health.json")); print("CACHE_READY="+str(d["ok"])); print("CACHE_DATE="+str(d["sourceDate"])); print("CACHE_PREDICTIONS="+str(d["cachedPredictions"])); assert d["ok"] and d["cachedPredictions"]>=1'
-          curl --fail --silent --show-error --max-time 20 'http://127.0.0.1:18080/api/main-football?limit=20' | python3 -c 'import json,sys; d=json.load(sys.stdin); print("VPS_20_MATCHES="+str(len(d.get("predictions",[])))); assert d.get("ok") and len(d.get("predictions",[]))==20'
-          curl --fail --silent --show-error --max-time 20 'http://127.0.0.1:18080/api/main-football?limit=30' | python3 -c 'import json,sys; d=json.load(sys.stdin); print("VPS_30_MATCHES="+str(len(d.get("predictions",[])))); assert d.get("ok") and len(d.get("predictions",[]))==30'
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            if docker compose exec -T football-db pg_isready -U r55app -d r55 >/dev/null 2>&1; then break; fi
-            sleep 3
-          done
-          docker compose exec -T football-db psql -U r55app -d r55 -Atc "SELECT 'R55_DB_TABLES=' || count(*) FROM pg_tables WHERE schemaname='public'"
-          docker compose exec -T football-native node worker.mjs probe
-          docker compose exec -T football-native node worker.mjs model-probe
-          docker compose exec -T football-native node worker.mjs snapshot-status
-          docker compose ps
-          REMOTE
+          sshpass -e ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 \
+            root@64.120.92.172 \
+            'tar -xzf /tmp/kq247-r55-stage.tgz -C /opt/kq247 && bash /opt/kq247/deployment/football-staging/deploy.sh'
