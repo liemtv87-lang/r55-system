@@ -83,7 +83,18 @@ jobs:
              sleep 2
           done
           test "$ok" -eq 1
-          curl -fsS --max-time 10 http://127.0.0.1:18088/ | grep -q 'Hồi kiểm 30 / 60 / 150 / 1.500 kỳ'
+          ready=0
+          for trial in $(seq 1 20); do
+            if curl -fsS --max-time 15 http://127.0.0.1:18088/ -o /tmp/kq247-r40-ui.html && \
+               grep -q 'THỐNG KÊ VIETLOTT 30 / 60 / 150 / 1.500 KỲ' /tmp/kq247-r40-ui.html && \
+               curl -fsS --max-time 15 http://127.0.0.1:18088/api/draw-window-stats -o /tmp/kq247-r40-stats.json && \
+               python3 -c 'import json; x=json.load(open("/tmp/kq247-r40-stats.json"));assert x["ok"] and x["products"]["mega645"]["30"]["available"]==30 and x["products"]["power655"]["60"]["available"]==60';then
+              ready=1
+              break
+            fi
+            sleep 3
+          done
+          test "$ready" -eq 1
           trap - ERR
           docker commit "$name" kq247-vietlott-vps:r40-draw-stats >/dev/null
           echo VIETLOTT_R40_LIVE_STATS=YES
