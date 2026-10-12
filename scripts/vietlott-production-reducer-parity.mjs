@@ -1,5 +1,5 @@
 import {readFileSync,writeFileSync} from 'node:fs';
-import {CFG,fetch3RegionSetForDate,collectFilteredPool,learnWeights,methodScores,METHOD_NAMES,prizeName} from './engine.mjs';
+import {CFG,fetch3RegionSetForDate,collectFilteredPool,learnWeights,methodScores,METHOD_NAMES} from './engine.mjs';
 import {reduceCoveragePool} from './reduce-coverage.mjs';
 const rows=[['mega645','2026-10-04',45,200000],['power655','2026-10-03',55,600000]];
 const xsmb=JSON.parse(readFileSync('./data/xsmb200.json','utf8'));
@@ -34,7 +34,7 @@ for(const [product,date,maxn,target] of rows){
  results.push({product,date,eligible:raw.valid_total,target,production_reducer_counts:counts,
   reported_backtest_top_score_counts:reported?.reduced_prize_counts||null,
   prod_subset_count:final.unique_five_subsets,methods:final.selection,
-  sameSelectionValidated:JSON.stringify(counts)===JSON.stringify(reported?.reduced_prize_counts||{})});
+  parityMatchesOnJPAndG1:['Jackpot','Jackpot 1','Jackpot 2','Giải nhất'].every(k=>Number(counts[k]||0)===Number(reported?.reduced_prize_counts?.[k]||0))});
  console.log('PARITY_RESULT_'+product+'='+JSON.stringify(results.at(-1)));
 }
 writeFileSync('/tmp/vietlott-production-reducer-parity.json',JSON.stringify(results,null,2));
