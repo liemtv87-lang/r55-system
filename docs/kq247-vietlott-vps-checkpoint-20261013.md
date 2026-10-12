@@ -37,3 +37,16 @@
 - Render Free handles PayOS confirmation and checkout using one-time Neon tickets. No payment was made in smoke testing.
 - A paid transaction to license issuance and user notification is not fully verified with real money; do not claim full paid conversion proven.
 - Monthly plan prices for lottery/football/vietlott in Neon are 1,500,000 VND.
+
+
+## Update (13 Oct 2026 VN) — exact draw-count statistics deployed with zero downtime
+- Production Vietlott remains R39 runner with daily snapshots unchanged. R40 reporting was safely installed by updating the running container's `scripts/merge-backtest-60.mjs` only (no restart), rebuilding aggregate stats, and adding static `public/draw-windows.json` and `public/draw-windows.html`. Workflow `kq247-vietlott-r40-no-restart.yml` run 38315733572: SUCCESS.
+- User-facing URL: https://vietlott.64-120-92-172.sslip.io/draw-windows.html . Root page navigation link to new stats is present.
+- Public verification: https://vietlott.64-120-92-172.sslip.io/draw-windows.json ; generated `2026-10-12T22:17:11.232Z`, source `verified_walk_forward_24_shards`.
+- Verified windows PER PRODUCT, separate 30/60/150/1500 draws (NOT days):
+  - Mega 6/45 reduced 200,000: 30 draws 0 JP / 80 G1; 60 draws 1 JP / 214 G1; 150 draws 2 JP / 798 G1; 1500 requested but only 152 eligible verified, reporting 2 JP / 800 G1 for the 152 only (INCOMPLETE).
+  - Power 6/55 reduced 600,000: 30 draws 0 JP / 52 G1; 60 draws 4 JP2 / 169 G1; 150 draws 3 JP1 plus 23 JP2 / 1,068 G1; 1500 requested but only 151 eligible verified, reporting 26 JP / 1,068 G1 for the 151 only (INCOMPLETE).
+  - Combined per-product 30-draw windows: ZERO JP, 132 G1, so goal 5 JP and 2,000 G1 not met. Power JP1 and JP2 must not be conflated in displays.
+- IMPORTANT: At fixed number of distinct lottery tickets with fair equiprobable draws, expected exact-five G1 wins PER DRAW are Mega 200,000*(6*39)/8,145,060 ≈5.746; Power 600,000*(6*48)/28,989,675 ≈5.961. Over 30 draws EACH, combined expectation ≈351.2 G1, independent of which ticket numbers are selected. 2,000 G1/30 draws each is therefore far above expectation; no genuine optimization guarantees it. These are mathematical expectations, not predicted results.
+- In progress: GitHub Actions `kq247-vietlott-rule-ablation.yml` run 38315939129 evaluates original 32 rules against relaxed variants on 30 historical draws and a holdout segment, without modifying live snapshots. Follow its result before promoting any rule changes.
+- Do NOT disable or modify old official (locked) Mega/Power pools just to improve historic score; only promote changes demonstrated on strictly held-out draws with unchanged 200k/600k counts.
