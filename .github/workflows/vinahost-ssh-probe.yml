@@ -38,4 +38,4 @@ jobs:
             -o ServerAliveInterval=15 \
             -o LogLevel=ERROR \
             root@64.120.92.172 \
-            'printf "KQ247_VPS_CONNECTED=yes\\n"; printf "HOSTNAME="; hostname; printf "OS="; ( . /etc/os-release && printf "%s\\n" "$PRETTY_NAME" ); printf "CPUS="; nproc; printf "MEMORY="; free -h | awk "/^Mem:/{print \\$2}"; printf "DISK="; df -h / | awk "NR==2{print \\$2}"; printf "DOCKER="; command -v docker || true'
+            'echo KQ247_VPS_CONNECTED=yes; printf "HOSTNAME="; hostname; echo "OPERATING_SYSTEM:"; cat /etc/os-release | head -n 3; printf "CPU_THREADS="; nproc; echo "MEMORY:"; free -h; echo "DISK:"; df -h /; printf "DOCKER_PATH="; command -v docker || true'
