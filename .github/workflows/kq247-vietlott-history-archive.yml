@@ -1,0 +1,53 @@
+name: KQ247 Vietlott Historical Seed Archive
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-history-archive.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download and validate public historic draw seed (not customer data)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vietlott-history
+          for product in mega645 power655; do
+            curl --fail --location --silent --show-error --retry 3 --max-time 120 \
+              "https://raw.githubusercontent.com/NhanAZ-Data/vietlott-data-research/main/datasets/draws/$product/all.csv" \
+              -o "/tmp/vietlott-history/$product-all.csv"
+          done
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+          for product in ['mega645','power655']:
+              path=Path('/tmp/vietlott-history/'+product+'-all.csv')
+              with path.open(encoding='utf-8',newline='') as fp:rows=list(csv.DictReader(fp))
+              dates=[r['draw_date'] for r in rows if r['product']==product and len(r.get('draw_date',''))==10]
+              assert len(dates)>1000 and len(dates)==len(rows)
+              print('HISTORICAL_SEED_'+product+'='+str(len(rows))+' date_min='+min(dates)+' date_max='+max(dates))
+          PY
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Archive verified seed on existing VPS without changing production 365-day caches
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/history-archive && chmod 700 /opt/kq247/vietlott/history-archive'
+          sshpass -e scp "${opts[@]}" /tmp/vietlott-history/mega645-all.csv /tmp/vietlott-history/power655-all.csv "$host":/opt/kq247/vietlott/history-archive/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          for p in mega645 power655;do
+             test -s "/opt/kq247/vietlott/history-archive/$p-all.csv"
+             echo "ARCHIVED_HISTORICAL_$p=$(du -h "/opt/kq247/vietlott/history-archive/$p-all.csv" | awk '{print $1}')"
+          done
+          echo HISTORICAL_SEED_ARCHIVE_NO_SNAPSHOT_CHANGES=YES
+          echo NO_NEW_PAID_STORAGE_REQUIRED=YES
+          REMOTE
