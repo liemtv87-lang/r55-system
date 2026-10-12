@@ -1,0 +1,64 @@
+name: KQ247 Vietlott Backtest Method Correction Label
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-backtest-correction.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Mark pre-existing score-only results provisional on VPS, with no restart or data loss
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/kq247/vietlott
+          name=kq247-vietlott-vps
+          mkdir -p "$root/versions/score-method-warning"
+          docker cp "$name":/app/scripts/merge-backtest-60.mjs "$root/versions/score-method-warning/original-merge.mjs"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          root=Path('/opt/kq247/vietlott')
+          merger=root/'scripts/merge-backtest-60.mjs'
+          s=merger.read_text()
+          old="ok:true,generated_at:out.generated_at,source:'verified_walk_forward_24_shards',"
+          new=("ok:true,generated_at:out.generated_at,source:'historical_score_only_reducer_NOT_PRODUCTION',"
+               "\n  provisional:true,matches_production_reducer:false,"
+               "\n  warning:'JP/G1 dưới đây là hồi kiểm chọn theo điểm, chưa phải dàn khách chọn theo độ phủ 5 số.',")
+          if old in s:s=s.replace(old,new)
+          elif 'historical_score_only_reducer_NOT_PRODUCTION' not in s:raise RuntimeError('unexpected reducer summary source')
+          merger.write_text(s)
+          p=root/'public/draw-windows.json'
+          d=json.loads(p.read_text())
+          d['source']='historical_score_only_reducer_NOT_PRODUCTION'
+          d['provisional']=True
+          d['matches_production_reducer']=False
+          d['warning']='Kết quả JP/G1 là hồi kiểm kiểu chọn điểm, CHƯA ĐÚNG với thuật toán dàn khách chọn độ phủ 5 số; không được dùng để khẳng định tỉ lệ trúng.'
+          tmp=p.with_suffix('.json.tmp')
+          tmp.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
+          os.replace(tmp,p)
+          html=root/'public/draw-windows.html'
+          h=html.read_text()
+          tag='<p style="padding:12px;background:#fff4e9;color:#a23200;border:2px solid #e7b086;border-radius:8px;font-weight:900">CẢNH BÁO: JP/G1 bên dưới là HỒI KIỂM THAM CHIẾU theo kiểu chọn điểm, CHƯA PHẢI thành tích của dàn khách chọn độ phủ 5 số. Đang kiểm tra lại đúng thuật toán.</p>'
+          if 'CẢNH BÁO: JP/G1' not in h:h=h.replace('</h1>','</h1>'+tag,1)
+          html.write_text(h)
+          index=root/'public/index.html'
+          if index.is_file():
+              s=index.read_text().replace('📊 THỐNG KÊ 30 / 60 / 150 / 1.500 KỲ','📊 HỒI KIỂM THAM CHIẾU 30 / 60 / 150 / 1.500 KỲ')
+              index.write_text(s)
+          print('VIETLOTT_PROVISIONAL_BACKTEST_LABEL=SET')
+          PY
+          docker cp "$root/scripts/merge-backtest-60.mjs" "$name":/app/scripts/merge-backtest-60.mjs
+          docker exec "$name" node --check /app/scripts/merge-backtest-60.mjs
+          curl -fsS --max-time 12 http://127.0.0.1:18088/draw-windows.json | python3 -c 'import json,sys;j=json.load(sys.stdin); assert j.get("provisional") and j.get("matches_production_reducer") is False;print("PUBLIC_BACKTEST_WARNING_VERIFIED=YES")'
+          echo PRODUCTION_PREDICTION_SNAPSHOTS_UNCHANGED=YES
+          REMOTE
