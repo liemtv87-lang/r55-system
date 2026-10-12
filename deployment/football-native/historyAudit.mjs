@@ -90,8 +90,14 @@ export async function auditAllMarketHistories(){
  })));
  const odds=V.parseOdds(xmls),feed=V.parseFeed(source.js,odds);
  const markets=marketTypeCount(source.js,xmls,feed);
- const chosen=feed.filter(m=>markets.get(m.bongdaluId)?.ah||markets.get(m.bongdaluId)?.ou);
- const withoutFeed=[...markets.keys()].filter(id=>!feed.some(f=>f.bongdaluId===id));
+ const feedById=new Map(feed.map(m=>[m.bongdaluId,m]));
+ // The bookmaker XML can contain a priced fixture that the current live A[] feed
+ // has dropped. Fetch its real H2H page too; never fabricate team metadata.
+ const withoutFeed=[...markets.keys()].filter(id=>!feedById.has(id));
+ const chosen=[...markets.keys()].sort().map(id=>feedById.get(id)||{
+   id:'BDL_'+id,bongdaluId:id,home:null,away:null,league:null,country:null,
+   kickoff:null,market:null
+ });
  let checked=0,ready=0,full20=0,partial=0,missing=0,h2h=0,archived=0,errors=[];
  const startedAt=Date.now(),concurrency=6;
  console.log('R55_ALL_AH_OU_START',JSON.stringify({day,fixtureCount:feed.length,marketIds:markets.size,fixturesToAudit:chosen.length,unmatchedMarkets:withoutFeed.length,source:source.base}));
