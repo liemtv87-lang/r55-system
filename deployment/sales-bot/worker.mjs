@@ -53,6 +53,34 @@ async function validClientUrl(product){
 const copyButton=(text,value)=>({text,copy_text:{text:String(value).slice(0,256)}});
 const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)===180?'6 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
 const isPaidTerm=days=>[30,180,365,730,360,720].includes(Number(days));
+const PAYOS_BRIDGE_URL='https://tool-sales-bot.onrender.com';
+async function createRemotePayosCheckout(telegramUserId,product,days){
+  if(!TOKEN)throw Error('sales_bridge_token_missing');
+  const body=JSON.stringify({telegramUserId:String(telegramUserId),product,days:Number(days)});
+  const timestamp=String(Date.now());
+  const signature=crypto.createHmac('sha256',TOKEN).update(timestamp+'.'+body).digest('hex');
+  const r=await fetch(PAYOS_BRIDGE_URL+'/sales/checkout',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-kq247-time':timestamp,'x-kq247-signature':signature},
+    body,signal:AbortSignal.timeout(115000)
+  });
+  if(!r.ok)throw Error('sales_bridge_unavailable_'+r.status);
+  const order=await r.json();
+  if(!order?.checkoutUrl||!Number.isSafeInteger(Number(order.amount)))throw Error('sales_bridge_invalid_response');
+  const uri=new URL(order.checkoutUrl);
+  if(uri.protocol!=='https:')throw Error('sales_bridge_invalid_url');
+  return order;
+}
+function bridgeSigned(req,body){
+  if(!TOKEN)return false;
+  const ts=String(req.headers['x-kq247-time']||'');
+  const sig=String(req.headers['x-kq247-signature']||'');
+  if(!/^\\d{13}$/.test(ts)||!Number.isFinite(Number(ts))||Math.abs(Date.now()-Number(ts))>90000)return false;
+  if(!/^[a-f0-9]{64}$/i.test(sig))return false;
+  const want=crypto.createHmac('sha256',TOKEN).update(ts+'.'+body).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(sig,'hex'),Buffer.from(want,'hex'));
+}
+
 
 async function showHome(chat){
  const r=await pool.query("SELECT product,duration_days,price_vnd FROM sales_plans WHERE enabled=true AND product=ANY($1::text[]) ORDER BY product,duration_days",[Object.keys(PRODUCTS)]);
@@ -128,7 +156,7 @@ async function purchasePlan(chat,userId,product,days,priceInquiry=false){
  }
  if(priceInquiry)return send(chat,'Gói '+escapeHtml(title)+' — '+money(p.price_vnd)+'. Thanh toán trực tuyến chỉ mở sau khi PayOS được kết nối và xác minh.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
  const status=payosStatus();
- if(!status.ready){
+ if(!status.ready && !TOKEN){
    return send(chat,'🛒 <b>ĐĂNG KÝ MUA TOOL '+escapeHtml(PRODUCTS[product])+'</b>\nGói: <b>'+escapeHtml(title)+'</b>\nGiá: <b>'+money(p.price_vnd)+'</b>\n\n⚠️ Thanh toán tự động PayOS chưa được kết nối. Có thể liên hệ quản trị để xác minh thanh toán. Bot không tự cấp mã trước khi xác nhận thanh toán.',keyboard([
     [{text:'💬 LIÊN HỆ MUA GÓI',url:'https://t.me/thantai7979abcd'}],
     [{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}],
@@ -136,7 +164,7 @@ async function purchasePlan(chat,userId,product,days,priceInquiry=false){
    ]));
   }
  try{
-  const order=await createPayosCheckout(pool,userId,product,days);
+  const order=status.ready?await createPayosCheckout(pool,userId,product,days):await createRemotePayosCheckout(userId,product,days);
   return send(chat,'💳 <b>THANH TOÁN PAYOS</b>\nSản phẩm: '+escapeHtml(PRODUCTS[product])+'\nGói: <b>'+escapeHtml(title)+'</b>\nSố tiền: <b>'+money(order.amount)+'</b>\nĐơn: <code>'+escapeHtml(order.orderCode)+'</code>\n\nBấm thanh toán để chuyển tới payOS. Bot chỉ tự cấp mã sau khi nhận và xác minh giao dịch thành công.',keyboard([
     [{text:'💳 THANH TOÁN AN TOÀN QUA PAYOS',url:order.checkoutUrl}],
     [{text:'📋 SAO CHÉP LINK THANH TOÁN',copy_text:{text:order.checkoutUrl.slice(0,256)}}],
@@ -229,6 +257,19 @@ async function handle(update){
  return showHome(chat);
 }
 async function payosHttp(req,res){
+ if(req.method==='POST' && new URL(req.url,'http://localhost').pathname==='/sales/checkout'){
+   if(!pool||!payosStatus().ready){res.writeHead(503).end('not_ready');return}
+   let raw='';
+   try{
+     for await(const chunk of req){raw+=chunk.toString('utf8');if(raw.length>4096)throw Error('payload_too_large')}
+     if(!bridgeSigned(req,raw)){res.writeHead(401).end('unauthorized');return}
+     const j=JSON.parse(raw);
+     if(!/^\\d{1,19}$/.test(String(j.telegramUserId))||!PRODUCTS[j.product]||!isPaidTerm(j.days))throw Error('invalid_request');
+     const order=await createPayosCheckout(pool,String(j.telegramUserId),j.product,Number(j.days));
+     res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify(order));
+   }catch(e){console.error('SALES_BRIDGE_ERROR',String(e.message).slice(0,80));res.writeHead(400).end('bad_request')}
+   return;
+ }
  if(req.method==='POST' && new URL(req.url,'http://localhost').pathname.endsWith('/payos/webhook')){
   if(!pool){res.writeHead(503).end('not_ready');return}
   let raw='';
