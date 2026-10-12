@@ -1,0 +1,32 @@
+name: KQ247 VPS Major League Historical Coverage
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-major-league-coverage.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check persisted football history and major-league gaps directly on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo VPS_HIST_COVERAGE_START
+          docker exec kq247-r55-postgres psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT 'DAY='||day||' RECORDS='||count(*)||' FULL20='||count(*) FILTER(WHERE status='full_20_20')||' PARTIAL='||count(*) FILTER(WHERE status<>'full_20_20') FROM r55_fixture_history GROUP BY day ORDER BY day DESC LIMIT 3" </dev/null
+          echo VPS_MAJOR_LEAGUE_BREAKDOWN
+          docker exec kq247-r55-postgres psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT COALESCE(payload->>'league','?') AS league,count(*) AS total,count(*) FILTER(WHERE status='full_20_20') AS full20,count(*) FILTER(WHERE status<>'full_20_20') AS incomplete FROM r55_fixture_history WHERE day=(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND COALESCE(payload->>'league','')~*'(Premier League|La Liga|Serie A|Bundesliga|Ligue 1|Champions League|Europa League|Libertadores|J1 League|J-League)' GROUP BY 1 ORDER BY total DESC LIMIT 40" </dev/null
+          echo VPS_RECENT_MISSING_HISTORY_EXAMPLES
+          docker exec kq247-r55-postgres psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT fixture_id||' | '||COALESCE(payload->>'league','')||' | home='||home_games||' away='||away_games||' | status='||status FROM r55_fixture_history WHERE day=(now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AND status<>'full_20_20' ORDER BY home_games+away_games ASC LIMIT 20" </dev/null
+          echo VPS_SNAPSHOT_CHECK
+          docker exec kq247-r55-postgres psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT 'DAY='||day||' GAMES='||jsonb_array_length(payload->'matches')||' LOCKED='||(locked_at IS NOT NULL) FROM football_snapshots ORDER BY day DESC LIMIT 3" </dev/null
+          echo VPS_MAJOR_LEAGUE_AUDIT_DONE
+          REMOTE
