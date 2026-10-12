@@ -1,0 +1,17 @@
+{
+  "name": "kq247-r55-vps-native",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "probe": "node worker.mjs probe",
+    "snapshot": "node worker.mjs snapshot-status",
+    "grade": "node worker.mjs grade",
+    "start": "node worker.mjs serve"
+  },
+  "dependencies": {
+    "pg": "8.16.3",
+    "hatchable": "file:./compat",
+    "lib": "file:./lib"
+  }
+}
