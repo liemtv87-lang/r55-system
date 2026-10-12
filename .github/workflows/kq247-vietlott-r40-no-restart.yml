@@ -1,0 +1,90 @@
+name: KQ247 Vietlott R40 Stats Without Restart
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r40-no-restart.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-statsonly-deploy
+  cancel-in-progress: false
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --check deployment/vietlott/apply-r40-stats-only.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Update only running aggregator and static HTML without any container restart
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/stats-r40'
+          sshpass -e scp "${opts[@]}" deployment/vietlott/apply-r40-stats-only.mjs deployment/vietlott/r40-windows-patch.json deployment/vietlott/draw-windows.html "$host":/opt/kq247/vietlott/versions/stats-r40/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          base=/opt/kq247/vietlott/versions/stats-r40
+          public=/opt/kq247/vietlott/public
+          mkdir -p "$base" "$public"
+          docker inspect -f '{{.State.Running}}' "$name" | grep -qx true
+          docker cp "$name":/app/scripts/merge-backtest-60.mjs "$base/merge-before-r40-stats.mjs"
+          test -s "$base/merge-before-r40-stats.mjs"
+          cp "$public/backtest-60.json" "$base/backtest-before-r40-stats.json"
+          rollback() {
+            docker cp "$base/merge-before-r40-stats.mjs" "$name":/app/scripts/merge-backtest-60.mjs
+            cp "$base/backtest-before-r40-stats.json" "$public/backtest-60.json"
+            echo VIETLOTT_R40_STATS_ROLLBACK=YES
+          }
+          trap rollback ERR
+          docker cp "$base/apply-r40-stats-only.mjs" "$name":/tmp/apply-r40-stats-only.mjs
+          docker cp "$base/r40-windows-patch.json" "$name":/tmp/r40-windows-patch.json
+          docker exec -u 0 "$name" node /tmp/apply-r40-stats-only.mjs
+          docker exec "$name" node --check /app/scripts/merge-backtest-60.mjs
+          docker exec "$name" node scripts/merge-backtest-60.mjs > "$base/r40-stats-merge.log"
+          python3 - <<'PY'
+          import json
+          folder='/opt/kq247/vietlott/public/'
+          d=json.load(open(folder+'draw-windows.json'))
+          full=json.load(open(folder+'backtest-60.json'))
+          assert d.get('ok') and d.get('products')
+          for p in ['mega645','power655']:
+              for n in [30,60,150,1500]:
+                  x=d['products'][p][str(n)]
+                  y=full['products'][p]['reduced_stats'+str(n)]
+                  assert x['requested']==n
+                  assert x['available']==y['draws_tested']
+                  assert y['complete']==(y['draws_tested']==n)
+                  print('VERIFIED_'+p+'_'+str(n)+'_JP='+str(x['jackpot'])+'_G1='+str(x['g1'])+'_DRAWS='+str(x['available'])+'/'+str(n))
+          PY
+          cp "$base/draw-windows.html" "$public/draw-windows.html"
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('/opt/kq247/vietlott/public/index.html')
+          if path.is_file():
+              s=path.read_text()
+              mark='kq247-draw-windows-link'
+              if mark not in s and '<body' in s:
+                  insert='<div id="'+mark+'" style="background:#f0f8ff;text-align:center;padding:12px;border-bottom:2px solid #0d65b2"><a href="/draw-windows.html" style="color:#0d65b2;font-weight:900">📊 THỐNG KÊ 30 / 60 / 150 / 1.500 KỲ</a></div>'
+                  import re
+                  s=re.sub(r'(<body[^>]*>)',lambda m:m.group(1)+insert,s,count=1)
+                  path.write_text(s)
+                  print('VIETLOTT_HOME_STATS_LINK=ADDED')
+              else:print('VIETLOTT_HOME_STATS_LINK=ALREADY_OR_NOT_APPLICABLE')
+          else:print('VIETLOTT_HOME_STATS_LINK=NO_STATIC_INDEX')
+          PY
+          test "$(curl -fsS -o /tmp/r40-stats-public.json -w '%{http_code}' --max-time 12 http://127.0.0.1:18088/draw-windows.json)" = 200
+          test "$(curl -fsS -o /tmp/r40-stats-page.html -w '%{http_code}' --max-time 12 http://127.0.0.1:18088/draw-windows.html)" = 200
+          grep -q '30 / 60 / 150 / 1.500 kỳ' /tmp/r40-stats-page.html
+          docker cp "$name":/app/scripts/merge-backtest-60.mjs /opt/kq247/vietlott/scripts/merge-backtest-60.mjs
+          docker commit "$name" kq247-vietlott-vps:r40-stats-no-restart >/dev/null
+          trap - ERR
+          echo VIETLOTT_STATS_NO_RESTART=PASS
+          echo VIETLOTT_EXISTING_DAILY_SNAPSHOTS_UNTOUCHED=YES
+          REMOTE
