@@ -51,7 +51,10 @@ async function retrieve(base,id){
    const html=await getBongdaluText(base,'match/h2h-'+id,'text/html',20000);
    const parsed=V.parseHistoryHtml(html);
    if(!parsed)throw Error('missing_expected_h2h_tables');
-   if(!Number(parsed.home?.n)&&!Number(parsed.away?.n))throw Error('no_parseable_recent_matches');
+   // The official page may contain valid fixture metadata but no played match
+   // rows. Archive that page as evidence, without inventing historical scores.
+   if(!Number(parsed.home?.n)&&!Number(parsed.away?.n))
+    return {html,parsed:null,tries:attempt,error:'source_lists_no_recent_match_rows'};
    return {html,parsed,tries:attempt,error:null};
   }catch(e){lastError=String(e.message||e).slice(0,140);if(attempt<3)await sleep(400*attempt);}
  }
