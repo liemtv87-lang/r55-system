@@ -52,3 +52,13 @@
 http://:80 {
   redir https://64-120-92-172.sslip.io{uri} permanent
 }
+
+# Vietlott 32-rule VPS: independent HTTPS host; block remote compute triggers.
+vietlott.64-120-92-172.sslip.io {
+  encode zstd gzip
+  @mutations method POST PUT PATCH DELETE
+  respond @mutations 403
+  @private_path path /file
+  respond @private_path 403
+  reverse_proxy kq247-vietlott-vps:8080
+}
