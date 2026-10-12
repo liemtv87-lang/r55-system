@@ -17,7 +17,7 @@ export const QC_TEXT=[
 const withoutRating=s=>String(s||"").split("\n").filter(line=>!/(?:độ\s+tin\s+cậy|tin\s+cậy\s+tham\s+khảo|điểm\s+(?:r55|chọn\s+kèo)|confidence\s*\d*\s*\/\s*100)/i.test(line)).join("\n");
 export const boldTelegram=(body,withQc=true)=>"<b>"+e(withoutRating(body)+(withQc?"\n\n"+QC_TEXT:""))+"</b>";
 export const validFootballMessage=msg=>typeof msg==="string"&&msg.startsWith("<b>")&&msg.includes("Tool Vietlott 6x45 6x55")&&msg.includes("muatool_du_doan_bot")&&!/(?:độ\s+tin\s+cậy|tin\s+cậy\s+tham\s+khảo|điểm\s+(?:r55|chọn\s+kèo)|\b\d{1,3}\/100\b)/i.test(msg);
-export const researchMessage=(m)=>matchMessage(m);
+export const researchMessage=(m)=>matchMessage(m).replace(/^<b>/,"<b>⚠️ DỰ ĐOÁN THAM KHẢO — CHƯA QUA KIỂM ĐỊNH HIỆU SUẤT\n");
 export const matchMessage=(m)=>{
  const clean=s=>String(s||"").replace(/[<>]/g,"").slice(0,110);
  const kickoff=Date.parse(m.kickoff),market=m.market||{};
