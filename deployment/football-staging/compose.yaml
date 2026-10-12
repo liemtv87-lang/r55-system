@@ -186,10 +186,14 @@ services:
     image: kq247/sales-vps:staging
     container_name: kq247-sales-vps
     restart: unless-stopped
+    depends_on:
+      football-db:
+        condition: service_healthy
     env_file:
       - path: /opt/kq247/.bot-secrets/sales.env
         required: false
     environment:
+      SALES_DATABASE_URL: postgres://r55app:${R55_DB_PASSWORD}@football-db:5432/kq247_legacy_staging
       NODE_ENV: production
       PORT: "3010"
     ports:
