@@ -48,5 +48,14 @@ jobs:
               find "$dir" -maxdepth 4 -type f \( -name '*sales*' -o -name '*bot*' -o -name '*payment*' -o -name '*telegram*' -o -name 'compose*.yml' \) ! -name '*.env' ! -name '*.pem' ! -name '*secret*' 2>/dev/null | head -80
             fi
           done
+          echo KQ247_PRIMARY_SALES_RUNTIME_BEGIN
+          if docker inspect kq247-sales-bot-primary >/dev/null 2>&1; then
+            docker exec kq247-sales-bot-primary node -e "const fs=require('fs');const c=fs.readFileSync('/app/worker.mjs','utf8');const flags={copy_code:c.includes('SAO CHÉP MÃ'),copy_client_url:c.includes('SAO CHÉP LINK'),paid_plans:c.includes('MUA '+"'"+'THÁNG'),payos_checkout:c.includes('createPayosCheckout'),payos_webhook:c.includes('processPayosWebhook')};console.log('SALES_LIVE_FEATURES='+JSON.stringify(flags))"
+            docker exec kq247-sales-bot-primary node -e "const keys=['PAYOS_CLIENT_ID','PAYOS_API_KEY','PAYOS_CHECKSUM_KEY','PAYOS_PUBLIC_BASE_URL','PAYOS_WEBHOOK_CONFIRMED'];console.log('PAYOS_LIVE_CONFIGURATION='+JSON.stringify(Object.fromEntries(keys.map(k=>[k,!!process.env[k]]))))"
+            curl -fsS --max-time 7 http://127.0.0.1:18087/healthz || true
+          else
+            echo KQ247_PRIMARY_SALES_CONTAINER=MISSING
+          fi
+          echo KQ247_PRIMARY_SALES_RUNTIME_END
           echo KQ247_SALES_VPS_READONLY_AUDIT=DONE
           REMOTE
