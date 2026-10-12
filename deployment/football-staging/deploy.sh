@@ -13,7 +13,7 @@ for i in $(seq 1 18); do
   sleep 2
 done
 if [ "$ready" != "yes" ]; then echo "POSTGRES_NOT_READY"; exit 1; fi
-for sql in /docker-entrypoint-initdb.d/01-r55.sql /docker-entrypoint-initdb.d/02-native-runs.sql; do
+for sql in /docker-entrypoint-initdb.d/*.sql; do
   docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -f "$sql" >/dev/null
 done
 echo "R55_DB_TABLES=$(docker compose exec -T football-db psql -U r55app -d r55 -Atc 'SELECT count(*) FROM pg_tables WHERE schemaname='\"'\"'public'\"'\"'' | tr -d '\r')"
@@ -28,7 +28,6 @@ curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main
 curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main-football?limit=30' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("ok") and len(d.get("predictions",[]))==30;print("VPS_R55_30=PASS")'
 docker compose exec -T football-native node worker.mjs probe
 docker compose exec -T football-native node worker.mjs model-probe
-docker compose exec -T football-native node worker.mjs model-batch
 docker compose exec -T football-native node worker.mjs snapshot-status
 docker compose ps
 echo 'R55_NATIVE_DEPLOY_VERIFIED=YES'
