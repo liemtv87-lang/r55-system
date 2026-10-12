@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/vinahost-stage-football.yml
       - deployment/football-staging/**
+      - deployment/football-native/**
 permissions:
   contents: read
 concurrency:
@@ -24,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
-          tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging
+          tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging deployment/football-native
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247'
           sshpass -e scp -o StrictHostKeyChecking=accept-new /tmp/kq247-r55-stage.tgz root@64.120.92.172:/tmp/kq247-r55-stage.tgz
       - name: Start read-only proxy and check upstream
@@ -41,6 +42,14 @@ jobs:
             printf 'R55_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env
           fi
           docker compose config -q
+          docker compose up -d football-db
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if docker compose exec -T football-db pg_isready -U r55app -d r55 >/dev/null 2>&1; then break; fi
+            sleep 3
+          done
+          for sql in /docker-entrypoint-initdb.d/01-r55.sql /docker-entrypoint-initdb.d/02-native-runs.sql; do
+            docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -f "$sql" >/dev/null
+          done
           docker compose up --build -d
           docker compose up -d --force-recreate football-staging
           for i in 1 2 3 4 5; do
@@ -61,5 +70,8 @@ jobs:
             sleep 3
           done
           docker compose exec -T football-db psql -U r55app -d r55 -Atc "SELECT 'R55_DB_TABLES=' || count(*) FROM pg_tables WHERE schemaname='public'"
+          docker compose exec -T football-native node worker.mjs probe
+          docker compose exec -T football-native node worker.mjs model-probe
+          docker compose exec -T football-native node worker.mjs snapshot-status
           docker compose ps
           REMOTE
