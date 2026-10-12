@@ -12,7 +12,7 @@ test('Bot has copy code, copy URL and three purchase term handlers',()=>{
   assert.ok(src.includes(part),'missing '+part);
  }
  assert.ok(src.includes("processPayosWebhook(pool,payload"),'missing payOS webhook');
- assert.ok(src.includes("url.pathname.endsWith('/payos/webhook')"),'missing HTTP webhook path');
+ assert.ok(src.includes(".pathname.endsWith('/payos/webhook')"),'missing HTTP webhook path');
 });
 
 test('Payment is blocked until credentials, HTTPS and verified webhook are configured',async()=>{
