@@ -1,0 +1,41 @@
+name: KQ247 XS Old Link Reload Migrates to VPS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-old-client-redirect-smoke.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check old root, old index and query URLs include license-preserving redirect
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,urllib.request
+          origin='https://kq247-xoso-khach-v29.onrender.com'
+          for path in ['/','/index.html','/?region=xsmb','/?client=1&region=xsmb','/index.html?neon=1&client=1&region=xsmb&v=20261010']:
+            u=origin+path
+            with urllib.request.urlopen(urllib.request.Request(u,headers={'Cache-Control':'no-cache'}),timeout=20) as r:
+              src=r.read().decode('utf8')
+              assert r.status==200
+            assert 'KQ247_XS_LEGACY_VPS_HANDOFF_20261012' in src,(path,'legacy not patched')
+            assert 'kq247_lottery_code' in src and 'kq247_dev' in src and 'kq247_lottery_session' in src
+            assert 'kq247_lottery_verified_v1' in src
+            assert 'location.replace(next.toString())' in src
+            assert "params.get('product')==='vietlott'" in src
+            print('XS_LEGACY_LINK_RELOAD_'+path.replace('/','_').replace('?','_')+'=PASS')
+          with urllib.request.urlopen('https://64-120-92-172.sslip.io/xoso-khach?region=xsmb',timeout=20) as r:
+            h=r.read().decode('utf8')
+            assert r.status==200
+          assert "location.hash.startsWith('#kq247=')" in h
+          assert 'kq247auth.compute' in h
+          print('XS_NEW_VPS_IMPORT_LICENSE_AND_VERIFY=PASS')
+          with urllib.request.urlopen('https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/?action=latest-link&product=lottery',timeout=20) as r:
+            d=json.load(r)
+          assert d.get('ok') and d.get('latest_url')=='https://64-120-92-172.sslip.io/xoso-khach?region=xsmb'
+          print('XS_NEON_LICENSE_CANONICAL_LINK=PASS')
+          PY
