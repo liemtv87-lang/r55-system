@@ -1,0 +1,67 @@
+name: KQ247 VPS Telegram Sole Sender Cutover
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vps-telegram-single-owner-cutover.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vps-telegram-cutover
+  cancel-in-progress: false
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Install encrypted SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Activate VPS group sender and confirm actual Telegram message
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          cd /opt/kq247/deployment/football-staging
+          # Preserve the existing database password; change only the VPS bot switch.
+          if grep -q '^R55_VPS_GROUP_BOT_ACTIVE=' .env; then
+            sed -i 's/^R55_VPS_GROUP_BOT_ACTIVE=.*/R55_VPS_GROUP_BOT_ACTIVE=1/' .env
+          else
+            printf '\nR55_VPS_GROUP_BOT_ACTIVE=1\n' >> .env
+          fi
+          chmod 600 .env
+          test "$(docker inspect -f '{{.State.Running}}' kq247-lottery-bot)" = true
+          curl -fsS --max-time 6 http://127.0.0.1:18085/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j.get("ok") and j.get("active") and j.get("has_token"); print("VPS_XS_ONLY_SENDER=PASS")'
+          docker compose up -d --no-deps --force-recreate football-group-bot >/dev/null
+          for i in $(seq 1 25); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18083/healthz > /tmp/kq247-bd-primary.json 2>/dev/null; then
+              if python3 -c 'import json; d=json.load(open("/tmp/kq247-bd-primary.json")); assert d["ok"] and d["active"] and d["tokenConfigured"] and d["primarySender"]' 2>/dev/null; then break; fi
+            fi
+            sleep 1
+          done
+          python3 -c 'import json; d=json.load(open("/tmp/kq247-bd-primary.json")); assert d["ok"] and d["active"] and d["tokenConfigured"] and d["primarySender"]; print("VPS_BD_ONLY_SENDER=PASS")'
+          mkdir -p /opt/kq247/.bot-secrets/proofs
+          chmod 700 /opt/kq247/.bot-secrets/proofs
+          receipt=/opt/kq247/.bot-secrets/proofs/bd-vps-telegram-test-20261012.json
+          if test ! -s "$receipt"; then
+            docker exec -i kq247-r55-group-bot node --input-type=module - <<'JS' > "$receipt.tmp"
+          import fs from 'node:fs';
+          const token=process.env.R55_GROUP_BOT_TOKEN||process.env.TELEGRAM_LOTTERY_BOT_TOKEN;
+          if(!token)throw Error('missing_VPS_group_token');
+          const body={chat_id:'@keochuyengia79',text:'✅ KQ247 • KIỂM TRA BOT VPS\nBot thông báo nhóm đã chuyển sang VPS VinaHost. Nguồn gửi chính: VPS.',disable_web_page_preview:true};
+          const r=await fetch('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+          const j=await r.json();
+          if(!r.ok||!j.ok||!j.result?.message_id)throw Error('telegram_sendMessage_no_ack_'+r.status);
+          console.log(JSON.stringify({ok:true,chat_id:String(j.result.chat.id),message_id:j.result.message_id,origin:'VPS',bot:'group'}));
+          JS
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["ok"] and d["message_id"]>0; print("VPS_BD_TEST_REAL_ACK_MESSAGE_ID="+str(d["message_id"]))' "$receipt.tmp"
+            mv -f "$receipt.tmp" "$receipt"
+            chmod 600 "$receipt"
+          else
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["ok"] and d["message_id"]>0; print("VPS_BD_PREVIOUS_REAL_ACK_MESSAGE_ID="+str(d["message_id"]))' "$receipt"
+          fi
+          echo 'KQ247_XS_AND_BD_TELEGRAM_VPS_LIVE=PASS'
+          VPS
