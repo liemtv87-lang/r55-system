@@ -1,0 +1,92 @@
+name: KQ247 VPS Sales Bot Atomic Rollout
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-sales-atomic-rollout.yml
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vps-sales-rollout
+  cancel-in-progress: false
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bot source and payment safety before changing the live bot
+        run: |
+          set -euo pipefail
+          cd deployment/sales-bot
+          npm install --omit=dev --no-audit --no-fund
+          npm test
+          node --check worker.mjs
+          node --check payos-orders.mjs
+      - name: Install SSH client helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Deploy without deleting previous container, with automated health rollback
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          host=root@64.120.92.172
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          live=kq247-sales-bot-primary
+          stage=kq247-sales-bot-stage
+          test "$(docker inspect -f '{{.State.Running}}' "$live")" = true
+          test "$(docker inspect -f '{{.State.Running}}' "$stage")" = true
+          test -s /opt/kq247/.bot-secrets/sales-primary.env
+          curl -fsS --max-time 10 http://127.0.0.1:18087/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["ok"] and j["active"] and j["tokenConfigured"] and j["databaseConfigured"] and j["lastPoll"] and not j["lastError"]'
+          docker exec "$stage" node -e 'const fs=require("fs");const s=fs.readFileSync("/app/worker.mjs","utf8");for(const k of ["180,","6 THÁNG","MỞ TOOL BÓNG ĐÁ","SAO CHÉP MÃ","SAO CHÉP LINK"]){if(!s.includes(k))process.exit(1)}console.log("NEW_STAGE_SOURCE=PASS")'
+          docker run --rm --env-file /opt/kq247/.bot-secrets/sales-primary.env --entrypoint node kq247/sales-bot-stage:latest --input-type=module -e '
+          import pg from "pg";
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:10000});
+          try{
+            const plans=await pool.query("SELECT product,price_vnd FROM sales_plans WHERE duration_days=180 AND enabled=true");
+            if(plans.rows.length!==3||plans.rows.some(x=>Number(x.price_vnd)!==5000000))throw Error("six_month_plan_db_mismatch");
+            const c=await pool.query("SELECT count(*)::int n FROM sales_licenses WHERE status=\u0027active\u0027");
+            if(c.rows[0].n<77)throw Error("existing_codes_count_too_low");
+            const token=process.env.TELEGRAM_SALES_BOT_TOKEN;
+            const resp=await fetch("https://api.telegram.org/bot"+token+"/getMe");
+            const bot=await resp.json();
+            if(!bot.ok||bot.result.username!=="muatool_du_doan_bot")throw Error("telegram_identity_mismatch");
+            const webhook=await(await fetch("https://api.telegram.org/bot"+token+"/getWebhookInfo")).json();
+            if(!webhook.ok||webhook.result.url)throw Error("telegram_webhook_conflict");
+            console.log("KQ247_SALES_PREFLIGHT=PASS");
+          }finally{await pool.end();}
+          '
+          backup="$live-backup-$(date +%Y%m%d%H%M%S)"
+          echo "KQ247_SALES_OLD_BACKUP=$backup"
+          docker stop "$live" >/dev/null
+          docker rename "$live" "$backup"
+          restore() {
+            echo KQ247_SALES_NEW_HEALTH=FAIL_RESTORING_OLD
+            docker rm -f "$live" >/dev/null 2>&1 || true
+            docker rename "$backup" "$live"
+            docker start "$live" >/dev/null
+            sleep 4
+            curl -fsS --max-time 10 http://127.0.0.1:18087/healthz >/dev/null
+            echo KQ247_SALES_ROLLBACK=RESTORED
+            exit 1
+          }
+          docker run -d --name "$live" --restart unless-stopped \
+            --env-file /opt/kq247/.bot-secrets/sales-primary.env \
+            -e KQ247_SALES_BOT_ACTIVE=1 \
+            -p 127.0.0.1:18087:3032 kq247/sales-bot-stage:latest >/dev/null || restore
+          ok=0
+          for i in $(seq 1 12); do
+            sleep 5
+            if curl -fsS --max-time 8 http://127.0.0.1:18087/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["ok"] and j["active"] and j["tokenConfigured"] and j["databaseConfigured"] and j["lastPoll"] and not j["lastError"]' >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+          done
+          if test "$ok" != 1; then restore; fi
+          docker exec "$live" node -e 'const fs=require("fs");const s=fs.readFileSync("/app/worker.mjs","utf8");for(const k of ["6 THÁNG","MỞ TOOL BÓNG ĐÁ","MUA TOOL VIETLOTT","SAO CHÉP LINK","createPayosCheckout"]){if(!s.includes(k))process.exit(1)}console.log("KQ247_SALES_LIVE_FEATURES=PASS")' || restore
+          echo KQ247_SALES_LIVE_ROLLOUT=SUCCESS
+          echo KQ247_SALES_OLD_CONTAINER=STOPPED_AND_PRESERVED
+          REMOTE
