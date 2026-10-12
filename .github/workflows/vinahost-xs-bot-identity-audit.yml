@@ -23,7 +23,7 @@ jobs:
           sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           docker inspect -f 'VPS_LOTTERY_BOT_STATUS={{.State.Status}}' kq247-lottery-bot
-          docker exec kq247-lottery-bot python - <<'PY'
+          docker exec -i kq247-lottery-bot python - <<'PY'
           import os,hashlib,json,urllib.request
           token=os.environ.get('TELEGRAM_LOTTERY_BOT_TOKEN','')
           print('TOKEN_CONFIGURED='+str(bool(token)))
