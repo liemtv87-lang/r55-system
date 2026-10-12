@@ -1,4 +1,5 @@
 name: KQ247 Vietlott VPS Runtime Inventory
+# Resume read-only audit before R39 deployment.
 on:
   push:
     paths:
