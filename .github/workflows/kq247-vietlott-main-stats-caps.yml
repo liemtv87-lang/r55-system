@@ -52,7 +52,7 @@ jobs:
           assert 'R17_USER32_ALL_METHODS_SAME_DAY_30DRAWS_60DRAWS_365D' in text
           assert 'CHỈ DÀN CUỐI' in text and '220000' in text and '650000' in text
           assert 'kq247-draw-windows-link' in text
-          for js in re.findall(r'<script\\b[^>]*>(.*?)</script>',text,re.S|re.I):
+          for js in re.findall(r'<script\b[^>]*>(.*?)</script>',text,re.S|re.I):
               if js.strip():
                   Path('/opt/kq247/vietlott/versions/caps-220k-650k/ui-check.js').write_text(js)
           h.write_text(text)
