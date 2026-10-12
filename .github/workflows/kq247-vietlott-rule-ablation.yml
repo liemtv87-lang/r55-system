@@ -1,0 +1,48 @@
+name: KQ247 Vietlott 32 Rules Holdout Research
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-rule-ablation.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --check scripts/vietlott-rule-research-30d.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Audit real 30-draw eligibility of original and relaxed rules without touching VPS production
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/rule-research'
+          sshpass -e scp "${opts[@]}" scripts/vietlott-rule-research-30d.mjs "$host":/opt/kq247/vietlott/versions/rule-research/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          base=/opt/kq247/vietlott/versions/rule-research
+          docker cp "$base/vietlott-rule-research-30d.mjs" "$name":/app/scripts/vietlott-rule-research-30d.mjs
+          docker exec "$name" node --check /app/scripts/vietlott-rule-research-30d.mjs
+          docker exec -e RESEARCH_DRAWS=30 -e RESEARCH_ASOF=2026-10-12 "$name" node scripts/vietlott-rule-research-30d.mjs | tee "$base/research-log.txt"
+          docker cp "$name":/tmp/vietlott-rule-research-30d-results.json "$base/real-30-draws-ablation.json"
+          python3 - <<'PY'
+          import json
+          root='/opt/kq247/vietlott/versions/rule-research/'
+          d=json.load(open(root+'real-30-draws-ablation.json'))
+          for product,p in d['products'].items():
+              print('RESEARCH_PRODUCT='+product+' from='+str(p.get('first_date'))+' to='+str(p.get('last_date')))
+              print('RESEARCH_TESTED='+str(len(p['draws'])))
+              for rule,stat in p['summaries'].items():
+                  print('RULE_VARIANT='+product+' '+rule+' '+str(stat))
+              print('RESEARCH_HOLDOUT='+json.dumps(p['holdout_results'],ensure_ascii=False)[:3900])
+          print('RESEARCH_MISSING_DATA_RECORDS='+str(len(d.get('errors',[]))))
+          PY
+          echo VIETLOTT_PRODUCTION_SNAPSHOTS_NOT_MODIFIED=YES
+          REMOTE
