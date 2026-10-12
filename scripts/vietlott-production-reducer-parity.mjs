@@ -1,9 +1,14 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import {CFG,fetch3RegionSetForDate,collectFilteredPool,learnWeights,methodScores,METHOD_NAMES} from './engine.mjs';
 import {reduceCoveragePool} from './vietlott-coverage-reducer-research.mjs';
-const rows=[['mega645','2026-10-04',45,200000],['power655','2026-10-03',55,600000]];
 const xsmb=JSON.parse(readFileSync('./data/xsmb200.json','utf8'));
 const bt=JSON.parse(readFileSync('./public/backtest-60.json','utf8'));
+const rows=[['mega645',45,200000],['power655',55,600000]].map(([product,maxn,target])=>{
+ const candidates=(bt.products?.[product]?.details30||[]).filter(x=>(x.reduced_prize_counts?.['Giải nhất']||0)>0);
+ if(!candidates.length)throw Error('no winning test draw '+product);
+ candidates.sort((a,b)=>Number(b.reduced_prize_counts['Giải nhất'])-Number(a.reduced_prize_counts['Giải nhất']));
+ return [product,candidates[0].date,maxn,target];
+});
 const results=[];
 for(const [product,date,maxn,target] of rows){
  const hist=JSON.parse(readFileSync('./data/history-'+product+'.json','utf8')).sort((a,b)=>a.date.localeCompare(b.date));
