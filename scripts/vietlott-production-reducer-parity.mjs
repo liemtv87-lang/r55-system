@@ -1,6 +1,6 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import {CFG,fetch3RegionSetForDate,collectFilteredPool,learnWeights,methodScores,METHOD_NAMES} from './engine.mjs';
-import {reduceCoveragePool} from './reduce-coverage.mjs';
+import {reduceCoveragePool} from './vietlott-coverage-reducer-research.mjs';
 const rows=[['mega645','2026-10-04',45,200000],['power655','2026-10-03',55,600000]];
 const xsmb=JSON.parse(readFileSync('./data/xsmb200.json','utf8'));
 const bt=JSON.parse(readFileSync('./public/backtest-60.json','utf8'));
