@@ -34,14 +34,14 @@ const variants=[];
 for(const spec of configs)variants.push({name:spec.name,mod:await variant(spec)});
 const asof=process.env.RESEARCH_ASOF||'2026-10-12';
 const drawWindow=Math.max(1,Math.min(60,Number(process.env.RESEARCH_DRAWS||30)));
-const begin='determined_by_last_draws';
+const begin=null;
 const xsmb=JSON.parse(readFileSync('./data/xsmb200.json','utf8'));
 const findings={version:'R39_rule_potential_screen',mode:'historic_eligibility_upper_bound_not_selected_200k_600k',start:begin,end:asof,variants:configs.map(x=>({name:x.name,changed:x.turn})),products:{},errors:[]};
 for(const product of ['mega645','power655']){
  const maxn=product==='mega645'?45:55;
  const draws=JSON.parse(readFileSync('./data/history-'+product+'.json','utf8')).sort((a,b)=>a.date.localeCompare(b.date));
  const window=draws.filter(d=>d.date<=asof).slice(-drawWindow);
- const out={draws:[],summaries:{}};
+ const out={draws:[],summaries:{},first_date:window.at(0)?.date||null,last_date:window.at(-1)?.date||null};
  for(const variant of variants)out.summaries[variant.name]={tested:0,jp_eligible:0,jp2_eligible:0,g1_eligible:0,g1_possible:0};
  for(const d of window){
    const train=draws.filter(x=>x.date<d.date);
