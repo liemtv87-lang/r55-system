@@ -1,4 +1,5 @@
-:18080 {
+# Shared routes for original UI, read-only snapshots and native API.
+(r55routes) {
   encode zstd gzip
   @health path /_kq247/health
   respond @health "KQ247 R55 VPS running" 200
@@ -30,4 +31,18 @@
     root * /srv
     file_server
   }
+}
+
+:18080 {
+  import r55routes
+}
+
+# Public HTTPS name resolves directly to this VPS's IPv4 address.
+64-120-92-172.sslip.io {
+  import r55routes
+}
+
+# A visitor who opens the old bare IP automatically reaches the clickable HTTPS site.
+http://:80 {
+  redir https://64-120-92-172.sslip.io{uri} permanent
 }
