@@ -59,3 +59,18 @@
 - **These are eligibility counts in the full expanded rule-filtered universe**, NOT historical prizes in the final exact 200k/600k portfolios. No method has demonstrated 5 JP and 2000 G1 in the actual reduced portfolios. Do not promote by those upper bounds alone.
 - An important parity check is under way (`kq247-vietlott-reducer-parity.yml`, run 38316312836): current VPS daily final pools use `reduceCoveragePool` (five-subset coverage) whereas historical `scanPoolOutcome` reduces by highest score; do not present the latter as exact replay of live final reducer until tested and aligned. In the future standardize the reduction algorithm for genuine walk-forward historical grading.
 - Progress note: original parity run hit missing `reduce-coverage.mjs` within the VPS container; rerun now stages original reducer into research namespace, without altering official pools.
+
+
+## Critical scoring correctness finding — 2026-10-13
+- Verified by running the **actual production reduceCoveragePool()** on historic snapshots (same 200,000 Mega and 600,000 Power combination budgets). Completed GitHub Actions run 38316462822:
+  - Mega 2026-08-07: production-selector replay **1 Jackpot and 73 G1**; former score-only backtest gave **0 Jackpot and 30 G1**.
+  - Power 2026-09-05: production-selector replay **15 G1**; score-only backtest gave **23 G1**.
+- Therefore the 30/60/150/1500 summary published by existing score-only backtest is **PROVISIONAL, NOT accurate historical grading of the actual deployed selector**.
+- Corrected user-facing static statistics JSON and HTML warning without restarting the live service, via workflow `kq247-vietlott-backtest-correction.yml`, successful run 38316659975.
+  - URL: https://vietlott.64-120-92-172.sslip.io/draw-windows.html
+  - JSON now carries `source:historical_score_only_reducer_NOT_PRODUCTION`, `provisional:true`, `matches_production_reducer:false`.
+  - Running backtest merger patched to preserve caution on future automatic regeneration.
+- Developed an exact 30-draw resumable walk-forward research module `scripts/vietlott-exact-coverage-backtest-30.mjs` in repo r55-system, commit af2e11f4d895320799907b8ac829a9f6693a80ba. It reproduces the production 5-subset coverage reducer, produces checkpoints in `/app/data/coverage-r40-walkforward-30`, and excludes all winning numbers from model fitting. **This new 30-draw replay has NOT RUN or been verified**: the attempted secure launch workflow was blocked by tool safety validation. Do not claim any 30-draw real-portfolio performance beyond isolated 2-draw checks.
+- Future priority: deploy/run the exact coverage-reducer backtest safely using authorized operator tooling, verify 30 then 60/150/1500 where data allow. Historical release sources only contain around 152 verified draws (Mega) and 151 (Power) in one-year shards; do not fabricate 1500-draw reports. Expand historic sources safely if available and within free VPS quota.
+- User KPI remains 5 JP (keep JP1/JP2 separately) and 2,000 G1 in 30 draws, with Mega pool 200k and Power pool 600k. At fair-draw independent uniform probabilities, expected exact G1 ≈351 across 30 draws EACH of both products (5.746 Mega and 5.961 Power per draw), regardless of portfolio selection, so 2,000 G1 is a stretch outcome and **cannot be guaranteed** or claimed achieved by overfitting.
+- Preserve live snapshots and customer access. Do not promote relaxed hard rules by full-pool prize eligibility upper bounds alone; evaluate fixed pool sizes on true holdout rounds first.
