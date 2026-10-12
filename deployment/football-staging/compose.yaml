@@ -1,0 +1,14 @@
+services:
+  football-staging:
+    image: caddy:2.10-alpine
+    container_name: kq247-football-staging
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18080:18080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    mem_limit: 256m
+    pids_limit: 100
+    cpus: "0.50"
+    security_opt:
+      - no-new-privileges:true
