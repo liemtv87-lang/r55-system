@@ -8,6 +8,7 @@ on:
       - deployment/football-native/**
       - deployment/football-original/**
       - deployment/football-history/**
+      - deployment/football-bots/**
 permissions:
   contents: read
 concurrency:
@@ -27,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
-          tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging deployment/football-native deployment/football-original deployment/football-history
+          tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging deployment/football-native deployment/football-original deployment/football-history deployment/football-bots
           sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247'
           sshpass -e scp -o StrictHostKeyChecking=accept-new /tmp/kq247-r55-stage.tgz root@64.120.92.172:/tmp/kq247-r55-stage.tgz
       - name: Execute on-VPS deployment script and verify native R55

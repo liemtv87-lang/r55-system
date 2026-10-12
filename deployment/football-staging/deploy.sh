@@ -92,5 +92,8 @@ cmp /tmp/r55-public-original.html /opt/kq247/deployment/football-original/public
 curl -fsS --max-time 15 'http://127.0.0.1:18080/api/main-football?data=1&mode=all&limit=20' -o /tmp/r55-original-public-api.json
 python3 -c 'import json;d=json.load(open("/tmp/r55-original-public-api.json"));assert d.get("ok") and d.get("found") and d.get("snapshot_total",0)>=20 and isinstance(d.get("predictions"),list);print("R55_ORIGINAL_PUBLIC_SNAPSHOT_TOTAL="+str(d["snapshot_total"]))'
 echo 'R55_PUBLIC_ORIGINAL_EXACT_UI_AND_API=PASS'
+# VPS Telegram group standby: never publish twice while Hatchable owns delivery.
+curl -fsS --max-time 8 http://127.0.0.1:18083/healthz -o /tmp/r55-vps-group-status.json
+python3 -c 'import json;d=json.load(open("/tmp/r55-vps-group-status.json"));assert d["ok"] and d["service"]=="r55-vps-telegram-group" and not d["active"] and not d["primarySender"];print("R55_VPS_GROUP_STANDBY=PASS")'
 docker compose ps
 echo 'R55_NATIVE_DEPLOY_VERIFIED=YES'
