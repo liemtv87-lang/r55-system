@@ -1,0 +1,50 @@
+name: KQ247 Vietlott Balanced 5-Subset Holdout
+on:
+  workflow_run:
+    workflows:
+      - KQ247 Vietlott Real 30-Draw Coverage Backtest
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-balanced-holdout
+  cancel-in-progress: false
+jobs:
+  compare:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          node --check scripts/vietlott-balanced-coverage-research.mjs
+          node --check scripts/vietlott-balanced-holdout.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Compare assistant 5-subset diversification against completed exact production replay, no customer changes
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=20)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/balanced-selector'
+          sshpass -e scp "${opts[@]}" scripts/vietlott-balanced-coverage-research.mjs scripts/vietlott-balanced-holdout.mjs deployment/vietlott/limits/pool-policy.mjs "$host":/opt/kq247/vietlott/versions/balanced-selector/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          base=/opt/kq247/vietlott/versions/balanced-selector
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          disk=$(df -P /opt/kq247/vietlott | awk 'NR==2{gsub(/%/,"",$5);print $5}')
+          available=$(awk '/MemAvailable:/{print int($2/1024)}' /proc/meminfo)
+          test "$disk" -lt 80 && test "$available" -gt 1024
+          for file in vietlott-balanced-coverage-research.mjs vietlott-balanced-holdout.mjs pool-policy.mjs;do
+            docker cp "$base/$file" "$name":/app/scripts/"$file"
+            docker exec "$name" node --check /app/scripts/"$file"
+          done
+          echo BALANCED_METHOD_HOLDOUT_3_DRAWS_PER_PRODUCT=START
+          docker exec -e COMPARE_DRAWS=3 "$name" sh -c 'cd /app && if command -v nice >/dev/null;then nice -n 10 node scripts/vietlott-balanced-holdout.mjs;else node scripts/vietlott-balanced-holdout.mjs;fi' | tee "$base/balanced-holdout.log"
+          echo BALANCED_METHOD_HOLDOUT_COMPLETED=YES
+          curl -fsS --max-time 12 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"];print("VPS_LIVE_SERVICE_UNCHANGED=YES")'
+          REMOTE
