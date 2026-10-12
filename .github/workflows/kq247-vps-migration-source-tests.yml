@@ -1,0 +1,32 @@
+name: KQ247 VPS Migration Code Safety Tests
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vps-migration-source-tests.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify safe database migration and sender syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deployment/football-staging/import-neon-to-vps.sh
+          node --check deployment/football-bots/group-worker.mjs
+          node --check deployment/sales-vps/server.mjs
+          node --check deployment/sales-bot/worker.mjs
+          node --input-type=module <<'JS'
+          import {matchMessage,validFootballMessage,QC_TEXT} from './deployment/football-original/lib/r55TelegramFormat.js';
+          const match={home:'FC Pyunik',away:'BKMA',country:'Armenia',league:'Armenia Premier League',kickoff:'2026-10-12T15:00:00Z',market:{type:'AH',pick:'AWAY',line:1.75,odds:1.95}};
+          const body=matchMessage(match);
+          if(!validFootballMessage(body)||!body.includes('BKMA +1.75')||!body.includes(QC_TEXT)||!body.startsWith('<b>')||!body.endsWith('</b>'))throw Error('formatted_message_invalid');
+          console.log('FULL_BOLD_QC_FORMAT_TEST=PASS');
+          JS
+          grep -q 'SALES_DATABASE_URL' deployment/sales-vps/server.mjs
+          grep -q 'CUSTOMER_LICENSE_VALUES_AND_STATUS_PRESERVED' deployment/football-staging/import-neon-to-vps.sh
+          echo VPS_MIGRATION_SOURCE_TESTS=PASS
