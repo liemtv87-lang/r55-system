@@ -553,12 +553,13 @@
         </div>
         <input id="code" placeholder="Nhập mã BD-..." autocomplete="off" />
         <div class="row">
-          <button class="btn" onclick="activate()">KÍCH HOẠT</button
+          <button class="btn" id="activateButton" onclick="activate()">KÍCH HOẠT</button
           ><button class="btn alt" onclick="copyBuy()">
             COPY LINK MUA TOOL
           </button>
         </div>
-        <p id="msg" class="muted"></p>
+        <p id="msg" class="muted" role="status" aria-live="polite"></p>
+        <p id="existingLicenseHelp" style="display:none"><a href="https://t.me/muatool_du_doan_bot?start=from_football_client" target="_blank" rel="noopener noreferrer">LẤY LẠI MÃ BÓNG ĐÁ CŨ CÒN HẠN</a></p>
         <div class="promo">
           <div>* Tool bóng đá + xổ số</div>
           <div>
@@ -580,7 +581,8 @@
     </div>
     <script>
       const API =
-          'https://wbegdefpdwctolawluzo.supabase.co/functions/v1/tool-customer-api',
+          'https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/',
+        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football',
         PRODUCT = 'football',
         BUY = 'https://t.me/muatool_du_doan_bot?start=from_football_client';
       let current = 5000,
@@ -606,27 +608,41 @@
         }
         return v;
       }
+      // KQ247_BD_FP_UNIQUE_V2_20261011: browser characteristics alone are not a device ID.
+      // Include the persistent per-device ID to avoid collisions across identical phones.
+      // Keep device_hash unchanged so existing device bindings and expiry remain valid.
       async function ids() {
+        const deviceId = dev();
+        const traits = [
+          navigator.userAgent,
+          navigator.language,
+          screen.width + 'x' + screen.height,
+          Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ].join('|');
         return {
-          device_hash: await sha(dev()),
-          fingerprint_hash: await sha(
-            [
-              navigator.userAgent,
-              navigator.language,
-              screen.width + 'x' + screen.height,
-              Intl.DateTimeFormat().resolvedOptions().timeZone,
-            ].join('|')
-          ),
+          device_hash: await sha(deviceId),
+          fingerprint_hash: await sha('kq247-bd-fingerprint-v2|' + deviceId + '|' + traits),
         };
       }
       async function post(action, body) {
-        try { const r = await fetch(API + '?action=' + action, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(body),
-          cache: 'no-store',
-        });
-        return [r, await r.json().catch(() => ({ok:false,error:'service_unavailable'}))]; } catch { return [{ok:false,status:503},{ok:false,error:'service_unavailable'}]; }
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        try {
+          const r = await fetch(API + '?action=' + encodeURIComponent(action), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+            cache: 'no-store',
+            signal: controller.signal,
+          });
+          const j = await r.json().catch(() => ({ ok: false, error: 'service_unavailable' }));
+          if (!r.ok && !j.reason) j.error = 'service_unavailable';
+          return [r, j];
+        } catch {
+          return [{ ok: false, status: 503 }, { ok: false, error: 'service_unavailable' }];
+        } finally {
+          clearTimeout(timeout);
+        }
       }
       function reason(r) {
         return (
@@ -634,32 +650,67 @@
             invalid_code: 'Mã không hợp lệ',
             expired: 'Mã đã hết hạn',
             device_mismatch: 'Mã đã khóa ở thiết bị khác',
-            device_has_active_license: 'Thiết bị đang có mã khác còn hạn',
+            device_has_active_license: 'Thiết bị đang có mã khác còn hạn. Hãy dùng mã cũ hoặc mở bot bên dưới để lấy lại mã đã cấp.',
+            fingerprint_matches_other_device: 'Thông số nhận diện trình duyệt trùng với thiết bị đã có mã còn hạn. Mã này chưa bị kích hoạt. Không cần mua hoặc cấp mã mới; hãy gửi ảnh lỗi cho quản trị viên để kiểm tra.',
             trial_already_used: 'Thiết bị đã dùng Free 10 ngày',
+            service_unavailable: 'Không kết nối được hệ thống mã. Mã cũ vẫn được giữ, vui lòng thử lại.',
           }[r] ||
           r ||
           'Không kích hoạt được'
         );
       }
+      // KQ247_BD_GATE_RESILIENCE_20261011: keep the key and expiry unchanged on network/browser errors.
+      let ACTIVATION_IN_PROGRESS = false;
       async function activate() {
+        if (ACTIVATION_IN_PROGRESS) return;
         const raw = $('code').value.trim().toUpperCase();
         if (!raw) {
           $('msg').textContent = 'Nhập mã kích hoạt.';
           return;
         }
-        const h = await ids(),
-          ch = await sha(raw);
-        const [r, j] = await post('activate', {
-          product: PRODUCT,
-          code_hash: ch,
-          ...h,
-        });
-        if (j.ok) {
-          localStorage.setItem('kq247_football_code', ch);
-          localStorage.setItem('kq247_football_session', j.session_token || '');
-          unlock(j);
-          loadFeatured();
-        } else $('msg').textContent = reason(j.reason || j.error);
+        ACTIVATION_IN_PROGRESS = true;
+        const button = $('activateButton');
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'ĐANG KIỂM TRA MÃ...';
+        }
+        $('msg').textContent = 'Đang xác minh mã bóng đá, vui lòng không bấm nhiều lần.';
+        $('existingLicenseHelp').style.display = 'none';
+        try {
+          const [h, ch] = await Promise.all([ids(), sha(raw)]);
+          const [r, j] = await post('activate', {
+            product: PRODUCT,
+            code_hash: ch,
+            ...h,
+          });
+          if (j.ok) {
+            localStorage.setItem('kq247_football_code', ch);
+            localStorage.setItem('kq247_football_session', j.session_token || '');
+            $('msg').textContent = '';
+            unlock(j);
+            load(5000, 'all');
+          } else if (j.reason === 'fingerprint_matches_other_device') {
+            $('msg').textContent = reason(j.reason);
+          } else if (j.reason === 'device_has_active_license') {
+            const prior = localStorage.getItem('kq247_football_code');
+            if (prior && prior !== ch && await check()) return;
+            $('msg').textContent = reason(j.reason);
+            $('existingLicenseHelp').style.display = 'block';
+          } else {
+            $('msg').textContent = reason(j.reason || j.error);
+          }
+        } catch (e) {
+          const msg = String(e && e.message || '');
+          $('msg').textContent = /storage|quota|security|access|permission|localStorage/i.test(msg)
+            ? 'Trình duyệt đang chặn lưu mã trên thiết bị. Hãy cho phép lưu dữ liệu trang web rồi thử lại; mã và hạn vẫn được giữ.'
+            : 'Lỗi kết nối hoặc trình duyệt khi kích hoạt. Mã vẫn được giữ trên máy chủ; vui lòng thử lại.';
+        } finally {
+          ACTIVATION_IN_PROGRESS = false;
+          if (button) {
+            button.disabled = false;
+            button.textContent = 'KÍCH HOẠT';
+          }
+        }
       }
       async function check() {
         const ch = localStorage.getItem('kq247_football_code');
@@ -673,10 +724,12 @@
         if (j.ok) {
           localStorage.setItem('kq247_football_session', j.session_token || '');
           unlock(j);
-          loadFeatured();
+          load(5000, 'all');
+          return true;
         } else {
           $('msg').textContent = (j.error === 'service_unavailable' || r.status >= 500 || r.status === 402 || r.status === 429) ? 'API đang gián đoạn. Đã giữ nguyên mã, thiết bị và hạn dùng; vui lòng thử lại sau.' : reason(j.reason || j.error);
         }
+        return false;
       }
       function unlock(j) {
         $('gate').classList.add('hidden');
@@ -809,6 +862,19 @@
                 : '')
           : 'Nhà cái tham chiếu: 0 • kèo mô hình';
       }
+      function formatPick(x, market) {
+        const p = market === 'AH' ? x.ah : x.ou;
+        if (!p || !p.pick) return '-';
+        const n = Number(p.line);
+        const line = Number.isFinite(n) ? String(n) : String(p.line ?? '').trim();
+        if (market === 'AH') {
+          const side = String(p.pick).trim().toUpperCase();
+          const team = ['CHỦ','HOME','1'].includes(side) ? String(x.home || '') :
+            ['KHÁCH','AWAY','2'].includes(side) ? String(x.away || '') : String(p.pick);
+          return team + ' ' + (Number.isFinite(n) && n >= 0 ? '+' : '') + line;
+        }
+        return String(p.pick).trim().toUpperCase() + (line ? ' ' + line : '');
+      }
       function txt(x) {
         const market = bestMarket(x);
         const p = market === 'AH' ? x.ah : x.ou;
@@ -826,33 +892,48 @@
           '\n' +
           label +
           ': ' +
-          (p?.pick || '-') +
-          ' ' +
-          (p?.line || '') +
-          ' ' +
-          (p?.price || '') +
-          '\nTin cậy: ' +
-          (x.confidence_score ?? '-') +
+          formatPick(x, market) +
+          ' • Tỷ lệ ăn: ' +
+          (p?.price ?? '-') +
           '\n' +
           bookText(x) +
           '\nPP: ' +
           methods(x)
         );
       }
-      function upcomingOnly(rows) {
-        const now = Date.now();
-        return (rows || []).filter(x => Number.isFinite(Number(x.ts)) && Number(x.ts) > now);
+
+      // KQ247_CURRENT_WINDOW_V2: 12:05 VN rollover; old kickoff stays in audit, never sold as a live prediction.
+      function operationalDay() {
+        return new Date(Date.now() + 7 * 3600000 - (12 * 60 + 5) * 60000).toISOString().slice(0, 10);
+      }
+      function calendarDay() {
+        return new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+      }
+      function expectedDay(j) {
+        return j?.provisional === true ? calendarDay() : operationalDay();
+      }
+      function upcoming(x) {
+        return Number.isFinite(Number(x?.ts)) && Number(x.ts) > Date.now();
+      }
+      function cleanSnapshot(j) {
+        const snapDay = String(j.date || '');
+        const all = Array.isArray(j.predictions) ? j.predictions : [];
+        if (snapDay !== expectedDay(j)) {
+          return {...j, found:false, predictions:[], total:0, stale:true, error:'snapshot_expired', snapshot_total:all.length};
+        }
+        const fresh=all.filter(upcoming);
+        return {...j, predictions:fresh, total:fresh.length, snapshot_total:all.length, hidden_past:all.length-fresh.length};
       }
       function visible() {
         const s = ($('q').value || '').toLowerCase().trim();
-        const active = upcomingOnly(ALL);
+        const relevant = META?.date === expectedDay(META) ? ALL.filter(upcoming) : [];
         const a = s
-          ? active.filter(x =>
+          ? relevant.filter(x =>
               ((x.home || '') + ' ' + (x.away || '') + ' ' + leagueLabel(x))
                 .toLowerCase()
                 .includes(s)
             )
-          : active;
+          : relevant;
         return [...a].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
       }
       function copyMatch(i) {
@@ -948,13 +1029,11 @@
                 esc(leagueLabel(x)) +
                 '</div><div class="kick">' +
                 time(x.ts) +
-                '</div><h3>' +
+                '</div><h3 style="color:#dc2626!important;font-weight:950!important">' +
                 esc(x.home || '') +
                 ' - ' +
                 esc(x.away || '') +
-                '</h3><div><span class="badge">Tin cậy ' +
-                esc(x.confidence_score ?? '-') +
-                '</span> <span class="badge ' +
+                '</h3><div><span class="badge ' +
                 (x.trusted_pick ? 'good' : '') +
                 '">' +
                 (x.trusted_pick ? '✅ Kèo đủ dữ liệu' : '⚠️ Dữ liệu mỏng') +
@@ -962,13 +1041,8 @@
                 esc(bookText(x)) +
                 '</span></div><div class="picks"><div class="pick"><b>KÈO SÁNG NHẤT • ' +
                 marketLabel +
-                '</b><span class="market-line">' +
-                esc(p?.pick || '-') +
-                (p?.line !== undefined &&
-                p?.line !== null &&
-                String(p.line) !== ''
-                  ? ' ' + esc(p.line)
-                  : '') +
+                '</b><span class="market-line" style="color:#ff172b!important;font-weight:950!important">' +
+                esc(formatPick(x, market)) +
                 '</span><div class="odds-line">Tỷ lệ ăn: <strong>' +
                 esc(p?.price ?? '-') +
                 '</strong></div></div></div><div class="small" style="margin-top:7px">Form: ' +
@@ -986,30 +1060,27 @@
           '<div class="muted" style="padding:12px 0">Không có trận phù hợp.</div>';
       }
       async function fetchMode(n, mode) {
-        const session = localStorage.getItem('kq247_football_session') || '';
+        // Neon exclusively verifies existing customer codes and expiry.
+        // Predictions always come from the exact same Bongdalu R55 API as the Hatchable main site;
+        // before 13h it marks them provisional, then switches to the locked snapshot.
         const r = await fetch(
-          API +
-            '?action=football-predictions&mode=' +
-            encodeURIComponent(mode) +
-            '&limit=' +
-            n +
-            '&from_ts=' +
-            Date.now(),
-          { headers: { authorization: 'Bearer ' + session }, cache: 'no-store' }
+          PICKS_API +
+            '?mode=' + encodeURIComponent(mode) +
+            '&limit=' + encodeURIComponent(n) +
+            '&from_ts=0',
+          { cache: 'no-store', signal: AbortSignal.timeout(15000) }
         );
-        const j = await r.json();
-        if (r.status === 401) {
-          $('gate').classList.remove('hidden');
-          throw Error('Phiên hết hạn, vui lòng kiểm tra mã.');
-        }
-        if (!r.ok || !j.ok) throw Error(j.error || 'API lỗi');
-        return j;
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw Error(j.error || 'Không tải được snapshot bóng đá');
+        if (j.found && !j.locked && !j.provisional) throw Error('Snapshot chưa khóa và chưa có dự đoán tạm tính');
+        const verified = cleanSnapshot(j);
+        return { ...verified, data: verified };
       }
       async function copyMode(n, mode, label) {
         try {
           const j = await fetchMode(n, mode),
             v = j.data || {},
-            a = upcomingOnly(v.predictions || []).sort(
+            a = [...(j.found ? (v.predictions || []).filter(upcoming) : [])].sort(
               (a, b) => Number(a.ts || 0) - Number(b.ts || 0)
             );
           await cp(a.map(txt).join('\n\n'));
@@ -1026,21 +1097,21 @@
         try {
           const j = await fetchMode(n, mode);
           if (!j.found) {
-            $('summary').textContent = 'Chưa có snapshot hôm nay.';
+            $('summary').textContent = j.stale ? 'Snapshot cũ đã hết kỳ 12:05. Đang chờ snapshot mới được khóa.' : 'Chưa có snapshot hôm nay.';
             ALL = [];
             render();
             return;
           }
           META = j.data || {};
-          ALL = upcomingOnly(META.predictions || []).sort(
+          ALL = [...(META.predictions || [])].filter(upcoming).sort(
             (a, b) => Number(a.ts || 0) - Number(b.ts || 0)
           );
           $('summary').innerHTML =
-            (j.locked ? '🔒 ĐÃ KHÓA • ' : '✅ ') +
+            (j.locked ? '🔒 ĐÃ KHÓA • ' : j.provisional ? '🕒 DỰ ĐOÁN TẠM TÍNH • CHỜ KHÓA 13H • ' : '✅ ') +
             (mode === 'featured' ? 'TRẬN LỚN • ' : '') +
             '<b>' +
             ALL.length +
-            ' trận</b> • cập nhật ' +
+            ' trận sắp diễn ra</b> • đã ẩn ' + Number(j.hidden_past || 0) + ' trận quá giờ • cập nhật ' +
             (j.updated_at && Number.isFinite(new Date(j.updated_at).getTime())
               ? new Date(j.updated_at).toLocaleString('vi-VN')
               : 'chưa có');
@@ -1103,8 +1174,20 @@
         } catch {}
         return true;
       }
+      setInterval(() => {
+        if (document.visibilityState !== 'visible' || $('gate').classList.contains('hidden') === false) return;
+        if (META?.provisional || (META?.date && META.date !== expectedDay(META))) refreshCurrent();
+        else render();
+      }, 60000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && $('gate').classList.contains('hidden')) refreshCurrent();
+      });
+      $('code').addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); activate(); }
+      });
       (async () => {
-        if (await ensureLatestLink()) await check();
+        try { if (await ensureLatestLink()) await check(); }
+        catch (e) { $('msg').textContent = 'Không tải được trạng thái mã lúc này. Vui lòng nhập lại mã hoặc thử lại khi kết nối ổn định.'; }
       })();
     </script>
   
