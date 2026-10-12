@@ -1,4 +1,5 @@
 name: KQ247 Vietlott Exact 30 Draw Progress
+# Follow-up checkpoint while Power 6/55 exact replay continues
 on:
   push:
     paths:
