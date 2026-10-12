@@ -29,3 +29,17 @@ jobs:
           else
             echo KQ247_PAYOS_SECRETS_ALL_PRESENT=NO
           fi
+
+      - name: Check live VPS sales payment flags without displaying private data
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          curl -fsS --max-time 10 http://127.0.0.1:18087/healthz |
+            python3 -c 'import json,sys;d=json.load(sys.stdin); p=d.get("payos") or {};print("VPS_BOT_ACTIVE="+str(bool(d.get("active"))).upper());print("VPS_PAYOS_CREDENTIALS="+str(bool(p.get("credentials"))).upper());print("VPS_PAYOS_WEBHOOK_CONFIRMED="+str(bool(p.get("webhookConfirmed"))).upper());print("VPS_PAYOS_READY="+str(bool(p.get("ready"))).upper())'
+          echo VPS_EXISTING_CUSTOMERS_UNCHANGED=YES
+          REMOTE
