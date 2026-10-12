@@ -1,0 +1,52 @@
+name: KQ247 VPS Sales Bot Read-only Audit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-sales-audit.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect running bots without exposing credentials or changing services
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo KQ247_REMOTE_SSH=CONNECTED
+          echo "KQ247_HOST_TIME_UTC=$(date -u +%FT%TZ)"
+          if command -v docker >/dev/null; then
+            echo 'KQ247_DOCKER_CONTAINERS_BEGIN'
+            docker ps -a --format '{{.Names}}|{{.Status}}' | grep -Ei 'kq247|sales|bot|telegram|football|lottery' || true
+            echo 'KQ247_DOCKER_CONTAINERS_END'
+            for c in $(docker ps -a --format '{{.Names}}' | grep -Ei 'sales|muatool|kq247' || true); do
+              echo "KQ247_CONTAINER_ENV_KEYS_$(echo "$c" | tr -dc 'a-zA-Z0-9_-')_BEGIN"
+              docker inspect "$c" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -Ei 'SALES|TELEGRAM|DATABASE|PAYOS|POSTGRES|WEBHOOK|BOT|LICENSE|NEON' | sort || true
+              echo KQ247_CONTAINER_ENV_KEYS_END
+            done
+          else
+            echo KQ247_DOCKER=NOT_INSTALLED
+          fi
+          echo KQ247_SYSTEMD_BEGIN
+          systemctl list-units --all --type=service --no-legend 2>/dev/null | grep -Ei 'kq247|sales|telegram|football|lottery' || true
+          echo KQ247_SYSTEMD_END
+          echo KQ247_TIMERS_BEGIN
+          systemctl list-timers --all --no-legend 2>/dev/null | grep -Ei 'kq247|sales|telegram|football|lottery' || true
+          echo KQ247_TIMERS_END
+          for dir in /opt/kq247 /srv/kq247 /app; do
+            if test -d "$dir"; then
+              echo "KQ247_FILES_IN=$dir"
+              find "$dir" -maxdepth 4 -type f \( -name '*sales*' -o -name '*bot*' -o -name '*payment*' -o -name '*telegram*' -o -name 'compose*.yml' \) ! -name '*.env' ! -name '*.pem' ! -name '*secret*' 2>/dev/null | head -80
+            fi
+          done
+          echo KQ247_SALES_VPS_READONLY_AUDIT=DONE
+          REMOTE
