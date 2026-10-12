@@ -1072,8 +1072,13 @@
         );
         const j = await r.json().catch(() => ({}));
         if (!r.ok || !j.ok) throw Error(j.error || 'Không tải được snapshot bóng đá');
-        if (j.found && !j.locked && !j.provisional) throw Error('Snapshot chưa khóa và chưa có dự đoán tạm tính');
-        const verified = cleanSnapshot(j);
+        // Native VPS returns locked predictions but intentionally omits 'found'.
+        // An absent field is not the same as no data: verify the snapshot array.
+        const hasSnapshot = Array.isArray(j.predictions) && j.predictions.length > 0 &&
+          (j.locked === true || j.provisional === true);
+        const normalized = { ...j, found: j.found === true || hasSnapshot };
+        if (normalized.found && !normalized.locked && !normalized.provisional) throw Error('Snapshot chưa khóa và chưa có dự đoán tạm tính');
+        const verified = cleanSnapshot(normalized);
         return { ...verified, data: verified };
       }
       async function copyMode(n, mode, label) {
