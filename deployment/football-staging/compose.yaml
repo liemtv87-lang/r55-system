@@ -1,8 +1,27 @@
 services:
+  football-cache:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kq247/r55-public-cache:local
+    container_name: kq247-football-cache
+    restart: unless-stopped
+    read_only: true
+    volumes:
+      - football-cache-data:/cache
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: 256m
+    pids_limit: 100
+    cpus: "0.50"
+    security_opt:
+      - no-new-privileges:true
   football-staging:
     image: caddy:2.10-alpine
     container_name: kq247-football-staging
     restart: unless-stopped
+    depends_on:
+      - football-cache
     ports:
       - "127.0.0.1:18080:18080"
     volumes:
@@ -12,3 +31,5 @@ services:
     cpus: "0.50"
     security_opt:
       - no-new-privileges:true
+volumes:
+  football-cache-data:
