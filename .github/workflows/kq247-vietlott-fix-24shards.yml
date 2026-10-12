@@ -14,58 +14,65 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Download pinned R39 server file
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL --retry 3 --max-time 75 'https://raw.githubusercontent.com/liemtv87-lang/vietlott-auto-hoc/722ad564e8d7d34bf9778aa29e5f1af4a11221f5/snapdeploy-server.mjs' -o /tmp/vietlott-snapdeploy-r39.mjs
-          node --check /tmp/vietlott-snapdeploy-r39.mjs
-          grep -q 'BACKTEST_SHARDS=24' /tmp/vietlott-snapdeploy-r39.mjs
-          grep -q 'R39_VPS_USER32_20261013_BACKTEST_24_SHARDS' /tmp/vietlott-snapdeploy-r39.mjs
-          echo R39_SOURCE_VERIFIED=YES
       - name: SSH helper
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Patch current Vietlott container, verify runtime and retain backup
+      - name: Patch existing VPS Vietlott image with rollback and retain durable snapshot
         shell: bash
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
-          host=root@64.120.92.172
-          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
-          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions && chmod 700 /opt/kq247/vietlott/versions'
-          sshpass -e scp "${opts[@]}" /tmp/vietlott-snapdeploy-r39.mjs "$host":/opt/kq247/vietlott/versions/snapdeploy-r39-24shards.mjs
-          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
           set -euo pipefail
           name=kq247-vietlott-vps
           test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
           base=/opt/kq247/vietlott/versions
-          patch="$base/snapdeploy-r39-24shards.mjs"
-          backup="$base/snapdeploy-before-r39-$(date -u +%Y%m%dT%H%M%SZ).mjs"
-          docker cp "$name":/app/snapdeploy-server.mjs "$backup"
-          test -s "$backup" && test -s "$patch"
-          node --check "$patch"
-          grep -q 'BACKTEST_SHARDS=24' "$patch"
-          restore() {
-            echo VIETLOTT_R39_ROLLBACK_START=YES
-            docker cp "$backup" "$name":/app/snapdeploy-server.mjs
+          mkdir -p "$base"
+          chmod 700 "$base"
+          current=/opt/kq247/vietlott/snapdeploy-server.mjs
+          test -s "$current"
+          prev="$base/snapdeploy-before-r39-$(date -u +%Y%m%dT%H%M%SZ).mjs"
+          docker cp "$name":/app/snapdeploy-server.mjs "$prev"
+          test -s "$prev"
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('/opt/kq247/vietlott/snapdeploy-server.mjs')
+          data=path.read_text()
+          old="const BACKTEST_SHARDS=48;"
+          before="R38_VPS_USER32_20261013_RESUMABLE_48_SHARDS"
+          after="R39_VPS_USER32_20261013_BACKTEST_24_SHARDS"
+          if data.count(old)!=1 or data.count(before)!=1:
+              if "const BACKTEST_SHARDS=24;" in data and after in data:
+                  print("VIETLOTT_HOST_ALREADY_R39=YES")
+              else:raise RuntimeError('unknown source version; refused to patch')
+          else:
+              data=data.replace(old,"const BACKTEST_SHARDS=24;").replace(before,after)
+              path.write_text(data)
+          print("VIETLOTT_HOST_24SHARD_PATCH_VERIFIED=YES")
+          PY
+          restore(){
+            echo VIETLOTT_ROLLBACK=STARTED
+            cp "$prev" "$current"
+            docker cp "$prev" "$name":/app/snapdeploy-server.mjs
             docker restart "$name" >/dev/null
           }
           trap restore ERR
-          docker cp "$patch" "$name":/app/snapdeploy-server.mjs
+          docker cp "$current" "$name":/app/snapdeploy-server.mjs
           docker exec "$name" node --check /app/snapdeploy-server.mjs
           docker restart "$name" >/dev/null
           ok=0
-          for n in $(seq 1 20); do
-            if curl -fsS --max-time 8 http://127.0.0.1:18088/health > /tmp/kq247-vietlott-live-health.json; then
-              if python3 -c 'import json; j=json.load(open("/tmp/kq247-vietlott-live-health.json")); assert j.get("ok") and "R39_" in j.get("runtime","") and "24_SHARDS" in j.get("runtime","")'; then ok=1;break; fi
-            fi
-            sleep 2
+          for i in $(seq 1 20); do
+             if curl -fsS --max-time 8 http://127.0.0.1:18088/health > /tmp/vietlott-r39-health.json; then
+                if python3 -c 'import json; j=json.load(open("/tmp/vietlott-r39-health.json"));assert j.get("ok") and "R39_" in j.get("runtime","") and "24_SHARDS" in j.get("runtime","")'; then ok=1;break;fi
+             fi
+             sleep 3
           done
           test "$ok" -eq 1
+          docker commit "$name" kq247-vietlott-vps:r39-24shards >/dev/null
           trap - ERR
-          echo VIETLOTT_R39_VPS_LIVE=YES
-          python3 -c 'import json;j=json.load(open("/tmp/kq247-vietlott-live-health.json"));print("VIETLOTT_RUNTIME="+j["runtime"])'
-          echo "VIETLOTT_PREVIOUS_SOURCE_BACKUP=$backup"
+          echo VIETLOTT_R39_LIVE=YES
+          python3 -c 'import json; print("VIETLOTT_RUNTIME="+json.load(open("/tmp/vietlott-r39-health.json"))["runtime"])'
+          echo "VIETLOTT_SOURCE_BACKUP=$prev"
+          echo VIETLOTT_R39_IMAGE_BACKUP_TAG=YES
           REMOTE
