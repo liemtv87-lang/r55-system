@@ -11,8 +11,19 @@
     rewrite * /healthz
     reverse_proxy football-native:3001
   }
-  handle /api/main-football {
-    reverse_proxy football-native:3001
+  # Original unchanged UI uses ?data=1; preserve the existing native API
+  # for integrations that do not send that query flag.
+  @original_main {
+    path /api/main-football
+    query data=1
+  }
+  route {
+    handle @original_main {
+      reverse_proxy football-original:3002
+    }
+    handle /api/main-football {
+      reverse_proxy football-native:3001
+    }
   }
   handle /api/health {
     reverse_proxy football-native:3001
