@@ -1,0 +1,119 @@
+name: KQ247 Vietlott Hard Limits And Public Stats
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-hard-limits.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-limits-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate portfolio policy and syntax
+        run: |
+          node --check deployment/vietlott/limits/pool-policy.mjs
+          node --check deployment/vietlott/limits/merge-backtest-60.mjs
+          node --check deployment/vietlott/limits/update-data.mjs
+          node --input-type=module - <<'NODE'
+          import {portfolioPolicy,assertPortfolioSize} from './deployment/vietlott/limits/pool-policy.mjs';
+          for(const [product,target,cap] of [['mega645',200000,220000],['power655',600000,650000]]){
+            if(portfolioPolicy(product).target!==target||portfolioPolicy(product).max!==cap)throw Error('wrong limits');
+            assertPortfolioSize(product,target);
+            try{assertPortfolioSize(product,cap+1);throw Error('oversize accepted')}catch(e){if(!String(e.message).includes('PORTFOLIO_LIMIT_EXCEEDED'))throw e}
+          }
+          console.log('MEGA_200K_CAP_220K=PASS POWER_600K_CAP_650K=PASS');
+          NODE
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Deploy only policy, reducer guard and capped reports to live VPS, no restart
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/caps-220k-650k'
+          sshpass -e scp "${opts[@]}" deployment/vietlott/limits/pool-policy.mjs deployment/vietlott/limits/merge-backtest-60.mjs deployment/vietlott/limits/update-data.mjs deployment/vietlott/draw-windows.html "$host":/opt/kq247/vietlott/versions/caps-220k-650k/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          root=/opt/kq247/vietlott
+          base="$root/versions/caps-220k-650k"
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          for file in merge-backtest-60.mjs update-data.mjs;do
+            docker cp "$name":/app/scripts/"$file" "$base/before-$file"
+            test -s "$base/before-$file"
+          done
+          cp "$root/public/backtest-60.json" "$base/backtest-before-limits.json"
+          cp "$root/public/draw-windows.json" "$base/draw-windows-before-limits.json"
+          cp "$root/public/draw-windows.html" "$base/draw-windows-before-limits.html"
+          rollback() {
+            echo LIMITS_ROLLBACK=START
+            for file in merge-backtest-60.mjs update-data.mjs;do
+              docker cp "$base/before-$file" "$name":/app/scripts/"$file"
+              cp "$base/before-$file" "$root/scripts/$file"
+            done
+            cp "$base/backtest-before-limits.json" "$root/public/backtest-60.json"
+            cp "$base/draw-windows-before-limits.json" "$root/public/draw-windows.json"
+            cp "$base/draw-windows-before-limits.html" "$root/public/draw-windows.html"
+            docker exec "$name" rm -f /app/scripts/pool-policy.mjs || true
+            echo LIMITS_ROLLBACK=RESTORED
+          }
+          trap rollback ERR
+          for file in pool-policy.mjs merge-backtest-60.mjs;do
+            cp "$base/$file" "$root/scripts/$file"
+            docker cp "$base/$file" "$name":/app/scripts/"$file"
+            docker exec "$name" node --check "/app/scripts/$file"
+          done
+          docker exec "$name" node scripts/merge-backtest-60.mjs > "$base/capped-stats-merge.log"
+          python3 - <<'PY'
+          import json
+          root='/opt/kq247/vietlott/public/'
+          b=json.load(open(root+'backtest-60.json'))
+          d=json.load(open(root+'draw-windows.json'))
+          for key,target,cap in [('mega645',200000,220000),('power655',600000,650000)]:
+            p=b['products'][key]
+            assert p['portfolio_target']==target and p['portfolio_hard_max']==cap
+            for n in [30,60,150,1500]:
+              z=p['reduced_stats'+str(n)]
+              s=p['stats'+str(n)]
+              x=d['products'][key][str(n)]
+              assert z['draws_tested']==s['draws_tested']==x['available']
+              assert z['avg_pool']==target and s['avg_pool']==target
+              assert x['average_pool']==target<=cap
+              assert x['portfolio_target']==target and x['portfolio_cap']==cap
+              assert 'full_jackpot' not in x and 'full_g1' not in x
+              assert x['under_cap']
+              print('CAP_STATS_'+key+'_'+str(n)+'_SAFE='+str(int(x['average_pool'])))
+          assert d.get('provisional') and not d.get('matches_production_reducer')
+          print('PROVISIONAL_BACKTEST_NOT_MISLABELED=PASS')
+          PY
+          cp "$base/draw-windows.html" "$root/public/draw-windows.html"
+          docker cp "$base/update-data.mjs" "$name":/app/scripts/update-data.mjs
+          cp "$base/update-data.mjs" "$root/scripts/update-data.mjs"
+          docker exec "$name" node --check /app/scripts/update-data.mjs
+          python3 - <<'PY'
+          import json
+          s=json.load(open('/opt/kq247/vietlott/public/state.json'))
+          for k,target,cap in [('mega645',200000,220000),('power655',600000,650000)]:
+            product=(s.get('snapshot',{}).get('products') or {}).get(k) or {}
+            n=product.get('reduced_total') or (s.get('products',{}).get(k) or {}).get('prediction_count') or 0
+            assert not n or n<=cap,(k,n,cap)
+            print('LOCKED_SNAPSHOT_'+k+'_UNCHANGED_AND_UNDER_CAP='+str(n))
+          PY
+          test "$(curl -fsS -o /tmp/vietlott-caps.json -w '%{http_code}' --max-time 15 http://127.0.0.1:18088/draw-windows.json)" = 200
+          grep -q '220.000' "$root/public/draw-windows.html"
+          grep -q '650.000' "$root/public/draw-windows.html"
+          curl -fsS --max-time 12 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"];print("PRODUCTION_VIETLOTT_RUNNING_NO_RESTART=YES")'
+          trap - ERR
+          echo VIETLOTT_HARD_CAPS_220K_650K_DEPLOYED=YES
+          echo VIETLOTT_STATS_FINAL_POOLS_ONLY=YES
+          echo VIETLOTT_SNAPSHOT_UNCHANGED=YES
+          REMOTE
