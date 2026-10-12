@@ -53,6 +53,28 @@ docker compose run --rm --no-deps football-staging caddy validate --config /etc/
 echo 'R55_CADDY_CONFIG=PASS'
 docker compose up --build -d </dev/null
 docker compose up -d --force-recreate football-staging </dev/null
+
+# PayOS is served by the independently owned sales container. Put only that
+# container on the existing internal compose network; do not start a second
+# Telegram consumer or expose any extra TCP port to the internet.
+if docker inspect kq247-sales-bot-primary >/dev/null 2>&1; then
+  proxy_network="$(docker inspect kq247-football-staging --format '{{range $name,$cfg := .NetworkSettings.Networks}}{{println $name}}{{end}}' | head -n 1)"
+  test -n "$proxy_network"
+  if ! docker inspect kq247-sales-bot-primary --format '{{range $name,$cfg := .NetworkSettings.Networks}}{{println $name}}{{end}}' | grep -Fxq "$proxy_network"; then
+    docker network connect "$proxy_network" kq247-sales-bot-primary
+  fi
+  # Return page and unsigned webhook probes prove routing, not payment success.
+  for i in $(seq 1 10); do
+    ret="$(curl -ksS --max-time 5 -o /dev/null -w '%{http_code}' https://64-120-92-172.sslip.io/payos/return || true)"
+    test "$ret" = 200 && break
+    sleep 2
+  done
+  test "$ret" = 200
+  reject="$(curl -ksS --max-time 5 -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' --data '{}' https://64-120-92-172.sslip.io/payos/webhook || true)"
+  test "$reject" = 400
+  echo KQ247_PAYOS_HTTPS_ROUTING=PASS
+fi
+
 for i in $(seq 1 15); do
   if curl --fail --silent --max-time 5 http://127.0.0.1:18080/_kq247/cache-health >/tmp/r55-cache-health.json; then break; fi
   sleep 2
