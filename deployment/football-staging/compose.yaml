@@ -36,6 +36,28 @@ services:
     cpus: "0.50"
     security_opt:
       - no-new-privileges:true
+  football-native:
+    build:
+      context: ../football-native
+      dockerfile: Dockerfile
+    image: kq247/r55-native:local
+    container_name: kq247-football-native
+    restart: unless-stopped
+    depends_on:
+      football-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://r55app:${R55_DB_PASSWORD}@football-db:5432/r55
+      NATIVE_MIN_DAY: "2026-10-13"
+      NODE_ENV: production
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+    mem_limit: 1024m
+    pids_limit: 200
+    cpus: "1.5"
+    security_opt:
+      - no-new-privileges:true
   football-staging:
     image: caddy:2.10-alpine
     container_name: kq247-football-staging
