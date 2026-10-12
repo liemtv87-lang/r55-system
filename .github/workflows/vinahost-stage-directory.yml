@@ -1,0 +1,17 @@
+name: Create KQ247 Staging Directory
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-stage-directory.yml
+permissions:
+  contents: read
+jobs:
+  create-directory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'mkdir -p /opt/kq247 && ls -ld /opt/kq247'
