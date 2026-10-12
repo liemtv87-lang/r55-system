@@ -27,6 +27,12 @@
   handle /api/health {
     reverse_proxy football-native:3001
   }
+  @lottery_paths {
+    path /xoso /xoso/ /xoso-khach /xoso-khach/ /lottery/*
+  }
+  handle @lottery_paths {
+    reverse_proxy lottery-original:3004
+  }
   handle {
     root * /srv
     file_server

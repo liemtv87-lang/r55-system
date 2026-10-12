@@ -132,6 +132,24 @@ services:
     cpus: "1.0"
     security_opt:
       - no-new-privileges:true
+  # Read-through of original live Neon HTML; no new prediction algorithm or snapshot writes.
+  lottery-original:
+    build:
+      context: ..
+      dockerfile: lottery-original/Dockerfile
+    image: kq247/lottery-original-ui:local
+    container_name: kq247-lottery-original
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18084:3004"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: 256m
+    pids_limit: 100
+    cpus: "0.50"
+    security_opt:
+      - no-new-privileges:true
   football-staging:
     image: caddy:2.10-alpine
     container_name: kq247-football-staging
@@ -139,6 +157,7 @@ services:
     depends_on:
       - football-cache
       - football-original
+      - lottery-original
     ports:
       - "127.0.0.1:18080:18080"
       - "80:80"
