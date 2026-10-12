@@ -104,41 +104,68 @@ async function run(){
   return;
  }
  if(cmd==='model-batch'){
+  // Exhaustive audit: every Bongdalu fixture in the validated feed gets an
+  // individual H2H/form history attempt. Only fixtures with actual AH/OU odds
+  // and future kickoff inside the operative window may become forecasts.
   const source=await resolveBongdaluBase();
   const xmls=await Promise.all(V.BOOKS.map(async([name,id])=>({
     name,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')
   })));
-  const markets=V.parseOdds(xmls);
-  const records=V.parseFeed(source.js,markets);
+  const markets=V.parseOdds(xmls),records=V.parseFeed(source.js,markets);
   const now=Date.now(),day=V.vnDay();
   const end=Date.parse(day+'T06:00:00Z')+86400000+300000;
-  const pool=records.filter(m=>m.ts>now&&m.ts<=end&&m.market&&!V.excluded(m.league+' '+m.home+' '+m.away))
-    .sort((a,b)=>b.priority-a.priority||b.market.bookmakerCount-a.market.bookmakerCount||a.ts-b.ts);
-  const wanted=Math.min(150,Math.max(1,Number(process.env.MODEL_BATCH_LIMIT||150)));
-  const selected=pool.slice(0,wanted);
-  const matches=[];
-  let attempted=0,historyReady=0;
-  for(let i=0;i<selected.length;i+=12){
-    const batch=selected.slice(i,i+12);
-    const history=await Promise.all(batch.map(async m=>({m,h:await V.history(source.base,m.bongdaluId)})));
-    for(const {m,h} of history){
+  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&m.market&&!V.excluded(m.league+' '+m.home+' '+m.away));
+  const eligibleIds=new Set(eligible.map(m=>m.id));
+  const matches=[],exceptions=[],missingHistory=[];
+  let attempted=0,historyReady=0,full20Both=0,partial20=0,h2hAvailable=0,modelAttempted=0;
+  for(let i=0;i<records.length;i+=8){
+    const batch=records.slice(i,i+8);
+    const histories=await Promise.all(batch.map(async m=>{
+      try{return {m,h:await V.history(source.base,m.bongdaluId),err:null}}
+      catch(e){return {m,h:null,err:String(e?.message||e).slice(0,100)}}
+    }));
+    for(const {m,h,err} of histories){
       attempted++;
-      if(!h)continue;
+      if(!h){
+        missingHistory.push(m.id);
+        if(err)exceptions.push({id:m.id,reason:err});
+        continue;
+      }
       historyReady++;
-      const forecast=V.makeMarket(m,h,[]);
-      if(forecast)matches.push(forecast);
+      if(Number(h.home?.n)>=20&&Number(h.away?.n)>=20)full20Both++;
+      else partial20++;
+      if(Number(h.h2h?.n)>0)h2hAvailable++;
+      if(!eligibleIds.has(m.id))continue;
+      modelAttempted++;
+      try{
+        const p=V.makeMarket(m,h,[]);
+        if(p)matches.push(p);
+      }catch(e){exceptions.push({id:m.id,reason:'model:'+String(e?.message||e).slice(0,80)})}
     }
-    log('R55_NATIVE_MODEL_BATCH_PROGRESS',JSON.stringify({attempted,total:selected.length,historyReady,modeled:matches.length}));
+    log('R55_NATIVE_FULL_HISTORY_PROGRESS',JSON.stringify({
+      checked:attempted,all:records.length,historyReady,missing:missingHistory.length,
+      full20Both,eligible:eligible.length,modelAttempted,modeled:matches.length
+    }));
   }
   const accepted=matches.filter(m=>m.market?.researchOnly===false);
-  const data={ok:matches.length>=Math.min(20,selected.length),day,source:source.base,
-    totalFromFeed:records.length,withMarkets:records.filter(m=>!!m.market).length,
-    eligibleFuture:pool.length,attempted,historyReady,modeled:matches.length,
-    qualityCandidates:accepted.length,researchOnly:matches.length-accepted.length,
+  const report={ok:attempted===records.length&&records.length>0,day,
+    checkedAt:new Date().toISOString(),source:source.base,feedFixtures:records.length,
+    fixtureIdsUnique:new Set(records.map(m=>m.id)).size,
+    withMarket:records.filter(m=>!!m.market).length,
+    eligibleFuture:eligible.length,historyAttempted:attempted,historyReady,
+    missingHistory:missingHistory.length,full20Both,partial20,h2hAvailable,
+    modelAttempted,modeled:matches.length,qualityCandidates:accepted.length,
+    researchOnly:matches.length-accepted.length,
     uniqueForecastIds:new Set(matches.map(m=>m.id)).size,
-    examples:matches.slice(0,3).map(m=>({id:m.id,league:m.league,market:m.market.type,choice:m.market.pick,line:m.market.line,odds:m.market.odds}))};
-  log('R55_NATIVE_MODEL_BATCH',JSON.stringify(data));
-  if(!data.ok||data.uniqueForecastIds!==data.modeled)throw Error('native_batch_incomplete');
+    missingSample:missingHistory.slice(0,25),
+    exceptionSample:exceptions.slice(0,12)};
+  // Persist counts for subsequent monitoring, not the 303 raw HTML histories.
+  await db.query(
+    "INSERT INTO football_compact_stats(scope,payload,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(scope) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()",
+    ["r55_vps_exhaustive_history_"+day,JSON.stringify(report)]
+  );
+  log('R55_NATIVE_FULL_HISTORY_AUDIT',JSON.stringify(report));
+  if(!report.ok||report.uniqueForecastIds!==report.modeled)throw Error('native_history_audit_incomplete');
   return;
  }
  if(cmd==='snapshot-status'){log('NATIVE_SNAPSHOT_STATUS',JSON.stringify(await report()));return;}
