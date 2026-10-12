@@ -1,0 +1,61 @@
+name: KQ247 Vietlott Real 30-Draw Coverage Backtest
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-exact-replay.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-exact-replay
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify model script
+        run: node --check scripts/vietlott-exact-coverage-backtest-30.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Run 30-draw historical replay using identical final-ticket selector with per-draw checkpoints
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=30)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/true-coverage-backtest'
+          sshpass -e scp "${opts[@]}" scripts/vietlott-exact-coverage-backtest-30.mjs scripts/vietlott-coverage-reducer-research.mjs deployment/vietlott/limits/pool-policy.mjs "$host":/opt/kq247/vietlott/versions/true-coverage-backtest/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          base=/opt/kq247/vietlott/versions/true-coverage-backtest
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          disk=$(df -P /opt/kq247/vietlott | awk 'NR==2{gsub(/%/,"",$5);print $5}')
+          available=$(awk '/MemAvailable:/{print int($2/1024)}' /proc/meminfo)
+          test "$disk" -lt 80
+          test "$available" -gt 1024
+          for p in vietlott-exact-coverage-backtest-30.mjs vietlott-coverage-reducer-research.mjs pool-policy.mjs; do
+            docker cp "$base/$p" "$name":/app/scripts/"$p"
+            docker exec "$name" node --check /app/scripts/"$p"
+          done
+          docker exec "$name" mkdir -p /app/data/coverage-r40-walkforward-30
+          echo EXACT30_RUNNING_REAL_200K_600K_SELECTOR=YES
+          docker exec -e MAX_DRAWS=30 "$name" sh -c 'cd /app && if command -v nice >/dev/null; then nice -n 10 node scripts/vietlott-exact-coverage-backtest-30.mjs; else node scripts/vietlott-exact-coverage-backtest-30.mjs; fi' | tee "$base/verified-30-draws-run.log"
+          docker cp "$name":/app/data/coverage-r40-walkforward-30/summary.json "$base/summary-verified.json"
+          python3 - <<'PY'
+          import json
+          x=json.load(open('/opt/kq247/vietlott/versions/true-coverage-backtest/summary-verified.json'))
+          for name,target,hard in [('mega645',200000,220000),('power655',600000,650000)]:
+              p=x['products'][name]
+              assert p['portfolio_target']==target and p['portfolio_hard_cap']==hard
+              assert p['completed']==30 and p['missing']==0
+              assert all(not r.get('error') for r in p['rows'])
+              print('VERIFIED_30_DRAW_EXACT_'+name+'='+json.dumps(p['counts'],ensure_ascii=False))
+          print('EXACT_30_DRAW_REPLAY_VERIFIED=YES')
+          PY
+          curl -fsS --max-time 15 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"];print("PRODUCTION_VIETLOTT_UNINTERRUPTED=YES")'
+          echo CUSTOMER_SNAPSHOTS_UNCHANGED=YES
+          REMOTE
