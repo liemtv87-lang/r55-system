@@ -1,0 +1,68 @@
+name: KQ247 Vietlott 30-Day Audit and Snapshot Catch-up
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-30d-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read 30-calendar-day prize scores and trigger missing daily snapshot
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,datetime
+          root='/opt/kq247/vietlott/public/'
+          bt=json.load(open(root+'backtest-60.json'))
+          state=json.load(open(root+'state.json'))
+          print('BACKTEST_GENERATED_AT='+str(bt.get('generated_at')))
+          print('BACKTEST_SHARDS_VERIFIED='+str(bt.get('verification',{}).get('verified_total_shards')))
+          current=state.get('snapshot',{})
+          print('LIVE_SNAPSHOT_LOCKED='+str(current.get('locked')))
+          print('LIVE_STATE_GENERATED='+str(state.get('generated_at')))
+          for product in ['mega645','power655']:
+              p=bt.get('products',{}).get(product,{})
+              rows=p.get('details30',[])
+              dates=[r['date'] for r in rows if r.get('date')]
+              end=max(dates) if dates else ''
+              cutoff=(datetime.date.fromisoformat(end)-datetime.timedelta(days=29)).isoformat() if end else ''
+              rows=[r for r in rows if r.get('date','')>=cutoff]
+              counts={}
+              for row in rows:
+                  for k,v in (row.get('reduced_prize_counts') or {}).items():
+                      counts[k]=counts.get(k,0)+int(v)
+              print('VIETLOTT_30D_'+product+'='+json.dumps({'from':cutoff,'to':end,'tested_draws':len(rows),'counts':counts},ensure_ascii=False))
+              ps=current.get('products',{}).get(product) or {}
+              print('LIVE_POOL_'+product+'='+json.dumps({'locked':ps.get('locked'),'target_date':ps.get('target_date'),'reduced_total':ps.get('reduced_total')},ensure_ascii=False))
+          PY
+          curl -fsS --max-time 8 http://127.0.0.1:18088/health > /tmp/kq247-vietlott-health-audit.json
+          python3 - <<'PY'
+          import json
+          h=json.load(open('/tmp/kq247-vietlott-health-audit.json'))
+          assert h.get('ok') and 'R39_' in h.get('runtime','')
+          print('LIVE_VIETLOTT_RUNNER_STATUS='+str(h.get('status')))
+          PY
+          if python3 - <<'PY'
+          import json,datetime
+          s=json.load(open('/opt/kq247/vietlott/public/state.json'))
+          day=(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=7)))-datetime.timedelta(days=1)).date().isoformat()
+          if s.get('snapshot',{}).get('locked') and s.get('generated_at','')[:10]>=day: exit(1)
+          PY
+          then
+              status=$(curl -sS -o /tmp/vietlott-daily-trigger.json -w '%{http_code}' --max-time 12 -X POST http://127.0.0.1:18088/run/daily)
+              echo "VIETLOTT_DAILY_TRIGGER_HTTP=$status"
+              cat /tmp/vietlott-daily-trigger.json | python3 -c 'import json,sys;s=json.load(sys.stdin);print("VIETLOTT_SNAPSHOT_CATCHUP_ACCEPTED="+str(s.get("accepted")))'
+          else
+              echo 'VIETLOTT_SNAPSHOT_UP_TO_DATE=YES'
+          fi
+          REMOTE
