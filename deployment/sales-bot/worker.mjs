@@ -51,8 +51,8 @@ async function validClientUrl(product){
  }catch{return null}
 }
 const copyButton=(text,value)=>({text,copy_text:{text:String(value).slice(0,256)}});
-const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
-const isPaidTerm=days=>[30,365,730,360,720].includes(Number(days));
+const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)===180?'6 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
+const isPaidTerm=days=>[30,180,365,730,360,720].includes(Number(days));
 
 async function showHome(chat){
  const r=await pool.query("SELECT product,duration_days,price_vnd FROM sales_plans WHERE enabled=true AND product=ANY($1::text[]) ORDER BY product,duration_days",[Object.keys(PRODUCTS)]);
@@ -60,7 +60,7 @@ async function showHome(chat){
  for(const [product,title] of Object.entries(PRODUCTS)){
   const plans=r.rows.filter(p=>p.product===product);
   lines.push('', '<b>'+escapeHtml(title)+'</b>');
-  for(const days of [10,30,365,730]){
+  for(const days of [10,30,180,365,730]){
    const p=plans.find(x=>Number(x.duration_days)===days||(days===365&&Number(x.duration_days)===360)||(days===730&&Number(x.duration_days)===720));
    if(p)lines.push('• '+escapeHtml(planLabel(p.duration_days))+' · '+money(p.price_vnd));
   }
@@ -104,7 +104,7 @@ async function showPlans(chat,product){
   lines.push('🆓 Free 10 ngày — 0đ');
   rows.push([{text:'🎁 DÙNG THỬ FREE 10 NGÀY',callback_data:'trial:'+product}]);
  }
- for(const [days,title] of [[30,'1 THÁNG'],[365,'1 NĂM'],[730,'2 NĂM']]){
+ for(const [days,title] of [[30,'1 THÁNG'],[180,'6 THÁNG'],[365,'1 NĂM'],[730,'2 NĂM']]){
   const plan=plans.find(p=>Number(p.duration_days)===days||(days===365&&Number(p.duration_days)===360)||(days===730&&Number(p.duration_days)===720));
   if(plan&&Number(plan.price_vnd)>0){
    lines.push('💳 '+title+' — '+money(plan.price_vnd));
@@ -120,7 +120,7 @@ async function showPlans(chat,product){
 }
 
 async function purchasePlan(chat,userId,product,days,priceInquiry=false){
- if(!PRODUCTS[product]||![30,360,365,720,730].includes(Number(days)))return;
+ if(!PRODUCTS[product]||![30,180,360,365,720,730].includes(Number(days)))return;
  const r=await pool.query('SELECT duration_days,price_vnd,label FROM sales_plans WHERE product=$1 AND enabled=true AND duration_days=$2 LIMIT 1',[product,days]);
  const p=r.rows[0],title=planLabel(days);
  if(!p||!(Number(p.price_vnd)>0)){
@@ -174,7 +174,7 @@ async function freeTrial(chat,userId,product){
  const url=await validClientUrl(product);
  const rows=[[copyButton('📋 SAO CHÉP MÃ',prior.code_value)]];
  if(url)rows.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
- rows.push([{text:'🛒 MUA 1 THÁNG / 1 NĂM / 2 NĂM',callback_data:'plans:'+product}],[{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]);
+ rows.push([{text:'🛒 MUA 1 THÁNG / 6 THÁNG / 1 NĂM / 2 NĂM',callback_data:'plans:'+product}],[{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]);
  await send(chat,'✅ Đã cấp Free 10 ngày '+PRODUCTS[product]+'\nMã: <code>'+escapeHtml(prior.code_value)+'</code>\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang xác minh.')+'\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',keyboard(rows));
 }
 
