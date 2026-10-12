@@ -1,0 +1,81 @@
+name: KQ247 Vietlott Publish Verified Real 30 Draws
+on:
+  workflow_run:
+    workflows:
+      - KQ247 Vietlott Real 30-Draw Coverage Backtest
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-exact30-report
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Publish verified exact 30-draw results only if every draw and hard pool cap passes QA
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/true-coverage-backtest'
+          sshpass -e scp "${opts[@]}" deployment/vietlott/exact-coverage-30.html "$host":/opt/kq247/vietlott/versions/true-coverage-backtest/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          root=/opt/kq247/vietlott
+          base="$root/versions/true-coverage-backtest"
+          json="$base/summary-verified.json"
+          test -s "$json"
+          python3 - <<'PY'
+          import json,datetime,os
+          from pathlib import Path
+          root=Path('/opt/kq247/vietlott')
+          src=root/'versions/true-coverage-backtest/summary-verified.json'
+          a=json.load(src.open())
+          assert a['schema_version']=='R40_SAME_REDUCER_AS_PRODUCTION'
+          assert a['mode']=='actual_coverage_reducer_not_score_only'
+          for key,target,cap in [('mega645',200000,220000),('power655',600000,650000)]:
+              p=a['products'][key]
+              assert p['completed']==30 and p['requested']==30 and p['missing']==0,(key,'incomplete')
+              assert p['portfolio_target']==target and p['portfolio_hard_cap']==cap
+              assert p['mode']=='exact_deployed_selector_200k_600k_hard_max_220k_650k'
+              assert len(p['rows'])==30 and len(set(r['date'] for r in p['rows']))==30
+              assert all(not r['error'] for r in p['rows'])
+              print('EXACT30_REAL_'+key+'_COUNT='+str(p['completed'])+' JP='+
+                    str(sum(p['counts'].get(k,0) for k in ['Jackpot','Jackpot 1','Jackpot 2']))+
+                    ' G1='+str(p['counts'].get('Giải nhất',0)))
+          b={k:v for k,v in a.items() if k!='products'}
+          b.update({'verified':True,'generated_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    'selector':'score_plus_unique_five_subsets_v1','goal30':{'jackpot':5,'g1':2000},
+                    'note':'Kết quả hồi kiểm dàn thật 30 kỳ, không bảo đảm các kỳ sau'})
+          b['products']=a['products']
+          out=root/'public/exact-coverage-30.json'
+          tmp=out.with_suffix('.json.tmp')
+          tmp.write_text(json.dumps(b,ensure_ascii=False,indent=2)+'\n')
+          os.replace(tmp,out)
+          PY
+          cp "$base/exact-coverage-30.html" "$root/public/exact-coverage-30.html"
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/opt/kq247/vietlott/public/index.html')
+          html=p.read_text()
+          if 'kq247-exact30-link' not in html:
+              link='<div id="kq247-exact30-link" style="background:#e8f8ec;text-align:center;padding:12px;border-bottom:2px solid #168043"><a href="/exact-coverage-30.html" style="color:#117441;font-weight:900">✅ HỒI KIỂM THẬT 30 KỲ — DÀN CUỐI 200K / 600K</a></div>'
+              import re
+              html=re.sub(r'(<body[^>]*>)',lambda m:m.group(1)+link,html,count=1)
+              p.write_text(html)
+          PY
+          curl -fsS --max-time 12 http://127.0.0.1:18088/exact-coverage-30.json | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["verified"] and all(x["completed"]==30 for x in d["products"].values());print("EXACT30_REPORT_LIVE=YES")'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 http://127.0.0.1:18088/exact-coverage-30.html)" = 200
+          curl -fsS --max-time 12 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"]'
+          echo VIETLOTT_EXACT_30_DRAW_REPORT_PUBLISHED_NO_RESTART=YES
+          echo CUSTOMER_LOCKED_SNAPSHOTS_UNCHANGED=YES
+          REMOTE
