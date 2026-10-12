@@ -51,6 +51,8 @@ services:
       NATIVE_MIN_DAY: "2026-10-13"
       NODE_ENV: production
     read_only: true
+    volumes:
+      - football-native-data:/data
     tmpfs:
       - /tmp:size=32m
     mem_limit: 1024m
@@ -74,5 +76,6 @@ services:
     security_opt:
       - no-new-privileges:true
 volumes:
+  football-native-data:
   football-db-data:
   football-cache-data:
