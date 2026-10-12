@@ -1,0 +1,25 @@
+name: KQ247 Sales Migration Readiness
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/kq247-sales-readiness.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required secret names (not values)
+        env:
+          S1: ${{ secrets.VPS_ROOT_PASSWORD }}
+          S2: ${{ secrets.NEON_DATABASE_URL }}
+          S3: ${{ secrets.TELEGRAM_SALES_BOT_TOKEN }}
+          S4: ${{ secrets.PAYOS_CLIENT_ID }}
+          S5: ${{ secrets.PAYOS_API_KEY }}
+          S6: ${{ secrets.PAYOS_CHECKSUM_KEY }}
+        shell: bash
+        run: |
+          for x in S1 S2 S3 S4 S5 S6; do
+            if [ -n "${!x}" ]; then echo "$x=READY"; else echo "$x=NOT_CONFIGURED"; fi
+          done
