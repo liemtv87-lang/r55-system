@@ -1,4 +1,4 @@
-name: KQ247 Stage Sales Bot on VinaHost Safely
+name: KQ247 Sales Bot VPS Non-Production Stage
 on:
   workflow_dispatch:
   push:
@@ -12,34 +12,38 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - name: Check worker source syntax
-        run: node --check deployment/sales-bot/worker.mjs
-      - name: Install SSH helper
+      - name: Validate the complete sales bot bundle locally
+        run: |
+          set -euo pipefail
+          cd deployment/sales-bot
+          node --check worker.mjs
+          node --check payos-orders.mjs
+          npm install --omit=dev --no-audit --no-fund
+          npm test
+          node --input-type=module -e "import {PayOS} from '@payos/node';if(typeof PayOS!=='function')process.exit(1);console.log('PAYOS_SDK_IMPORT=PASS')"
+      - name: Install SSH utility
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Stage sales bot files on VPS without changing the existing production bot
+      - name: Stage isolated inactive build without production credentials or Telegram polling
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
-          if sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 "curl -fsS --max-time 5 http://127.0.0.1:18086/healthz >/dev/null 2>&1"; then
-            echo KQ247_EXISTING_SALES_SHADOW=PASS
-            echo KQ247_SKIP_SECOND_STANDBY_DEPLOYMENT=YES
-            exit 0
-          fi
-          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247/deployment/sales-bot && chmod 700 /opt/kq247/deployment/sales-bot'
-          sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/sales-bot/worker.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile root@64.120.92.172:/opt/kq247/deployment/sales-bot/
-          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
+          host=root@64.120.92.172
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$host" "mkdir -p /opt/kq247/sales-stage && chmod 700 /opt/kq247/sales-stage"
+          sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/sales-bot/worker.mjs deployment/sales-bot/payos-orders.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile "$host":/opt/kq247/sales-stage/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$host" 'bash -se' <<'REMOTE'
           set -euo pipefail
-          if docker ps -a --format '{{.Names}}' | grep -qx kq247-sales-bot; then
-            echo KQ247_SALES_EXISTING_CONTAINER_PRESENT_NO_OVERWRITE
-            exit 1
+          curl -fsS --max-time 8 http://127.0.0.1:18087/healthz >/dev/null
+          cd /opt/kq247/sales-stage
+          docker build --quiet -t kq247/sales-bot-stage:latest . >/dev/null
+          if docker ps -a --format '{{.Names}}' | grep -qx kq247-sales-bot-stage; then
+            docker rm -f kq247-sales-bot-stage >/dev/null
           fi
-          cd /opt/kq247/deployment/sales-bot
-          docker build --quiet -t kq247-sales-bot:standby .
-          docker run -d --name kq247-sales-bot --restart unless-stopped -p 127.0.0.1:18086:3032 -e KQ247_SALES_BOT_ACTIVE=0 kq247-sales-bot:standby >/dev/null
-          sleep 3
-          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:18086/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j.get("ok") and j.get("active") is False and j.get("tokenConfigured") is False; print("KQ247_SALES_VPS_STANDBY=PASS"); print("KQ247_SALES_VPS_HEALTH="+json.dumps(j))'
-          echo KQ247_LEGACY_SALES_BOT_UNCHANGED=YES
+          docker run -d --name kq247-sales-bot-stage --restart unless-stopped -p 127.0.0.1:18088:3032 -e KQ247_SALES_BOT_ACTIVE=0 kq247/sales-bot-stage:latest >/dev/null
+          sleep 5
+          curl -fsS --max-time 8 http://127.0.0.1:18088/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["ok"] and j["active"] is False and not j["tokenConfigured"] and not j["databaseConfigured"] and not j["payos"]["ready"]; print("KQ247_SALES_STAGE_HEALTH=PASS")'
+          docker exec kq247-sales-bot-stage node -e 'const fs=require("fs"); const s=fs.readFileSync("/app/worker.mjs","utf8"); for(const k of ["MỞ TOOL BÓNG ĐÁ","MỞ BẢN KHÁCH XỔ SỐ","MUA TOOL VIETLOTT","SAO CHÉP MÃ","SAO CHÉP LINK","createPayosCheckout","processPayosWebhook"]){if(!s.includes(k))process.exit(1)}console.log("KQ247_SALES_STAGE_FEATURES=PASS")'
+          curl -fsS --max-time 8 http://127.0.0.1:18087/healthz | python3 -c 'import json,sys;j=json.load(sys.stdin); assert j["ok"] and j["active"] is True; print("KQ247_EXISTING_LIVE_BOT_UNCHANGED=PASS")'
           REMOTE
