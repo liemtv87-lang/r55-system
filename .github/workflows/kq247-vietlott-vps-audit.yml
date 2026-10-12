@@ -1,0 +1,40 @@
+name: KQ247 Vietlott VPS source audit
+on:
+  push:
+    paths: [.github/workflows/kq247-vietlott-vps-audit.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install SSH password helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only inventory on VinaHost for Vietlott migration
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SSHPASS" ]; then echo 'VPS_SECRET=UNCONFIGURED'; exit 1; fi
+          sshpass -e ssh -T -o BatchMode=no -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          echo VIETLOTT_VPS_SSH=CONNECTED
+          echo VIETLOTT_SERVER_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo VIETLOTT_DISK
+          df -h /opt/kq247 | tail -1
+          echo VIETLOTT_RAM
+          free -m | awk 'NR==2 {print "total_mb=" $2,"available_mb=" $7}'
+          echo VIETLOTT_PROCESSES
+          docker ps --format '{{.Names}} {{.Status}} {{.Ports}}' | grep -iE 'vietlott|kq247' || true
+          for dir in /opt/kq247/vietlott /opt/kq247/apps/vietlott /opt/kq247; do
+            if [ -d "$dir" ]; then
+              echo "DIR_PRESENT=$dir"
+              find "$dir" -maxdepth 2 -type f \( -name package.json -o -name Dockerfile -o -name compose.yaml -o -name docker-compose.yml -o -name engine.mjs \) -print | head -40
+            else
+              echo "DIR_ABSENT=$dir"
+            fi
+          done
+          REMOTE
