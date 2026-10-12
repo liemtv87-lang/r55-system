@@ -1,0 +1,57 @@
+name: KQ247 VPS Football Readiness & History
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-football-cutover-readiness.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect VPS runtime, protected credentials, history and Telegram ownership
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo "VPS_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo VPS_CONTAINERS_BEGIN
+          docker ps --format '{{.Names}}|{{.Status}}' | grep -Ei 'football|sales|lottery|kq247' || :
+          echo VPS_CONTAINERS_END
+          echo VPS_DISK_BEGIN
+          df -h / /opt | tail -3
+          echo VPS_DISK_END
+          for port in 18080 18081 18083 18085 18086; do
+             echo "VPS_HTTP_$port=$(curl -s --max-time 6 -o /dev/null -w '%{http_code}' http://127.0.0.1:$port/healthz || :)"
+          done
+          for c in kq247-r55-group-bot kq247-sales-vps; do
+            if docker inspect "$c" >/dev/null 2>&1; then
+              echo "VPS_ENV_NAMES_$c=$(docker inspect "$c" --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | grep -Ei 'BOT|TELEGRAM|DATABASE|PAYOS|NEON|ACTIVE' | sort | paste -sd, -)"
+            fi
+          done
+          if test -d /opt/kq247/.bot-secrets; then
+             echo "VPS_SECRET_FILE_NAMES=$(find /opt/kq247/.bot-secrets -maxdepth 1 -type f -printf '%f\n' | grep -v '\.pem$' | sort | paste -sd, -)"
+          fi
+          echo 'VPS_BD_BOT_HEALTH_BEGIN'
+          curl -fsS --max-time 6 http://127.0.0.1:18083/healthz || :
+          echo
+          echo 'VPS_BD_BOT_HEALTH_END'
+          echo 'VPS_SALES_HEALTH_BEGIN'
+          curl -fsS --max-time 6 http://127.0.0.1:18086/healthz || :
+          echo
+          echo 'VPS_SALES_HEALTH_END'
+          echo VPS_POSTGRES_STATUS_BEGIN
+          cd /opt/kq247/deployment/football-staging
+          docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT 'DAY='||day||' RECORDS='||count(*)||' FULL20='||count(*) FILTER(WHERE status='full_20_20')||' PARTIAL='||count(*) FILTER(WHERE status='partial')||' MISSING='||count(*) FILTER(WHERE status='missing') FROM r55_fixture_history GROUP BY day ORDER BY day DESC LIMIT 3"
+          docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT 'SNAPSHOT_DAY='||day||' LOCKED='||(locked_at IS NOT NULL)||' GAMES='||jsonb_array_length(payload->'matches') FROM football_snapshots ORDER BY day DESC LIMIT 4"
+          docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT 'CREDS_TABLE='||to_regclass('public.football_runtime_credentials')"
+          docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -Atc "SELECT 'BOT_DB_ITEMS='||count(*) FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent'"
+          echo VPS_POSTGRES_STATUS_END
+          echo VPS_AUDIT_READONLY_DONE=YES
+          REMOTE
