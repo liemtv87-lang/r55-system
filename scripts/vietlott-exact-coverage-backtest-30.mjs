@@ -2,8 +2,10 @@ import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync} from 'node:f
 import {resolve} from 'node:path';
 import {CFG,fetch3RegionSetForDate,collectFilteredPool,learnWeights,methodScores,METHOD_NAMES} from './engine.mjs';
 import {reduceCoveragePool} from './vietlott-coverage-reducer-research.mjs';
+import {assertPortfolioSize,portfolioPolicy} from './pool-policy.mjs';
 
 const MAX_DRAWS=Math.max(1,Math.min(30,Number(process.env.MAX_DRAWS||30)));
+const RUN_MODE='exact_deployed_selector_200k_600k_hard_max_220k_650k';
 const ROOT='/app/data/coverage-r40-walkforward-30';
 mkdirSync(ROOT,{recursive:true});
 const readJson=path=>JSON.parse(readFileSync(path,'utf8'));
@@ -44,6 +46,7 @@ for(const [product,maxn,target] of [['mega645',45,200000],['power655',55,600000]
        score[n]=Number(t.toFixed(8));
      }
      const reduced=reduceCoveragePool(pool.keys,score,target);
+     assertPortfolioSize(product,reduced.keys.length);
      const prize_counts=computePrizes(reduced.keys,draw,product);
      const row={date,draw_id:draw.draw_id,product,target,selector:'score_plus_unique_five_subsets_v1',
        filtered:pool.valid_total,reduced:reduced.keys.length,prize_counts,subset_diversity:reduced.unique_five_subsets};
@@ -54,6 +57,7 @@ for(const [product,maxn,target] of [['mega645',45,200000],['power655',55,600000]
  const good=rows.filter(r=>!r.error),counts={};
  for(const r of good)for(const [k,v] of Object.entries(r.prize_counts||{}))counts[k]=(counts[k]||0)+Number(v||0);
  result.products[product]={requested:MAX_DRAWS,completed:good.length,missing:rows.length-good.length,
+   mode:RUN_MODE,portfolio_target:target,portfolio_hard_cap:portfolioPolicy(product).max,
    window_start:perDraw.at(0)||null,window_end:perDraw.at(-1)||null,counts,
    rows:rows.map(r=>({date:r.date,error:r.error||null,prize_counts:r.prize_counts||null}))};
  atomic(resolve(ROOT,'summary.json'),result);
