@@ -2,7 +2,7 @@
 // Bot token MUST come from the VPS environment; never from git, API URLs or public files.
 import http from 'node:http';
 import {Pool} from 'pg';
-import {researchMessage,boldTelegram} from './lib/r55TelegramFormat.js';
+import {matchMessage,boldTelegram,validFootballMessage} from './lib/r55TelegramFormat.js';
 import {settle} from './lib/r55Settlement.js';
 const CHANNEL='@keochuyengia79';
 const pool=new Pool({connectionString:process.env.DATABASE_URL, max:3,connectionTimeoutMillis:6000});
@@ -62,12 +62,13 @@ async function sendPick(){
    [key,JSON.stringify({state:'sending',source:'bongdalu-r55',day:x.day,id:x.m.id,owner:'vinahost-vps'})]);
   if(!v.rowCount)continue;
   try{
-   const msg=researchMessage(x.m);
+   const msg=matchMessage(x.m);
+   if(!validFootballMessage(msg))throw Error('football_message_not_exact_or_incomplete');
    const messageId=await send(msg);
    await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
     [key,JSON.stringify({state:'sent',source:'bongdalu-r55',day:x.day,id:x.m.id,
       messageId,group:CHANNEL,owner:'vinahost-vps',certified:false})]);
-   return {sent:true,id:x.m.id,day:x.day,messageId,researchOnly:true};
+   return {sent:true,id:x.m.id,day:x.day,messageId,certified:false};
   }catch(e){
    // A Telegram timeout is ambiguous. Do not retry blindly or duplicate a message.
    await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
