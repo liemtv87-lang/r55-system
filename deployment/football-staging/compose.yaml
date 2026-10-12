@@ -1,4 +1,24 @@
 services:
+  football-db:
+    image: postgres:17-alpine
+    container_name: kq247-r55-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: r55
+      POSTGRES_USER: r55app
+      POSTGRES_PASSWORD: ${R55_DB_PASSWORD:?required}
+    volumes:
+      - football-db-data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    shm_size: 128mb
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U r55app -d r55"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
   football-cache:
     build:
       context: .
@@ -32,4 +52,5 @@ services:
     security_opt:
       - no-new-privileges:true
 volumes:
+  football-db-data:
   football-cache-data:
