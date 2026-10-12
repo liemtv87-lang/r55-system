@@ -18,9 +18,12 @@ const vnDate=d=>new Intl.DateTimeFormat('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',day
 const money=n=>Number(n).toLocaleString('vi-VN')+'đ';
 const keyboard=rows=>({inline_keyboard:rows});
 const nav=()=>keyboard([
- [{text:'🔐 MÃ CỦA TÔI & LINK MỚI NHẤT',callback_data:'mycodes'}],
- [{text:'⚽ Bóng đá',callback_data:'plans:football'},{text:'🎯 Xổ số',callback_data:'plans:lottery'}],
- [{text:'🎟 Vietlott',callback_data:'plans:vietlott'}]
+ [{text:'⚽ MỞ TOOL BÓNG ĐÁ',callback_data:'latest:football'}],
+ [{text:'🎯 MỞ BẢN KHÁCH XỔ SỐ',callback_data:'latest:lottery'}],
+ [{text:'🍀 MỞ TOOL VIETLOTT',callback_data:'latest:vietlott'}],
+ [{text:'🔐 LẤY MÃ ĐÃ CẤP CHO TELEGRAM NÀY',callback_data:'mycodes'}],
+ [{text:'⚽ MUA TOOL BÓNG ĐÁ',callback_data:'plans:football'},{text:'🎯 MUA TOOL XỔ SỐ',callback_data:'plans:lottery'}],
+ [{text:'🍀 MUA TOOL VIETLOTT',callback_data:'plans:vietlott'}]
 ]);
 async function telegram(method,payload){
  const r=await fetch('https://api.telegram.org/bot'+TOKEN+'/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(33000)});
@@ -50,6 +53,21 @@ async function validClientUrl(product){
 const copyButton=(text,value)=>({text,copy_text:{text:String(value).slice(0,256)}});
 const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
 const isPaidTerm=days=>[30,365,730,360,720].includes(Number(days));
+
+async function showHome(chat){
+ const r=await pool.query("SELECT product,duration_days,price_vnd FROM sales_plans WHERE enabled=true AND product=ANY($1::text[]) ORDER BY product,duration_days",[Object.keys(PRODUCTS)]);
+ const lines=['🏠 <b>KQ247 · CHỌN SẢN PHẨM VÀ THỜI HẠN</b>','Mở bản khách hoặc lấy lại mã bằng các nút dưới đây.'];
+ for(const [product,title] of Object.entries(PRODUCTS)){
+  const plans=r.rows.filter(p=>p.product===product);
+  lines.push('', '<b>'+escapeHtml(title)+'</b>');
+  for(const days of [10,30,365,730]){
+   const p=plans.find(x=>Number(x.duration_days)===days||(days===365&&Number(x.duration_days)===360)||(days===730&&Number(x.duration_days)===720));
+   if(p)lines.push('• '+escapeHtml(planLabel(p.duration_days))+' · '+money(p.price_vnd));
+  }
+ }
+ lines.push('','Chỉ mở bản khách, không đưa bản quản trị. Thanh toán trả phí chỉ tự động khi cổng PayOS đã được xác minh.');
+ return send(chat,lines.join('\n'),nav());
+}
 
 async function myCodes(chat,userId){
  const r=await pool.query(
@@ -111,11 +129,12 @@ async function purchasePlan(chat,userId,product,days,priceInquiry=false){
  if(priceInquiry)return send(chat,'Gói '+escapeHtml(title)+' — '+money(p.price_vnd)+'. Thanh toán trực tuyến chỉ mở sau khi PayOS được kết nối và xác minh.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
  const status=payosStatus();
  if(!status.ready){
-  return send(chat,'⚠️ <b>PayOS chưa sẵn sàng</b>. Bot chưa thể nhận thanh toán tự động. Không chuyển khoản theo hướng dẫn không được xác thực; mã hiện có không bị thay đổi.',keyboard([
-   [{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}],
-   [{text:'⬅️ CHỌN GÓI',callback_data:'plans:'+product}]
-  ]));
- }
+   return send(chat,'🛒 <b>ĐĂNG KÝ MUA TOOL '+escapeHtml(PRODUCTS[product])+'</b>\nGói: <b>'+escapeHtml(title)+'</b>\nGiá: <b>'+money(p.price_vnd)+'</b>\n\n⚠️ Thanh toán tự động PayOS chưa được kết nối. Có thể liên hệ quản trị để xác minh thanh toán. Bot không tự cấp mã trước khi xác nhận thanh toán.',keyboard([
+    [{text:'💬 LIÊN HỆ MUA GÓI',url:'https://t.me/thantai7979abcd'}],
+    [{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}],
+    [{text:'⬅️ CHỌN GÓI',callback_data:'plans:'+product}]
+   ]));
+  }
  try{
   const order=await createPayosCheckout(pool,userId,product,days);
   return send(chat,'💳 <b>THANH TOÁN PAYOS</b>\nSản phẩm: '+escapeHtml(PRODUCTS[product])+'\nGói: <b>'+escapeHtml(title)+'</b>\nSố tiền: <b>'+money(order.amount)+'</b>\nĐơn: <code>'+escapeHtml(order.orderCode)+'</code>\n\nBấm thanh toán để chuyển tới payOS. Bot chỉ tự cấp mã sau khi nhận và xác minh giao dịch thành công.',keyboard([
@@ -200,13 +219,14 @@ async function handle(update){
  if(update.callback_query)await telegram('answerCallbackQuery',{callback_query_id:update.callback_query.id});
  const cmd=update.callback_query?.data||update.message?.text?.trim()||'';
  if(cmd==='mycodes'||cmd.startsWith('/mycodes')||cmd.startsWith('/mycode'))return myCodes(chat,user.id);
+ if(cmd.startsWith('latest:') && PRODUCTS[cmd.slice(7)])return sendLatestClient(chat,cmd.slice(7));
  const mapped=legacyProduct(cmd);if(mapped)return sendLatestClient(chat,mapped);
  if(cmd.startsWith('plans:'))return showPlans(chat,cmd.slice(6));
  if(cmd.startsWith('buy:')){const [_,product,days]=cmd.split(':');return purchasePlan(chat,user.id,product,Number(days),false)}
  if(cmd.startsWith('ask:')){const [_,product,days]=cmd.split(':');return purchasePlan(chat,user.id,product,Number(days),true)}
  if(cmd.startsWith('trial:'))return freeTrial(chat,user.id,cmd.slice(6));
- if(cmd==='home'||cmd.startsWith('/start')||cmd.startsWith('/menu'))return send(chat,'KQ247 — chọn sản phẩm hoặc lấy lại mã và link bản khách mới nhất.',nav());
- return send(chat,'Chọn <b>Mã của tôi & link mới nhất</b> hoặc sản phẩm cần xem.',nav());
+ if(cmd==='home'||cmd.startsWith('/start')||cmd.startsWith('/menu'))return showHome(chat);
+ return showHome(chat);
 }
 async function payosHttp(req,res){
  if(req.method==='POST' && new URL(req.url,'http://localhost').pathname.endsWith('/payos/webhook')){
