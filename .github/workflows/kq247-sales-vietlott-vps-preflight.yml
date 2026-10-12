@@ -24,7 +24,7 @@ jobs:
           echo VPS_CHECK=CONNECTED
           df -h /opt/kq247 | tail -1
           free -m | awk 'NR==2 {print "RAM_TOTAL_MB=" $2,"RAM_AVAILABLE_MB=" $7}'
-          docker exec kq247-sales-bot-primary node --input-type=module - <<'JS'
+          docker exec -i kq247-sales-bot-primary node --input-type=module - <<'JS'
           import pg from 'pg';
           const p=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:8000});
           try {
