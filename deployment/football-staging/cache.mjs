@@ -77,7 +77,7 @@ const server=http.createServer((req,res)=>{
   const requested=Number(url.searchParams.get('limit')||30);
   const limit=Number.isFinite(requested)?Math.min(5000,Math.max(1,Math.floor(requested))):30;
   const now=Date.now();
-  const future=cache.predictions.filter(p=>Number(p.ts)>now);
+  const future=url.searchParams.get('from_ts')==='0'?cache.predictions:cache.predictions.filter(p=>Number(p.ts)>now);
   const picks=url.searchParams.get('mode')==='featured'?future.filter(p=>p.top===true):future;
   const exposed={...cache,snapshot_total:cache.predictions.length,hidden_started:cache.predictions.length-future.length,
     total:picks.length,predictions:picks.slice(0,limit)};
