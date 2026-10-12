@@ -172,7 +172,22 @@ async function run(){
     ["r55_vps_exhaustive_history_"+day,JSON.stringify(report)]
   );
   log('R55_NATIVE_FULL_HISTORY_AUDIT',JSON.stringify(report));
-  if(!report.ok||report.uniqueForecastIds!==report.modeled)throw Error('native_history_audit_incomplete');
+  if(!report.ok||report.uniqueForecastIds!==report.modeled||
+     report.eligibleFuture<1||report.modeled/report.eligibleFuture<.8)
+   throw Error('native_80pct_coverage_requirement_failed');
+  // Preserve today's immutable official lock. The new risk-adjusted picks
+  // can be inspected separately as a plainly labeled fresh VPS preview.
+  const preview={date:day,generatedAt:new Date().toISOString(),source:'Bongdalu',
+    locked:false,preview:true,model:'R55 native risk-adjusted shadow',
+    oneMarketPerMatch:true,scanProgress:{checked:attempted,marketPool:eligible.length,
+      modeled:matches.length,coverage:+(100*matches.length/eligible.length).toFixed(2),
+      qualityCandidates:accepted.length},matches};
+  await db.query(
+    "INSERT INTO football_compact_stats(scope,payload,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(scope) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()",
+    ["r55_native_preview_"+day,JSON.stringify(preview)]
+  );
+  log('R55_VPS_PREVIEW_READY',JSON.stringify({day,predictions:matches.length,
+    coverage:preview.scanProgress.coverage,locked:false,qualityCandidates:accepted.length}));
   return;
  }
  if(cmd==='snapshot-status'){log('NATIVE_SNAPSHOT_STATUS',JSON.stringify(await report()));return;}
