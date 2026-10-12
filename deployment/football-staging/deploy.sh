@@ -28,6 +28,7 @@ curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main
 curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main-football?limit=30' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("ok") and len(d.get("predictions",[]))==30;print("VPS_R55_30=PASS")'
 docker compose exec -T football-native node worker.mjs probe
 docker compose exec -T football-native node worker.mjs model-probe
+docker compose exec -T football-native node worker.mjs model-batch
 docker compose exec -T football-native node worker.mjs snapshot-status
 docker compose ps
 echo 'R55_NATIVE_DEPLOY_VERIFIED=YES'
