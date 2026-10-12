@@ -136,7 +136,7 @@ def committed_state(path,contents):
     subprocess.run(["git","push","origin","HEAD:main"],cwd=ROOT,check=True,stdout=subprocess.DEVNULL,timeout=20)
 
 def send(day,region,phase,station,pick,draw,fp):
-    if draw is not None and not due(datetime.now(VN),region,"result"):
+    if not due(datetime.now(VN),region,"result" if draw is not None else "pre"):
         raise RuntimeError("RESULT_DEADLINE_EXPIRED_"+region)
     key=re.sub(r"[^a-z0-9]+","-",station_name(station)).strip("-")
     path=STORE/day/f"{region}-{phase}-{key}.json"
@@ -154,7 +154,7 @@ def send(day,region,phase,station,pick,draw,fp):
     # Claim BEFORE send; an uncertain Telegram timeout must never cause duplicate retries.
     entry={"date":day,"region":region,"phase":phase,"station":station,"status":"claimed","fingerprint":fp,"claimed_at":datetime.now(VN).isoformat()}
     committed_state(path,entry)
-    if draw is not None and not due(datetime.now(VN),region,"result"):
+    if not due(datetime.now(VN),region,"result" if draw is not None else "pre"):
         entry["status"]="deadline_expired";committed_state(path,entry)
         raise RuntimeError("RESULT_DEADLINE_EXPIRED_BEFORE_SEND_"+region)
     url="https://api.telegram.org/bot"+token+"/sendMessage"
@@ -177,7 +177,7 @@ def due(now,region,phase):
     t=now.time().replace(tzinfo=None)
     if phase=="pre":
         start=REGIONS[region]["pre"]
-        return dt_time(start.hour,max(0,start.minute-2))<=t<=dt_time(start.hour,25)
+        return start<=t<=dt_time(start.hour,15)
     after=REGIONS[region]["after"]
     # Hard close at 17:05 MN / 18:05 MT / 20:05 MB (Vietnam local time).
     return after<=t<=dt_time(after.hour,5)
@@ -217,7 +217,8 @@ def main():
     errors=0
     for region in target_regions:
         for phase in (["pre","result"] if forced_phase not in ("pre","result") else [forced_phase]):
-            if not forced_phase and not due(now,region,phase): continue
+            if not dry and not due(datetime.now(VN),region,phase): continue
+            if dry and not forced_phase and not due(now,region,phase): continue
             print("CHECK",region,phase)
             try:
                 stations,fp=read_snapshot(day,region)
