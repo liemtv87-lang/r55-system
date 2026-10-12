@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --retry 2 --max-time 120 https://tool-sales-bot.onrender.com/healthz |
             python3 -c 'import json,sys; j=json.load(sys.stdin); p=j.get("payos") or {}; assert j["active"] is False and j["tokenConfigured"] and j["databaseConfigured"] and p.get("ready");print("RENDER_PAYOS_READY=YES")'
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 -X POST -H 'content-type: application/json' -d '{}' https://tool-sales-bot.onrender.com/sales/checkout)
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 -X POST -H 'content-type: application/json' -d '{"ticket":"0000000000000000000000000000000000000000000000000000000000000000","telegramUserId":"0","product":"lottery","days":30}' https://tool-sales-bot.onrender.com/sales/checkout)
           test "$code" = "401"
           echo RENDER_SALES_BRIDGE_UNSIGNED_REJECTED=YES
       - name: Deploy on existing VinaHost VPS with rollback
