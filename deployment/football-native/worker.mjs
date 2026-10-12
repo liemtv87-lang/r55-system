@@ -1,5 +1,6 @@
 import http from 'node:http';
 import {db,closePool} from 'hatchable';
+import {publicHandler} from './publicApi.mjs';
 import {inspectBongdalu,inspectBongdaluHistoryProbe,resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from 'lib/bongdaluR55.js';
 import {processBongdaluChunk} from 'lib/r55ChunkedBuild.js';
 import {gradeAndLearn} from 'lib/r55Ops.js';
@@ -179,7 +180,9 @@ async function run(){
  if(cmd!=='serve')throw Error('unknown_command');
  await dbReady();
  const server=http.createServer(async(req,res)=>{
-  if(req.method!=='GET'||req.url?.split('?')[0]!=='/healthz'){res.writeHead(404);res.end();return;}
+  if(req.method!=='GET'){res.writeHead(405);res.end();return;}
+  if(await publicHandler(req,res))return;
+  if(req.url?.split('?')[0]!=='/healthz'){res.writeHead(404);res.end();return;}
   try{const result=await report();res.writeHead(result.ok?200:503,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(result));}
   catch(e){res.writeHead(503,{'content-type':'application/json'});res.end(JSON.stringify({ok:false,error:String(e.message||e)}));}
  });
