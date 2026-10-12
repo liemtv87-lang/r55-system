@@ -1,0 +1,27 @@
+name: KQ247 Read Private Vietlott Repository from VPS Build
+on:
+  push:
+    paths: [.github/workflows/vinahost-vietlott-crossrepo-check.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout private Vietlott source using existing installation
+        uses: actions/checkout@v4
+        with:
+          repository: liemtv87-lang/vietlott-auto-hoc
+          ref: main
+          token: ${{ github.token }}
+          persist-credentials: false
+      - name: Verify user rules
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'JS'
+          import { HARD_RULES } from './scripts/engine.mjs';
+          console.log('VIETLOTT_SOURCE_RULE_COUNT='+HARD_RULES.length);
+          if (HARD_RULES.length!==32)process.exit(1);
+          JS
