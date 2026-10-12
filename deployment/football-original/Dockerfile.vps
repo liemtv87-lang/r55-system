@@ -1,0 +1,14 @@
+FROM node:22-alpine
+WORKDIR /app
+COPY football-original/package.vps.json ./package.json
+COPY football-native/compat ./compat
+RUN npm install --omit=dev --no-audit --no-fund
+COPY football-original/lib ./lib
+COPY football-original/api ./api
+COPY football-original/public ./public
+COPY football-original/server.mjs ./server.mjs
+RUN printf '{"name":"lib","type":"module"}\n' > ./lib/package.json && ln -s /app/lib ./node_modules/lib
+USER node
+ENV NODE_ENV=production
+EXPOSE 3002
+CMD ["node","server.mjs"]
