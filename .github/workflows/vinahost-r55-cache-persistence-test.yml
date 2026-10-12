@@ -1,0 +1,36 @@
+name: Verify R55 Locked Snapshot Persistence
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-cache-persistence-test.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Restart staging cache and verify locked data survives
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          echo "BEFORE:"
+          docker exec kq247-football-cache sha256sum /cache/2026-10-12.json | tee /tmp/kq247-r55-before.txt
+          docker restart kq247-football-cache >/dev/null
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:18080/_kq247/cache-health >/tmp/kq247-r55-after-health.json; then break; fi
+            sleep 2
+          done
+          echo "AFTER:"
+          docker exec kq247-football-cache sha256sum /cache/2026-10-12.json | tee /tmp/kq247-r55-after.txt
+          diff -u /tmp/kq247-r55-before.txt /tmp/kq247-r55-after.txt
+          python3 -c 'import json; d=json.load(open("/tmp/kq247-r55-after-health.json")); print("PERSISTED_SNAPSHOT_COUNT="+str(d["cachedPredictions"])); assert d["ok"] and d["cachedPredictions"]==137'
+          echo "PERSISTENCE_TEST=PASS"
+          REMOTE
