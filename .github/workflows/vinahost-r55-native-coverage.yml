@@ -1,0 +1,44 @@
+name: R55 VPS Native Full Coverage Test
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-native-coverage.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Analyze every Bongdalu fixture and assert at least 80 percent AH OU prediction coverage
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 root@64.120.92.172             'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node worker.mjs model-batch' | tee /tmp/native-coverage.log
+          python3 - <<'PY'
+          import json
+          s=open('/tmp/native-coverage.log',encoding='utf-8').read()
+          lines=[line for line in s.splitlines() if 'R55_NATIVE_FULL_HISTORY_AUDIT ' in line]
+          if not lines: raise RuntimeError('native coverage audit was not emitted')
+          d=json.loads(lines[-1].split('R55_NATIVE_FULL_HISTORY_AUDIT ',1)[1])
+          eligible=d['eligibleFuture']
+          modeled=d['modeled']
+          assert eligible>0
+          coverage=round(100*modeled/eligible,2)
+          print('R55_NATIVE_ELIGIBLE='+str(eligible))
+          print('R55_NATIVE_MODELED='+str(modeled))
+          print('R55_NATIVE_COVERAGE_PERCENT='+str(coverage))
+          print('R55_NATIVE_SOURCE='+str(d['source']))
+          print('R55_NATIVE_HISTORY_CHECKED='+str(d['historyAttempted']))
+          print('R55_NATIVE_HISTORY_READY='+str(d['historyReady']))
+          print('R55_NATIVE_QUALITY_CANDIDATES='+str(d['qualityCandidates']))
+          assert d['historyAttempted']==d['feedFixtures'], 'not all source fixtures audited'
+          assert coverage>=80, 'native AH OU forecast coverage below user target'
+          assert d['modeled']==d['uniqueForecastIds'],'duplicate forecasts'
+          print('R55_NATIVE_80_PERCENT_COVERAGE=PASS')
+          PY
