@@ -1,0 +1,47 @@
+name: R55 Client Migration and Bot Link Proof
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/r55-client-link-proof.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify HTTPS, existing Neon code backend, old Render handoff, and matching predictions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,urllib.request
+          from urllib.parse import urlparse
+          ua={'User-Agent':'KQ247-R55-Compatibility-Smoke/1.0'}
+          vps='https://64-120-92-172.sslip.io'
+          old='https://kq247-football-live.onrender.com/client.html'
+          auth='https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/'
+          def req(url):
+            with urllib.request.urlopen(urllib.request.Request(url,headers=ua),timeout=18) as r:
+              return r.status,r.read().decode('utf-8')
+          status,new=req(vps+'/client.html')
+          assert status==200
+          assert auth in new and (vps+'/api/main-football') in new
+          assert 'importLinkMigration()' in new and 'exportLinkMigration()' in new
+          assert 'kq247_football_code' in new and 'kq247_dev' in new
+          print('R55_NEW_CLIENT_NEON_CODE_PRESERVATION=PASS')
+          status,legacy=req(old)
+          assert status==200 and auth in legacy and 'ensureLatestLink()' in legacy
+          print('R55_OLD_RENDER_CLIENT_AUTO_REDIRECT_CODE=PASS')
+          status,body=req(auth+'?action=latest-link&product=football')
+          config=json.loads(body)
+          assert status==200 and config.get('ok')
+          assert config.get('latest_url')==vps+'/client.html',(status,config.get('latest_url'))
+          print('R55_NEON_LATEST_LINK_POINTS_TO_VPS=PASS')
+          status,body=req(vps+'/api/main-football?data=1&mode=all&limit=30')
+          preds=json.loads(body)
+          assert status==200 and preds.get('ok') and preds.get('found') and preds.get('locked')
+          assert len(preds.get('predictions',[]))==30
+          print('R55_CLIENT_FORECASTS_30_AND_LOCKED=PASS')
+          PY
