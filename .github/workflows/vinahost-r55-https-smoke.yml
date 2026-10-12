@@ -1,0 +1,38 @@
+name: R55 HTTPS One-Click and Redirect Smoke
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-https-smoke.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  https:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check HTTPS, TLS trust, working prediction and old IP redirect
+        run: |
+          set -euo pipefail
+          host=64-120-92-172.sslip.io
+          echo "HTTPS_DNS=$(getent ahostsv4 "$host" | head -1 || true)"
+          for i in $(seq 1 10); do
+            if curl -fsSL --connect-timeout 7 --max-time 16 "https://$host/" -o /tmp/r55-https.html; then break; fi
+            sleep 5
+          done
+          test -s /tmp/r55-https.html
+          grep -q 'KQ247' /tmp/r55-https.html
+          echo R55_HTTPS_ONE_CLICK=PASS
+          curl -fsS --connect-timeout 7 --max-time 20 "https://$host/api/main-football?data=1&limit=30" -o /tmp/r55-https.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/r55-https.json'))
+          assert d['ok'] and d['found'] and d['locked']
+          assert len(d['predictions'])==30
+          print('R55_HTTPS_PREDICTIONS='+str(len(d['predictions'])))
+          print('R55_HTTPS_SNAPSHOT_TOTAL='+str(d['snapshot_total']))
+          PY
+          curl -fsSI --connect-timeout 7 --max-time 15 http://64.120.92.172/ -o /tmp/r55-redirect.txt
+          grep -Eq '^HTTP/.* 30[1278]' /tmp/r55-redirect.txt
+          grep -iq "location: https://$host/" /tmp/r55-redirect.txt
+          echo R55_OLD_IP_AUTO_REDIRECT=PASS
