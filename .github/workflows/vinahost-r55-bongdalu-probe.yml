@@ -1,0 +1,27 @@
+name: R55 VPS Bongdalu Network Probe
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-r55-bongdalu-probe.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -eu
+          for base in www.bongdalu812.com www.bongdalu.com www.bongdalu802.com www.bongdalu811.com www.bongdalu628.com; do
+            echo "HOST=$base"
+            for path in gf/data/bf_vn1_nt.js gf/data/odds/en/goal8.xml; do
+              curl -L -s -S --max-time 11 --connect-timeout 5 -o /tmp/kq247-probe.tmp -w "HTTP=%{http_code} BYTES=%{size_download} FINAL=%{url_effective}\n" "https://$base/$path" || echo "HTTP_FAILED"
+              wc -c </tmp/kq247-probe.tmp
+            done
+          done
+          REMOTE
