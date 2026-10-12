@@ -12,7 +12,7 @@ const json=(res,code,obj)=>{
  res.end(JSON.stringify(obj));
 };
 const localVN=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-const valid=(data)=>data&&data.ok===true&&data.source==='Bongdalu'&&
+const valid=(data)=>data&&data.ok===true&&/bongdalu/i.test(String(data.source||''))&&
  /^20\d{2}-\d{2}-\d{2}$/.test(data.date)&&Array.isArray(data.predictions)&&
  data.predictions.every(p=>typeof p.id==='string'&&Number.isFinite(Number(p.ts))&&
  (p.ah||p.ou));
