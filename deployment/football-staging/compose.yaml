@@ -98,10 +98,12 @@ services:
       football-db:
         condition: service_healthy
     env_file:
+      - /opt/kq247/.bot-secrets/xs.env
       - path: /opt/kq247/.bot-secrets/bd.env
         required: false
     environment:
       DATABASE_URL: postgres://r55app:${R55_DB_PASSWORD}@football-db:5432/r55
+      R55_VPS_GROUP_BOT_ACTIVE: "${R55_VPS_GROUP_BOT_ACTIVE:-0}"
       NODE_ENV: production
     ports:
       - "127.0.0.1:18083:3030"
