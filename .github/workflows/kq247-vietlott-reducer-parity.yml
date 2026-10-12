@@ -1,4 +1,5 @@
 name: KQ247 Vietlott Production Reducer Parity Audit
+# Retest on historical draws with G1 prizes (nontrivial comparison).
 on:
   push:
     paths:
