@@ -1,0 +1,13 @@
+{
+  "name": "kq247-vps-sales-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node worker.mjs",
+    "check": "node --check worker.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
