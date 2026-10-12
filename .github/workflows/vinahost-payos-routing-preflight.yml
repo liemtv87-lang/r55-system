@@ -1,0 +1,35 @@
+name: KQ247 PayOS Public Routing Preflight
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-payos-routing-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check VPS routing and trusted encryption key, never print secrets
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo KQ247_VPS_PAYOS_PREFLIGHT=START
+          if test -s /opt/kq247/.bot-secrets/r55-transfer-private.pem; then echo VPS_SEALED_KEY_AVAILABLE=YES;else echo VPS_SEALED_KEY_AVAILABLE=NO;fi
+          if command -v nginx >/dev/null;then echo NGINX_BIN=YES;nginx -t 2>&1 | tail -3;else echo NGINX_BIN=NO;fi
+          if test -d /etc/nginx/sites-enabled;then for f in /etc/nginx/sites-enabled/*;do echo "NGINX_SITE=$f";grep -E 'server_name|listen |location |proxy_pass' "$f" | head -35 || true;done;fi
+          echo VPS_DOCKER_PROXIES_BEGIN
+          docker ps --format '{{.Names}}|{{.Ports}}' | grep -E 'nginx|caddy|proxy|traefik|sales|payos' || true
+          echo VPS_DOCKER_PROXIES_END
+          echo VPS_HTTPS_PAYOS_ENDPOINT
+          curl --insecure -sS --max-time 12 -o /dev/null -w '%{http_code}' https://64-120-92-172.sslip.io/payos/return || true
+          echo
+          echo KQ247_VPS_PAYOS_PREFLIGHT=DONE
+          VPS
