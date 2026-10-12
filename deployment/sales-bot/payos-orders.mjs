@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 
 const PRODUCTS=new Set(['football','lottery','vietlott']);
-const PAID_TERMS=new Set([30,360,365,720,730]);
+const PAID_TERMS=new Set([30,180,360,365,720,730]);
 let client=null,prepared=false;
 
 export function payosStatus(){
