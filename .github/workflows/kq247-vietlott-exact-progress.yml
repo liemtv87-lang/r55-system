@@ -1,0 +1,34 @@
+name: KQ247 Vietlott Exact 30 Draw Progress
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-exact-progress.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read checkpoint counts and VPS resources without modifying anything
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          docker exec "$name" sh -c '
+            root=/app/data/coverage-r40-walkforward-30
+            echo MEGA_EXACT_CACHED=$(find "$root" -maxdepth 1 -type f -name "mega645-*.json" 2>/dev/null | wc -l)
+            echo POWER_EXACT_CACHED=$(find "$root" -maxdepth 1 -type f -name "power655-*.json" 2>/dev/null | wc -l)
+            if test -s "$root/summary.json";then
+              node -e '\''const fs=require("fs");const j=JSON.parse(fs.readFileSync("/app/data/coverage-r40-walkforward-30/summary.json"));for(const [k,v] of Object.entries(j.products||{}))console.log("EXACT_COMPLETED_"+k+"="+v.completed+"/"+v.requested+" errors="+v.missing);'\''
+            fi'
+          docker top "$name" -eo pid,args | grep -E 'vietlott-exact-coverage-backtest-30' | grep -v grep | head -3 || true
+          docker stats --no-stream --format 'VPS_CONTAINER={{.Name}} CPU={{.CPUPerc}} RAM={{.MemUsage}}' "$name"
+          curl -fsS --max-time 10 http://127.0.0.1:18088/health | python3 -c 'import json,sys;v=json.load(sys.stdin);assert v["ok"];print("VIETLOTT_SITE_HEALTH=OK")'
+          REMOTE
