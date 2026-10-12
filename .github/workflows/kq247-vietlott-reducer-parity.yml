@@ -1,0 +1,37 @@
+name: KQ247 Vietlott Production Reducer Parity Audit
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-reducer-parity.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --check scripts/vietlott-production-reducer-parity.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Compare actual 200k and 600k production selection with scored backtest, without writing snapshots
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/parity-research'
+          sshpass -e scp "${opts[@]}" scripts/vietlott-production-reducer-parity.mjs "$host":/opt/kq247/vietlott/versions/parity-research/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          base=/opt/kq247/vietlott/versions/parity-research
+          docker cp "$base/vietlott-production-reducer-parity.mjs" "$name":/app/scripts/vietlott-production-reducer-parity.mjs
+          docker exec "$name" node --check /app/scripts/vietlott-production-reducer-parity.mjs
+          docker exec "$name" node scripts/vietlott-production-reducer-parity.mjs | tee "$base/reducer-parity-log.txt"
+          docker cp "$name":/tmp/vietlott-production-reducer-parity.json "$base/verified-result.json"
+          echo REDUCER_PARITY_AUDIT_COMPLETED=YES
+          echo PRODUCTION_VIETLOTT_SNAPSHOT_UNCHANGED=YES
+          REMOTE
