@@ -1,0 +1,46 @@
+name: KQ247 Sales Legacy and Vietlott Source Checks
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-sales-vietlott-source-checks.yml
+      - deployment/sales-bot/worker.mjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sales:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check active sales-bot source and latest client-only link resolver
+        run: |
+          set -euo pipefail
+          node --check deployment/sales-bot/worker.mjs
+          grep -q 'function legacyProduct' deployment/sales-bot/worker.mjs
+          grep -q 'function sendLatestClient' deployment/sales-bot/worker.mjs
+          grep -q 'sales_link_history' deployment/sales-bot/worker.mjs
+          echo SALES_LEGACY_LINK_SOURCE=PASS
+  vietlott:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Validate original 32-rule repo with client license server
+        run: |
+          set -euo pipefail
+          git clone --depth 1 -q https://github.com/liemtv87-lang/vietlott-auto-hoc.git src
+          cd src
+          node --check scripts/engine.mjs
+          node --check scripts/update-data.mjs
+          node --check snapdeploy-server.mjs
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {HARD_RULES,METHOD_NAMES} from './scripts/engine.mjs';
+          if(HARD_RULES.length!==32)throw Error('32-rule violation');
+          const src=fs.readFileSync('scripts/update-data.mjs','utf8');
+          if(!src.includes("product==='mega645'?200000:600000"))throw Error('wrong reduction counts');
+          if(!fs.readFileSync('public/client.html','utf8').includes('kq247auth.compute'))throw Error('client points to old auth');
+          console.log('VIETLOTT_32_RULES=PASS');
+          console.log('TARGET_MEGA645=200000 TARGET_POWER655=600000');
+          console.log('METHODS='+METHOD_NAMES.length);
+          JS
