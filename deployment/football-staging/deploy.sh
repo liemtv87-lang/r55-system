@@ -12,6 +12,20 @@ deploy_diagnostics() {
   fi
 }
 trap deploy_diagnostics EXIT
+# Verify complete original application source was extracted unchanged.
+source_dir=/opt/kq247/deployment/football-original
+source_count=$(find "$source_dir" -type f | wc -l | tr -d ' ')
+if [ "${source_count:-0}" -lt 116 ]; then echo "R55_ORIGINAL_SOURCE_MISSING=${source_count:-0}" >&2; exit 1; fi
+for file in public/index.html public/client.html api/main-football.js lib/bongdaluR55.js lib/r55EnsembleV3.js lib/r55Ops.js; do
+  test -s "$source_dir/$file" || { echo "R55_SOURCE_FILE_MISSING=$file" >&2; exit 1; }
+done
+for file in r55Ops.js r55Settlement.js r55TelegramFormat.js; do
+  cmp -s "$source_dir/lib/$file" "/opt/kq247/deployment/football-native/lib/$file" || {
+    echo "R55_UNREQUESTED_RUNTIME_CHANGE=$file" >&2; exit 1;
+  }
+done
+echo "R55_ORIGINAL_SOURCE_FILES=$source_count"
+echo "R55_NONSCORING_MODULES_PRESERVED=YES"
 umask 077
 if [ ! -s .env ]; then
   printf 'R55_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env

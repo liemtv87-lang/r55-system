@@ -105,7 +105,7 @@ export function chooseR55Ensemble(row,h,native){
     a.fragility-b.fragility||Number(b.nativeAligned===true)-Number(a.nativeAligned===true)||
     b.worstEV-a.worstEV||b.ev-a.ev);
  const chosen=scored[0];
- const method="r55_ensemble_v3_"+chosen.type.toLowerCase();
+ const method="r55_ensemble_v4_"+chosen.type.toLowerCase();
  return {type:chosen.type,pick:chosen.pick,line:chosen.line,odds:chosen.odds,
   method,ev:chosen.ev,worstEV:chosen.worstEV,modelSpread:chosen.spreadEV,agree:chosen.agree,
   researchOnly:chosen.researchOnly,reason:chosen.reason,bookmakers:q.books,
