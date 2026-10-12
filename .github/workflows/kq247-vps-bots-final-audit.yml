@@ -1,0 +1,32 @@
+name: KQ247 Sole VPS Bots Final Audit
+on:
+  push:
+    paths: [.github/workflows/kq247-vps-bots-final-audit.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          for entry in '18085 xs' '18083 football' '18087 sales'; do
+            set -- $entry
+            curl -fsS --max-time 8 "http://127.0.0.1:$1/healthz" > "/tmp/bots-$2.json"
+          done
+          python3 - <<'PY'
+          import json
+          s={x:json.load(open('/tmp/bots-'+x+'.json')) for x in ('xs','football','sales')}
+          assert s['xs']['active'] and s['xs']['has_token']
+          assert s['football']['active'] and s['football']['primarySender']
+          assert s['sales']['active'] and s['sales']['tokenConfigured'] and s['sales']['databaseConfigured'] and s['sales']['lastPoll'] and not s['sales']['lastError']
+          for name in ('xs','football','sales'):print('VPS_ONLY_'+name.upper()+'=PASS')
+          PY
+          curl -fsS --max-time 20 https://tool-sales-bot.onrender.com/ | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["retired"] and not j["telegram_sender"]; print("LEGACY_RENDER_SENDS_DISABLED=YES")'
+          VPS
