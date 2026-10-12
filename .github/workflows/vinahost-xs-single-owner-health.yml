@@ -1,0 +1,28 @@
+name: VPS XS Sole Sender Health
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-single-owner-health.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify VPS bot active and test message saved
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          curl -fsS http://127.0.0.1:18085/healthz | python3 -c 'import json,sys; s=json.load(sys.stdin); print("XS_VPS_HEALTH="+json.dumps(s,ensure_ascii=False)); assert s["ok"] and s["active"] and s["has_token"]'
+          docker exec kq247-lottery-bot python -c 'import json,pathlib; p=pathlib.Path("/data/xs-test-message-20261012.json"); assert p.is_file(); d=json.loads(p.read_text()); assert d.get("chat_id")=="-1004320899120" and int(d.get("message_id",0))>0; print("XS_VPS_TEST_MESSAGE_ID="+str(d["message_id"]))'
+          echo 'XS_SINGLE_VPS_SENDER_RUNNING=PASS'
+          VPS
