@@ -131,7 +131,7 @@ export async function auditAllMarketHistories(){
   historyAttempted:checked,historyAvailable:ready,full20Both:full20,partialOrLess20:partial,
   unavailable:missing,h2hAvailable:h2h,rawHtmlArchived:archived,
   uniqueChecked:idsSeen.size,errors:errors.slice(0,60),
-  complete:checked===chosen.length&&chosen.length>0&&errors.length===0&&withoutFeed.length===0
+  complete:checked===chosen.length&&chosen.length>0&&ready===chosen.length&&archived===chosen.length&&errors.length===0
  };
  await db.query(
   "INSERT INTO football_compact_stats(scope,payload,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(scope) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()",
