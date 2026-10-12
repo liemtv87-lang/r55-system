@@ -26,6 +26,9 @@ jobs:
             root=/app/data/coverage-r40-walkforward-30
             echo MEGA_EXACT_CACHED=$(find "$root" -maxdepth 1 -type f -name "mega645-*.json" 2>/dev/null | wc -l)
             echo POWER_EXACT_CACHED=$(find "$root" -maxdepth 1 -type f -name "power655-*.json" 2>/dev/null | wc -l)
+            alt=/app/data/vietlott-balanced-selector-holdout
+            echo BALANCED_MEGA_CACHED=$(find "$alt" -maxdepth 1 -type f -name "mega645-*.json" 2>/dev/null | wc -l)
+            echo BALANCED_POWER_CACHED=$(find "$alt" -maxdepth 1 -type f -name "power655-*.json" 2>/dev/null | wc -l)
             if test -s "$root/summary.json";then
               node -e '\''const fs=require("fs");const j=JSON.parse(fs.readFileSync("/app/data/coverage-r40-walkforward-30/summary.json"));for(const [k,v] of Object.entries(j.products||{}))console.log("EXACT_COMPLETED_"+k+"="+v.completed+"/"+v.requested+" errors="+v.missing);'\''
             fi'
