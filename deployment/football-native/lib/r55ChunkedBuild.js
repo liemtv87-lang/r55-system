@@ -39,7 +39,7 @@ export async function processBongdaluChunk(mode){
   const start=Date.parse(day+"T06:00:00Z"),end=start+86400000+300000;
   // Only fixtures strictly after the live scan time can enter a new forecast.
   // A 5-minute look-back would incorrectly permit already-started matches.
-  const pool=all.filter(m=>Number.isFinite(m.ts)&&m.ts>now&&m.ts<=end&&m.market&&!V.excluded(m.league+" "+m.home+" "+m.away))
+  const pool=all.filter(m=>Number.isFinite(m.ts)&&m.ts>now&&m.ts<=end&&m.market)
    .sort((a,b)=>b.priority-a.priority||b.market.bookmakerCount-a.market.bookmakerCount||a.ts-b.ts);
   if(pool.length<20)return {ok:false,day,error:"verified_bongdalu_pool_less_than_20",marketPool:pool.length};
   const manifest={day,mode,cursor:0,pool,source:rr.base,sourceFixtureCount:all.length,matches:[],startedAt:new Date().toISOString()};
@@ -63,7 +63,7 @@ export async function processBongdaluChunk(mode){
   }
   // If a worker crashed after the last cursor commit but before insertion,
   // finish atomically from the verified saved work, without redoing the model.
-  if(lockedMatches.length<20)return {ok:false,day,error:"final_verified_pool_less_than_20",eligible:lockedMatches.length};
+  if(lockedMatches.length<20||lockedMatches.length<Math.ceil(state.pool.length*.8))return {ok:false,day,error:"native_coverage_below_80_percent",eligible:lockedMatches.length,marketPool:state.pool.length};
   const wrote=await db.query("INSERT INTO football_snapshots(day,payload,source) VALUES($1::date,$2::jsonb,'bongdalu-r55') ON CONFLICT(day) DO NOTHING RETURNING day",[day,JSON.stringify(payload)]);
   if(!wrote.rows.length)return {ok:false,day,error:"day_already_locked_by_another_writer_no_override"};
   return {ok:true,day,mode,locked:true,completed:true,recoveredFinalization:true,eligible:lockedMatches.length,checked:start,marketPool:state.pool.length,source:state.source};
@@ -93,7 +93,7 @@ export async function processBongdaluChunk(mode){
   if(complete||ordered.length>=previousCount)await save("r55_provisional_"+day,payload);
  }
  if(complete&&official){
-  if(lockedMatches.length<20)return {ok:false,day,error:"final_verified_pool_less_than_20",eligible:lockedMatches.length,checked:end};
+  if(lockedMatches.length<20||lockedMatches.length<Math.ceil(state.pool.length*.8))return {ok:false,day,error:"native_coverage_below_80_percent",eligible:lockedMatches.length,checked:end,marketPool:state.pool.length};
   const wrote=await db.query("INSERT INTO football_snapshots(day,payload,source) VALUES($1::date,$2::jsonb,'bongdalu-r55') ON CONFLICT(day) DO NOTHING RETURNING day",[day,JSON.stringify(payload)]);
   if(!wrote.rows.length)return {ok:false,day,error:"day_already_locked_by_another_writer_no_override"};
  }
