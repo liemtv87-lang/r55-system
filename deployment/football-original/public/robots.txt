@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://kq247-r55-football.hatchable.site/sitemap.xml

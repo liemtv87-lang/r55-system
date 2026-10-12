@@ -1,0 +1,1122 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <title>Tool phân tích bóng đá KQ247 • Bản khách</title>
+    <script>
+      (() => {
+        window.addEventListener('beforeinstallprompt', event => {
+          event.preventDefault();
+        });
+        if ('serviceWorker' in navigator) {
+          try {
+            navigator.serviceWorker.register = () =>
+              Promise.reject(new Error('pwa_disabled'));
+          } catch {}
+        }
+        const disablePwa = () => {
+          document
+            .querySelectorAll('link[rel="manifest"]')
+            .forEach(node => node.remove());
+          document
+            .querySelectorAll(
+              'meta[name="mobile-web-app-capable"],meta[name="apple-mobile-web-app-capable"],meta[name="apple-mobile-web-app-title"],meta[name="apple-mobile-web-app-status-bar-style"]'
+            )
+            .forEach(node => node.remove());
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(registrations =>
+                Promise.all(registrations.map(registration => registration.unregister()))
+              )
+              .catch(() => {});
+          }
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', disablePwa, { once: true });
+        } else {
+          disablePwa();
+        }
+        setTimeout(disablePwa, 250);
+        setTimeout(disablePwa, 1200);
+      })();
+    </script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #fff;
+        color: #172033;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Arial,
+          sans-serif;
+        min-height: 100vh;
+      }
+      .warn {
+        background: #a31325;
+        color: #fff;
+        padding: 9px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: auto;
+        padding: 10px;
+      }
+      .hero {
+        background: #fff;
+        border: 1px solid #d8e0ec;
+        border-radius: 18px;
+        padding: 18px;
+        margin: 10px 0;
+        box-shadow: 0 2px 10px #0f172a0b;
+      }
+      .hero h1 {
+        margin: 0 0 5px;
+        font-size: 21px;
+      }
+      .muted {
+        color: #667085;
+        font-size: 13px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #d8e0ec;
+        border-radius: 16px;
+        padding: 14px;
+        margin: 10px 0;
+        box-shadow: 0 2px 10px #0f172a0b;
+      }
+      .row {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .btn {
+        border: 0;
+        border-radius: 11px;
+        padding: 10px 13px;
+        background: #2563eb;
+        color: #fff;
+        font-weight: 900;
+        margin: 2px;
+        cursor: pointer;
+      }
+      .btn.alt {
+        background: #475569;
+      }
+      .btn.green {
+        background: #07835f;
+      }
+      .btn.copy {
+        background: #0f8a79;
+      }
+      .search {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #cfd8e6;
+        background: #fff;
+        color: #172033;
+        margin: 8px 0;
+      }
+      .status {
+        padding: 9px 10px;
+        border-radius: 10px;
+        background: #f4f7fb;
+        color: #667085;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+      .summary {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .stat {
+        background: #f8fafc;
+        border: 1px solid #d8e0ec;
+        border-radius: 10px;
+        padding: 7px 9px;
+        font-size: 12px;
+      }
+      .fixture {
+        background: #fff;
+        border: 1px solid #d8e0ec;
+        border-radius: 14px;
+        padding: 12px;
+        margin: 10px 0;
+      }
+      .league {
+        font-size: 12px;
+        color: #2563eb;
+        font-weight: 850;
+      }
+      .kick {
+        font-size: 12px;
+        color: #667085;
+      }
+      .fixture h3 {
+        font-size: 17px;
+        margin: 5px 0 8px;
+        color: #dc2626 !important;
+        font-weight: 950 !important;
+        line-height: 1.35;
+      }
+      .picks {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .pick {
+        padding: 14px 15px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #d8e0ec;
+        min-height: 112px;
+      }
+      .pick b {
+        display: block;
+        font-size: 17px;
+        color: #0757d5 !important;
+        font-weight: 950 !important;
+        margin-bottom: 9px;
+        line-height: 1.2;
+      }
+      .pick span {
+        font-size: 15px;
+        color: #0757d5 !important;
+        font-weight: 950 !important;
+      }
+      .market-line {
+        display: block;
+        color: #0757d5 !important;
+        font-size: 16px;
+        font-weight: 950 !important;
+        line-height: 1.35;
+        margin: 2px 0 10px;
+      }
+      .odds-line {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        padding-top: 8px;
+        border-top: 1px dashed #cbd5e1;
+        font-size: 14px;
+        color: #475569;
+      }
+      .odds-line strong {
+        color: #0757d5 !important;
+        font-size: 16px;
+        font-weight: 950;
+      }
+      .badge {
+        display: inline-block;
+        padding: 3px 7px;
+        border-radius: 99px;
+        font-size: 10px;
+        background: #eaf1ff;
+        color: #174ea6;
+        margin: 2px 2px 2px 0;
+      }
+      .badge.good {
+        background: #e9f8ef;
+        color: #087443;
+      }
+      .actions {
+        display: flex;
+        gap: 7px;
+        margin-top: 9px;
+      }
+      .actions button {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+      .gate {
+        position: fixed;
+        inset: 0;
+        background: #fffffffa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        z-index: 50;
+      }
+      .gate.hidden {
+        display: none;
+      }
+      .panel {
+        width: min(440px, 100%);
+        background: #fff;
+        border: 1px solid #cfd8e6;
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 12px 40px #0f172a1f;
+      }
+      .panel input {
+        width: 100%;
+        padding: 13px;
+        border-radius: 11px;
+        border: 1px solid #cfd8e6;
+        background: #fff;
+        color: #172033;
+        margin: 8px 0;
+      }
+      .promo {
+        margin: 14px 0;
+        padding: 12px;
+        border-radius: 12px;
+        background: #eef4ff;
+        color: #0757d5;
+        font-weight: 800;
+        line-height: 1.65;
+      }
+      .promo a {
+        color: #d71920 !important;
+        font-weight: 900;
+        text-decoration: underline;
+      }
+      .buy {
+        color: #0757d5;
+        font-weight: 900;
+      }
+      .small {
+        font-size: 11px;
+        color: #667085;
+      }
+      .statsgrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 8px;
+      }
+      .day,
+      .method {
+        border: 1px solid #d8e0ec;
+        border-radius: 12px;
+        padding: 10px;
+        background: #fbfdff;
+      }
+      .rate {
+        font-weight: 900;
+        color: #0757d5;
+      }
+      .priority {
+        display: inline-block;
+        background: #dcfce7;
+        color: #166534;
+        border-radius: 99px;
+        padding: 2px 7px;
+        font-size: 10px;
+        font-weight: 900;
+      }
+      .learnon {
+        color: #087443;
+        font-weight: 900;
+      }
+      .collapsed #list {
+        display: none;
+      }
+      @media (max-width: 620px) {
+        .wrap {
+          padding: 8px;
+        }
+        .hero {
+          padding: 14px;
+        }
+        .row > .btn {
+          flex: 1;
+        }
+        .fixture {
+          padding: 10px;
+        }
+        .picks {
+          grid-template-columns: 1fr;
+        }
+        .actions {
+          flex-direction: column;
+        }
+        .actions button {
+          width: 100%;
+        }
+      }
+    </style>
+  
+    <meta name="description" content="Tool phân tích bóng đá KQ247 dành cho khách đã có mã kích hoạt: lịch trận, dữ liệu phân tích và 1 kèo tham khảo sáng nhất mỗi trận trên điện thoại." />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <link rel="canonical" href="https://kq247-football-live.onrender.com/client.html" />
+    <meta property="og:title" content="Tool phân tích bóng đá KQ247 • Bản khách" />
+    <meta property="og:description" content="Bản khách Tool bóng đá KQ247: lịch trận, dữ liệu phân tích, giao diện mobile và kích hoạt bằng mã khách hàng." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kq247-football-live.onrender.com/client.html" />
+    <script type="application/ld+json" data-kq247-seo="1">{"@context":"https://schema.org","@type":"WebPage","name":"Tool phân tích bóng đá KQ247 • Bản khách","description":"Bản khách Tool bóng đá KQ247 dành cho người dùng có mã kích hoạt, hỗ trợ xem lịch trận và dữ liệu phân tích trên web mobile.","url":"https://kq247-football-live.onrender.com/client.html","inLanguage":"vi-VN"}</script>
+
+<script data-kq247-growth-analytics="1">
+(() => {
+  const KQ247_PH_KEY = "phc_rCvftnSz7DhowFBdng3GgBq9HnqrcbgAgk7VsvtY3CqJ";
+  const KQ247_PH_URL = 'https://us.i.posthog.com/i/v0/e/';
+  const KQ247_SURFACE = "football-client";
+  function kq247DistinctId() {
+    try {
+      let id = localStorage.getItem('kq247_growth_id');
+      if (!id) {
+        id = (crypto.randomUUID ? crypto.randomUUID() : ('kq247-' + Date.now() + '-' + Math.random().toString(36).slice(2)));
+        localStorage.setItem('kq247_growth_id', id);
+      }
+      return id;
+    } catch {
+      return 'kq247-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    }
+  }
+  const KQ247_DISTINCT_ID = kq247DistinctId();
+  function kq247Capture(event, extra = {}) {
+    const payload = {
+      api_key: KQ247_PH_KEY,
+      event,
+      distinct_id: KQ247_DISTINCT_ID,
+      properties: {
+        ...extra,
+        kq247_surface: KQ247_SURFACE,
+        '$current_url': location.href,
+        '$host': location.host,
+        '$pathname': location.pathname,
+        '$referrer': document.referrer || ''
+      }
+    };
+    try {
+      fetch(KQ247_PH_URL, {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(payload),
+        keepalive: true,
+        mode: 'cors'
+      }).catch(() => {});
+    } catch {}
+  }
+  window.kq247GrowthCapture = kq247Capture;
+  kq247Capture('$pageview');
+  document.addEventListener('click', event => {
+    const a = event.target && event.target.closest ? event.target.closest('a[href]') : null;
+    if (!a) return;
+    const href = String(a.href || '');
+    if (href.includes('t.me/muatool_du_doan_bot')) {
+      kq247Capture('sales bot clicked', {
+        sales_bot: 'muatool_du_doan_bot',
+        link_text: String(a.textContent || '').trim().slice(0, 120)
+      });
+      return;
+    }
+    let telegram_group = '';
+    if (href.includes('t.me/keochuyengia79')) telegram_group = 'keochuyengia79';
+    if (href.includes('t.me/xsbm999')) telegram_group = 'xsbm999';
+    if (!telegram_group) return;
+    kq247Capture('telegram cta clicked', {
+      telegram_group,
+      link_text: String(a.textContent || '').trim().slice(0, 120)
+    });
+  }, true);
+})();
+</script>
+</head>
+  <body>
+    <div class="warn">
+      Cờ bạc là bất hợp pháp - Tool chỉ mang tính chất tham khảo - học hỏi !
+    </div>
+    <div class="wrap" id="app">
+      <div
+        id="expiryAlert"
+        style="
+          display: none;
+          background: #fee2e2;
+          color: #b91c1c;
+          border: 1px solid #fecaca;
+          border-radius: 12px;
+          padding: 12px 14px;
+          margin: 10px 0;
+          font-weight: 950;
+          text-align: center;
+          font-size: 16px;
+        "
+      ></div>
+      <div class="hero">
+        <h1>⚽ Tool phân tích bóng đá KQ247 • BẢN KHÁCH</h1>
+        <div class="muted">
+          1 KÈO SÁNG NHẤT/TRẬN • snapshot đã khóa • tự học hiệu suất • không quét lại trên
+          điện thoại
+        </div>
+      </div>
+      
+      <div class="card">
+        <b>📡 Dữ liệu hôm nay</b>
+        <div id="licenseInfo" class="status">Chưa kích hoạt.</div>
+        <div class="row" style="margin-top: 8px">
+          <button class="btn" onclick="loadFeatured()">
+            🔥 TRẬN LỚN NHẤT TRONG NGÀY
+          </button>
+          <button class="btn" onclick="load(20)">20 TRẬN</button>
+          <button class="btn" onclick="load(30)">30 TRẬN</button>
+          <button class="btn alt" onclick="load(5000)">TẤT CẢ</button>
+          <button class="btn green" onclick="refreshCurrent()">CẬP NHẬT</button>
+          <button class="btn alt" onclick="toggleCollapse()">
+            THU GỌN / MỞ RỘNG
+          </button>
+        </div>
+        <div class="row" style="margin-top: 8px">
+          <button class="btn copy" onclick="copyMode(20, 'all', '20 TRẬN')">
+            COPY TOÀN BỘ 20 TRẬN
+          </button>
+          <button class="btn copy" onclick="copyMode(30, 'all', '30 TRẬN')">
+            COPY TOÀN BỘ 30 TRẬN
+          </button>
+          <button
+            class="btn copy"
+            onclick="copyMode(5000, 'featured', 'TRẬN LỚN NHẤT TRONG NGÀY')"
+          >
+            COPY TOÀN BỘ TRẬN LỚN NHẤT
+          </button>
+          <button class="btn copy" onclick="copyMode(5000, 'all', 'TẤT CẢ')">
+            COPY TOÀN BỘ TẤT CẢ
+          </button>
+        </div>
+        <input
+          id="q"
+          class="search"
+          placeholder="Tìm đội hoặc giải..."
+          oninput="render()"
+        />
+        <div id="summary" class="status">Đang chờ kích hoạt...</div>
+      </div>
+
+      <div class="card">
+        <b>📊 Thống kê hàng ngày</b>
+        <div id="dailyStats" class="statsgrid" style="margin-top: 8px">
+          <div class="muted">Chưa kích hoạt.</div>
+        </div>
+      </div>
+      <div class="card">
+        <b>🧠 Tự học & hiệu suất phương pháp</b>
+        <div class="status">
+          <span class="learnon">● TỰ HỌC: ĐANG BẬT</span><br />Hiệu suất quá khứ
+          điều chỉnh lựa chọn theo giải đấu, nguồn kèo, mức chấp và phương pháp.
+          Snapshot đã khóa không thay đổi giữa ngày.
+        </div>
+        <div id="methodStats" class="statsgrid" style="margin-top: 8px">
+          <div class="muted">Chưa kích hoạt.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <b>4) Kết quả phân tích</b>
+        <div id="stats" class="summary" style="margin-top: 8px"></div>
+        <div id="list">
+          <div class="muted" style="padding: 12px 0">Chưa có dữ liệu.</div>
+        </div>
+      </div>
+      <div class="promo">
+        <div>* Bán tool Phân tích dự đoán XSMB, MT , MN</div>
+        <div>* tool Phân tích, dự đoán kèo bóng đá, chọn xiên 6,8,10 trận.</div>
+        <div>* Tool dự đoán Vietlott 6x45 6x55</div>
+        <div>* Sử dụng link trên ĐT dễ dàng - nhanh chóng - hiệu quả</div>
+        <div>
+          * Vào nhóm kèo bóng :
+          <a href="https://t.me/keochuyengia79">https://t.me/keochuyengia79</a>
+        </div>
+        <div>
+          hoặc nhóm Xổ Số :
+          <a href="https://t.me/xsbm999">https://t.me/xsbm999</a>
+        </div>
+        <div class="buy">
+          Mua tool tại:
+          <a href="https://t.me/muatool_du_doan_bot?start=from_football_client">Mua Tool KQ247 tại @muatool_du_doan_bot</a>
+        </div>
+      </div>
+    </div>
+    <div id="gate" class="gate">
+      <div class="panel">
+        <h2 style="margin-top: 0">Kích hoạt Tool bóng đá KQ247</h2>
+        <div class="muted">
+          Mỗi mã chỉ dùng trên thiết bị đã kích hoạt. Mã Free 10 ngày chỉ dùng
+          một lần/thiết bị.
+        </div>
+        <input id="code" placeholder="Nhập mã BD-..." autocomplete="off" />
+        <div class="row">
+          <button class="btn" onclick="activate()">KÍCH HOẠT</button
+          ><button class="btn alt" onclick="copyBuy()">
+            COPY LINK MUA TOOL
+          </button>
+        </div>
+        <p id="msg" class="muted"></p>
+        <div class="promo">
+          <div>* Tool bóng đá + xổ số</div>
+          <div>
+            * Vào nhóm kèo bóng :
+            <a href="https://t.me/keochuyengia79"
+              >https://t.me/keochuyengia79</a
+            >
+          </div>
+          <div>
+            hoặc nhóm Xổ Số :
+            <a href="https://t.me/xsbm999">https://t.me/xsbm999</a>
+          </div>
+          <div class="buy">
+            Mua tool tại:
+            <a href="https://t.me/muatool_du_doan_bot?start=from_football_client">Mua Tool KQ247 tại @muatool_du_doan_bot</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      const API =
+          'https://wbegdefpdwctolawluzo.supabase.co/functions/v1/tool-customer-api',
+        PRODUCT = 'football',
+        BUY = 'https://t.me/muatool_du_doan_bot?start=from_football_client';
+      let current = 5000,
+        currentMode = 'featured',
+        ALL = [],
+        META = {},
+        COLLAPSED = false;
+      const $ = id => document.getElementById(id);
+      async function sha(s) {
+        const b = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(s)
+        );
+        return [...new Uint8Array(b)]
+          .map(x => x.toString(16).padStart(2, '0'))
+          .join('');
+      }
+      function dev() {
+        let v = localStorage.getItem('kq247_dev');
+        if (!v) {
+          v = crypto.randomUUID();
+          localStorage.setItem('kq247_dev', v);
+        }
+        return v;
+      }
+      async function ids() {
+        return {
+          device_hash: await sha(dev()),
+          fingerprint_hash: await sha(
+            [
+              navigator.userAgent,
+              navigator.language,
+              screen.width + 'x' + screen.height,
+              Intl.DateTimeFormat().resolvedOptions().timeZone,
+            ].join('|')
+          ),
+        };
+      }
+      async function post(action, body) {
+        try { const r = await fetch(API + '?action=' + action, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+          cache: 'no-store',
+        });
+        return [r, await r.json().catch(() => ({ok:false,error:'service_unavailable'}))]; } catch { return [{ok:false,status:503},{ok:false,error:'service_unavailable'}]; }
+      }
+      function reason(r) {
+        return (
+          {
+            invalid_code: 'Mã không hợp lệ',
+            expired: 'Mã đã hết hạn',
+            device_mismatch: 'Mã đã khóa ở thiết bị khác',
+            device_has_active_license: 'Thiết bị đang có mã khác còn hạn',
+            trial_already_used: 'Thiết bị đã dùng Free 10 ngày',
+          }[r] ||
+          r ||
+          'Không kích hoạt được'
+        );
+      }
+      async function activate() {
+        const raw = $('code').value.trim().toUpperCase();
+        if (!raw) {
+          $('msg').textContent = 'Nhập mã kích hoạt.';
+          return;
+        }
+        const h = await ids(),
+          ch = await sha(raw);
+        const [r, j] = await post('activate', {
+          product: PRODUCT,
+          code_hash: ch,
+          ...h,
+        });
+        if (j.ok) {
+          localStorage.setItem('kq247_football_code', ch);
+          localStorage.setItem('kq247_football_session', j.session_token || '');
+          unlock(j);
+          loadFeatured();
+        } else $('msg').textContent = reason(j.reason || j.error);
+      }
+      async function check() {
+        const ch = localStorage.getItem('kq247_football_code');
+        if (!ch) return;
+        const h = await ids();
+        const [r, j] = await post('check', {
+          product: PRODUCT,
+          code_hash: ch,
+          ...h,
+        });
+        if (j.ok) {
+          localStorage.setItem('kq247_football_session', j.session_token || '');
+          unlock(j);
+          loadFeatured();
+        } else {
+          $('msg').textContent = (j.error === 'service_unavailable' || r.status >= 500 || r.status === 402 || r.status === 429) ? 'API đang gián đoạn. Đã giữ nguyên mã, thiết bị và hạn dùng; vui lòng thử lại sau.' : reason(j.reason || j.error);
+        }
+      }
+      function unlock(j) {
+        $('gate').classList.add('hidden');
+        const exp = new Date(j.expires_at),
+          ms = exp.getTime() - Date.now(),
+          days = Math.max(0, Math.ceil(ms / 86400000)),
+          txt =
+            '⏳ CÒN ' +
+            days +
+            ' NGÀY SỬ DỤNG • Hết hạn: ' +
+            exp.toLocaleString('vi-VN');
+        const a = $('expiryAlert');
+        if (a) {
+          a.textContent = txt;
+          a.style.display = 'block';
+        }
+        $('licenseInfo').innerHTML =
+          '✅ Mã còn hạn đến <b>' + exp.toLocaleString('vi-VN') + '</b>';
+      }
+      function esc(s) {
+        return String(s ?? '').replace(
+          /[&<>"']/g,
+          c =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            })[c]
+        );
+      }
+      function time(ts) {
+        const d = new Date(Number(ts));
+        return Number.isFinite(d.getTime())
+          ? new Intl.DateTimeFormat('vi-VN', {
+              timeZone: 'Asia/Ho_Chi_Minh',
+              hour: '2-digit',
+              minute: '2-digit',
+              day: '2-digit',
+              month: '2-digit',
+            }).format(d)
+          : '-';
+      }
+      async function cp(t) {
+        try {
+          await navigator.clipboard.writeText(t);
+        } catch {
+          const a = document.createElement('textarea');
+          a.value = t;
+          document.body.appendChild(a);
+          a.select();
+          document.execCommand('copy');
+          a.remove();
+        }
+      }
+      function copyBuy() {
+        cp(BUY);
+        $('msg').textContent = 'Đã copy link mua tool.';
+        try { window.kq247GrowthCapture?.('sales bot copied', { sales_bot: 'muatool_du_doan_bot' }); } catch {}
+      }
+      function methods(x) {
+        return (x.learning_methods || []).join(', ') || 'R55 xG';
+      }
+      function numericMarketScore(x, market) {
+        const prefix = market === 'AH' ? 'ah' : 'ou';
+        const direct = [
+          x?.[prefix + '_confidence_score'],
+          x?.[prefix + '_confidence'],
+          x?.[prefix + '_score'],
+          x?.[prefix + '_edge'],
+          x?.[prefix + '_release_score'],
+          x?.market_scores?.[prefix],
+          x?.[prefix]?.confidence_score,
+          x?.[prefix]?.confidence,
+          x?.[prefix]?.score,
+          x?.[prefix]?.edge,
+        ].map(Number).find(Number.isFinite);
+        if (Number.isFinite(direct)) return direct;
+        const perf = Array.isArray(META?.method_performance) ? META.method_performance : [];
+        const wanted = new Set((x?.learning_methods || []).map(v => String(v)));
+        let rows = wanted.size ? perf.filter(r => wanted.has(String(r?.method || ''))) : [];
+        if (!rows.length) rows = perf;
+        const key = market === 'AH' ? 'ah_score' : 'ou_score';
+        let total = 0, weight = 0;
+        for (const r of rows) {
+          const v = Number(r?.[key]);
+          if (!Number.isFinite(v)) continue;
+          const w = Math.max(1, Number(r?.recent_n || r?.n || 1));
+          total += v * w;
+          weight += w;
+        }
+        return weight ? total / weight : 0;
+      }
+      function bestMarket(x) {
+        const ahOk = !!String(x?.ah?.pick || '').trim() && String(x?.ah?.pick || '').trim() !== '-';
+        const ouOk = !!String(x?.ou?.pick || '').trim() && String(x?.ou?.pick || '').trim() !== '-';
+        if (ahOk && !ouOk) return 'AH';
+        if (ouOk && !ahOk) return 'OU';
+        if (!ahOk && !ouOk) return 'AH';
+        const ahRelease = x?.ah_release === true;
+        const ouRelease = x?.ou_release === true;
+        if (ahRelease !== ouRelease) return ahRelease ? 'AH' : 'OU';
+        const ahScore = numericMarketScore(x, 'AH');
+        const ouScore = numericMarketScore(x, 'OU');
+        if (ahScore !== ouScore) return ahScore > ouScore ? 'AH' : 'OU';
+        const ahPrice = Number(x?.ah?.price);
+        const ouPrice = Number(x?.ou?.price);
+        if (Number.isFinite(ahPrice) && Number.isFinite(ouPrice) && ahPrice !== ouPrice)
+          return ahPrice < ouPrice ? 'AH' : 'OU';
+        return 'AH';
+      }
+      function leagueLabel(x) {
+        const c = String(
+            x?.country || x?.competition_country || x?.region || ''
+          ).trim(),
+          l = String(x?.league || '').trim();
+        if (c) return c + (l && l !== c ? ' • ' + l : '');
+        if (/^League\s+[ABCD]:\s*Group/i.test(l))
+          return 'UEFA Nations League • ' + l;
+        return l || '-';
+      }
+      function bookText(x) {
+        const n = Number(x.bookmaker_count || 0);
+        return n > 0
+          ? 'Nhà cái tham chiếu: ' +
+              n +
+              (x.bookmaker_names?.length
+                ? ' (' + x.bookmaker_names.join(', ') + ')'
+                : '')
+          : 'Nhà cái tham chiếu: 0 • kèo mô hình';
+      }
+      function txt(x) {
+        const market = bestMarket(x);
+        const p = market === 'AH' ? x.ah : x.ou;
+        const label = market === 'AH' ? 'AH' : 'T/X';
+        return (
+          (x.home || '') +
+          ' - ' +
+          (x.away || '') +
+          '\n' +
+          leagueLabel(x) +
+          ' • ' +
+          time(x.ts) +
+          '\nKÈO SÁNG NHẤT: ' +
+          label +
+          '\n' +
+          label +
+          ': ' +
+          (p?.pick || '-') +
+          ' ' +
+          (p?.line || '') +
+          ' ' +
+          (p?.price || '') +
+          '\nTin cậy: ' +
+          (x.confidence_score ?? '-') +
+          '\n' +
+          bookText(x) +
+          '\nPP: ' +
+          methods(x)
+        );
+      }
+      function upcomingOnly(rows) {
+        const now = Date.now();
+        return (rows || []).filter(x => Number.isFinite(Number(x.ts)) && Number(x.ts) > now);
+      }
+      function visible() {
+        const s = ($('q').value || '').toLowerCase().trim();
+        const active = upcomingOnly(ALL);
+        const a = s
+          ? active.filter(x =>
+              ((x.home || '') + ' ' + (x.away || '') + ' ' + leagueLabel(x))
+                .toLowerCase()
+                .includes(s)
+            )
+          : active;
+        return [...a].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+      }
+      function copyMatch(i) {
+        cp(txt(ALL[i]));
+      }
+      function toggleCollapse() {
+        COLLAPSED = !COLLAPSED;
+        $('app').classList.toggle('collapsed', COLLAPSED);
+      }
+      function renderDaily(a) {
+        const x = (a || [])
+          .filter(d => Number(d.picks || 0) > 0 || Number(d.settled || 0) > 0)
+          .slice(0, 14);
+        $('dailyStats').innerHTML =
+          x
+            .map(
+              d =>
+                '<div class="day"><b>' +
+                esc(d.day) +
+                '</b><div>Lên kèo: <b>' +
+                d.picks +
+                '</b> • Đã chấm: <b>' +
+                d.settled +
+                '</b></div><div>AH: ' +
+                d.ah_win +
+                ' thắng + ' +
+                d.ah_half_win +
+                ' thắng 1/2 • ' +
+                d.ah_push +
+                ' hòa • ' +
+                d.ah_half_loss +
+                ' thua 1/2 • ' +
+                d.ah_loss +
+                ' thua • <span class="rate">' +
+                d.ah_rate +
+                '%</span></div><div>T/X: ' +
+                d.ou_win +
+                ' thắng + ' +
+                d.ou_half_win +
+                ' thắng 1/2 • ' +
+                d.ou_push +
+                ' hòa • ' +
+                d.ou_half_loss +
+                ' thua 1/2 • ' +
+                d.ou_loss +
+                ' thua • <span class="rate">' +
+                d.ou_rate +
+                '%</span></div></div>'
+            )
+            .join('') || '<div class="muted">Chưa có ngày nào đã chấm.</div>';
+      }
+      function renderMethods(a) {
+        $('methodStats').innerHTML =
+          (a || [])
+            .map(
+              m =>
+                '<div class="method"><b>' +
+                esc(m.method) +
+                '</b> ' +
+                (m.selected
+                  ? '<span class="priority">ĐANG ƯU TIÊN</span>'
+                  : '') +
+                '<div>Mẫu đã chấm: <b>' +
+                m.n +
+                '</b></div><div>AH: <span class="rate">' +
+                (Number(m.ah_score || 0) * 100).toFixed(1) +
+                '%</span> • T/X: <span class="rate">' +
+                (Number(m.ou_score || 0) * 100).toFixed(1) +
+                '%</span></div><div>Hiệu suất gộp: <b>' +
+                (Number(m.combined_score || 0) * 100).toFixed(1) +
+                '%</b></div></div>'
+            )
+            .join('') ||
+          '<div class="muted">Chưa đủ dữ liệu để xếp phương pháp.</div>';
+      }
+      function render() {
+        const a = visible();
+        $('stats').innerHTML =
+          '<div class="stat">Hiển thị: <b>' +
+          a.length +
+          '</b></div><div class="stat">Snapshot: <b>' +
+          esc(META.model || '-') +
+          '</b></div><div class="stat">Tự học: <b class="learnon">BẬT</b></div>';
+        $('list').innerHTML =
+          a
+            .map(x => {
+              const i = ALL.indexOf(x);
+              const market = bestMarket(x);
+              const p = market === 'AH' ? x.ah : x.ou;
+              const marketLabel = market === 'AH' ? 'AH' : 'T/X';
+              return (
+                '<div class="fixture"><div class="league">' +
+                esc(leagueLabel(x)) +
+                '</div><div class="kick">' +
+                time(x.ts) +
+                '</div><h3>' +
+                esc(x.home || '') +
+                ' - ' +
+                esc(x.away || '') +
+                '</h3><div><span class="badge">Tin cậy ' +
+                esc(x.confidence_score ?? '-') +
+                '</span> <span class="badge ' +
+                (x.trusted_pick ? 'good' : '') +
+                '">' +
+                (x.trusted_pick ? '✅ Kèo đủ dữ liệu' : '⚠️ Dữ liệu mỏng') +
+                '</span> <span class="badge">' +
+                esc(bookText(x)) +
+                '</span></div><div class="picks"><div class="pick"><b>KÈO SÁNG NHẤT • ' +
+                marketLabel +
+                '</b><span class="market-line">' +
+                esc(p?.pick || '-') +
+                (p?.line !== undefined &&
+                p?.line !== null &&
+                String(p.line) !== ''
+                  ? ' ' + esc(p.line)
+                  : '') +
+                '</span><div class="odds-line">Tỷ lệ ăn: <strong>' +
+                esc(p?.price ?? '-') +
+                '</strong></div></div></div><div class="small" style="margin-top:7px">Form: ' +
+                esc(x.formHome || x.home_form || '-') +
+                ' / ' +
+                esc(x.formAway || x.away_form || '-') +
+                '</div><div class="small">PP: ' +
+                esc(methods(x)) +
+                '</div><div class="actions"><button class="btn copy" onclick="copyMatch(' +
+                i +
+                ')">COPY TRẬN</button></div></div>'
+              );
+            })
+            .join('') ||
+          '<div class="muted" style="padding:12px 0">Không có trận phù hợp.</div>';
+      }
+      async function fetchMode(n, mode) {
+        const session = localStorage.getItem('kq247_football_session') || '';
+        const r = await fetch(
+          API +
+            '?action=football-predictions&mode=' +
+            encodeURIComponent(mode) +
+            '&limit=' +
+            n +
+            '&from_ts=' +
+            Date.now(),
+          { headers: { authorization: 'Bearer ' + session }, cache: 'no-store' }
+        );
+        const j = await r.json();
+        if (r.status === 401) {
+          $('gate').classList.remove('hidden');
+          throw Error('Phiên hết hạn, vui lòng kiểm tra mã.');
+        }
+        if (!r.ok || !j.ok) throw Error(j.error || 'API lỗi');
+        return j;
+      }
+      async function copyMode(n, mode, label) {
+        try {
+          const j = await fetchMode(n, mode),
+            v = j.data || {},
+            a = upcomingOnly(v.predictions || []).sort(
+              (a, b) => Number(a.ts || 0) - Number(b.ts || 0)
+            );
+          await cp(a.map(txt).join('\n\n'));
+          $('summary').textContent =
+            '✅ Đã copy ' + a.length + ' trận • ' + label;
+        } catch (e) {
+          $('summary').textContent = '❌ ' + e.message;
+        }
+      }
+      async function load(n, mode = 'all') {
+        current = n;
+        currentMode = mode;
+        $('summary').textContent = 'Đang tải snapshot đã lưu...';
+        try {
+          const j = await fetchMode(n, mode);
+          if (!j.found) {
+            $('summary').textContent = 'Chưa có snapshot hôm nay.';
+            ALL = [];
+            render();
+            return;
+          }
+          META = j.data || {};
+          ALL = upcomingOnly(META.predictions || []).sort(
+            (a, b) => Number(a.ts || 0) - Number(b.ts || 0)
+          );
+          $('summary').innerHTML =
+            (j.locked ? '🔒 ĐÃ KHÓA • ' : '✅ ') +
+            (mode === 'featured' ? 'TRẬN LỚN • ' : '') +
+            '<b>' +
+            ALL.length +
+            ' trận</b> • cập nhật ' +
+            (j.updated_at && Number.isFinite(new Date(j.updated_at).getTime())
+              ? new Date(j.updated_at).toLocaleString('vi-VN')
+              : 'chưa có');
+          renderDaily(META.daily_stats);
+          renderMethods(META.method_performance);
+          render();
+        } catch (e) {
+          $('summary').textContent = '❌ ' + e.message;
+        }
+      }
+      function loadFeatured() {
+        return load(5000, 'featured');
+      }
+      function refreshCurrent() {
+        return load(current, currentMode);
+      }
+      function importLinkMigration() {
+        const p = '#kq247=';
+        if (!location.hash.startsWith(p)) return;
+        try {
+          const raw = location.hash.slice(p.length).replace(/-/g, '+').replace(/_/g, '/');
+          const bin = atob(raw + '='.repeat((4 - (raw.length % 4)) % 4));
+          const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+          const data = JSON.parse(new TextDecoder().decode(bytes));
+          if (data.dev) localStorage.setItem('kq247_dev', String(data.dev));
+          if (data.code)
+            localStorage.setItem('kq247_football_code', String(data.code));
+          if (data.session)
+            localStorage.setItem('kq247_football_session', String(data.session));
+        } catch {}
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+      function exportLinkMigration() {
+        const data = {
+          dev: localStorage.getItem('kq247_dev') || '',
+          code: localStorage.getItem('kq247_football_code') || '',
+          session: localStorage.getItem('kq247_football_session') || '',
+        };
+        const bytes = new TextEncoder().encode(JSON.stringify(data));
+        let bin = '';
+        for (const b of bytes) bin += String.fromCharCode(b);
+        return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+      async function ensureLatestLink() {
+        importLinkMigration();
+        try {
+          const r = await fetch(API + '?action=latest-link&product=' + PRODUCT, {
+            cache: 'no-store',
+          });
+          const j = await r.json();
+          if (!r.ok || !j.ok || !j.latest_url) return true;
+          const latest = new URL(String(j.latest_url), location.href);
+          const currentUrl = new URL(location.href);
+          currentUrl.hash = '';
+          latest.hash = '';
+          if (latest.href !== currentUrl.href) {
+            location.replace(latest.href + '#kq247=' + exportLinkMigration());
+            return false;
+          }
+        } catch {}
+        return true;
+      }
+      (async () => {
+        if (await ensureLatestLink()) await check();
+      })();
+    </script>
+  
+<!-- KQ247_GROWTH_CROSSLINKS_20261008 -->
+<nav aria-label="KQ247 liên kết nhanh" style="max-width:1100px;margin:18px auto 28px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;font-family:system-ui,-apple-system,sans-serif;text-align:center">
+  <div style="font-weight:800;margin-bottom:8px">KQ247 • Liên kết nhanh</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center">
+    <a href="https://www.kq247.com/" target="_blank" rel="noopener noreferrer" aria-label="KQXS 3 miền" style="padding:8px 10px;border-radius:9px;background:#f3f4f6;color:#111827;text-decoration:none;font-weight:700">KQXS 3 miền</a>
+    <a href="https://vietlott-r32-runner-free.onrender.com/" target="_blank" rel="noopener noreferrer" aria-label="Vietlott 6/45 và 6/55" style="padding:8px 10px;border-radius:9px;background:#f3f4f6;color:#111827;text-decoration:none;font-weight:700">Vietlott 6/45 • 6/55</a>
+    <a href="https://t.me/keochuyengia79" target="_blank" rel="noopener noreferrer" aria-label="Nhóm cập nhật bóng đá trên Telegram" style="padding:8px 10px;border-radius:9px;background:#f3f4f6;color:#111827;text-decoration:none;font-weight:700">Nhóm cập nhật bóng đá</a>
+    <a href="https://t.me/xsbm999" target="_blank" rel="noopener noreferrer" aria-label="Nhóm cập nhật xổ số trên Telegram" style="padding:8px 10px;border-radius:9px;background:#f3f4f6;color:#111827;text-decoration:none;font-weight:700">Nhóm cập nhật xổ số</a>
+  </div>
+</nav>
+</body>
+</html>

@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS xs_group_delivery_v1 (day date NOT NULL, region text NOT NULL, station text NOT NULL, phase text NOT NULL, status text NOT NULL DEFAULT 'claimed', message_id bigint, error text, snapshot_data jsonb, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(day,region,station,phase))

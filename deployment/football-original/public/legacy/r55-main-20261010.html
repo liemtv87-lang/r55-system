@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <title>Kèo bóng đá R55 • BẢN CHÍNH</title>
+    <meta name="robots" content="noindex,nofollow,noarchive,nosnippet" />
+    <script>
+      (() => {
+        window.addEventListener('beforeinstallprompt', event => {
+          event.preventDefault();
+        });
+        if ('serviceWorker' in navigator) {
+          try {
+            navigator.serviceWorker.register = () =>
+              Promise.reject(new Error('pwa_disabled'));
+          } catch {}
+        }
+        const disablePwa = () => {
+          document
+            .querySelectorAll('link[rel="manifest"]')
+            .forEach(node => node.remove());
+          document
+            .querySelectorAll(
+              'meta[name="mobile-web-app-capable"],meta[name="apple-mobile-web-app-capable"],meta[name="apple-mobile-web-app-title"],meta[name="apple-mobile-web-app-status-bar-style"]'
+            )
+            .forEach(node => node.remove());
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(registrations =>
+                Promise.all(registrations.map(registration => registration.unregister()))
+              )
+              .catch(() => {});
+          }
+        };
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', disablePwa, { once: true });
+        } else {
+          disablePwa();
+        }
+        setTimeout(disablePwa, 250);
+        setTimeout(disablePwa, 1200);
+      })();
+    </script>
+    <style>
+      :root {
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+        color: #172033;
+        background: #fff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #fff;
+        min-height: 100vh;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: auto;
+        padding: 10px;
+      }
+      .top {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        background: #ffffffee;
+        backdrop-filter: blur(8px);
+      }
+      h1 {
+        font-size: 19px;
+        margin: 0 0 4px;
+      }
+      .sub,
+      .small {
+        color: #667085;
+      }
+      .sub {
+        font-size: 12px;
+      }
+      .small {
+        font-size: 11px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #d8e0ec;
+        border-radius: 16px;
+        padding: 13px;
+        margin: 9px 0;
+        box-shadow: 0 2px 10px #0f172a0b;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      input,
+      button {
+        font: inherit;
+        border-radius: 11px;
+        border: 1px solid #cfd8e6;
+        padding: 10px 11px;
+      }
+      input {
+        background: #fff;
+        color: #172033;
+        flex: 1;
+      }
+      button {
+        background: #2563eb;
+        color: #fff;
+        font-weight: 750;
+        border: 0;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #475569;
+      }
+      button.green {
+        background: #07835f;
+      }
+      button.copy {
+        background: #0f8a79;
+      }
+      .status {
+        padding: 9px;
+        border-radius: 10px;
+        background: #f4f7fb;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .muted {
+        color: #667085;
+      }
+      .fixture {
+        border: 1px solid #d8e0ec;
+        border-radius: 14px;
+        padding: 11px;
+        margin-top: 10px;
+        background: #fff;
+      }
+      .fixture h3 {
+        font-size: 17px;
+        margin: 5px 0 8px;
+        color: #dc2626 !important;
+        font-weight: 950 !important;
+        line-height: 1.35;
+      }
+      .league {
+        font-size: 12px;
+        color: #2563eb;
+      }
+      .kick {
+        font-size: 12px;
+        color: #667085;
+      }
+      .picks {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .pick {
+        padding: 14px 15px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #d8e0ec;
+        min-height: 112px;
+      }
+      .pick b {
+        display: block;
+        font-size: 17px;
+        color: #0757d5 !important;
+        font-weight: 950 !important;
+        margin-bottom: 9px;
+        line-height: 1.2;
+      }
+      .pick span {
+        font-size: 15px;
+        color: #0757d5 !important;
+        font-weight: 950 !important;
+      }
+      .market-line {
+        display: block;
+        color: #0757d5 !important;
+        font-size: 16px;
+        font-weight: 950 !important;
+        line-height: 1.35;
+        margin: 2px 0 10px;
+      }
+      .odds-line {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        padding-top: 8px;
+        border-top: 1px dashed #cbd5e1;
+        font-size: 14px;
+        color: #475569;
+      }
+      .odds-line strong {
+        color: #0757d5 !important;
+        font-size: 16px;
+        font-weight: 950;
+      }
+      .badge {
+        display: inline-block;
+        padding: 3px 7px;
+        border-radius: 99px;
+        font-size: 10px;
+        background: #eaf1ff;
+        color: #174ea6;
+        margin: 2px 2px 2px 0;
+      }
+      .badge.good {
+        background: #e9f8ef;
+        color: #087443;
+      }
+      .actions {
+        display: flex;
+        gap: 7px;
+        margin-top: 9px;
+      }
+      .actions button {
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+      .warnbar {
+        background: #a31325;
+        color: #fff;
+        padding: 9px 12px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 900;
+      }
+      .promo {
+        margin: 14px 0;
+        padding: 12px;
+        border-radius: 12px;
+        background: #eef4ff;
+        color: #0757d5;
+        font-weight: 800;
+        line-height: 1.65;
+      }
+      .promo a {
+        color: #d71920;
+        font-weight: 900;
+        text-decoration: underline;
+      }
+      .summary {
+        display: flex;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+      .stat {
+        background: #f8fafc;
+        border: 1px solid #d8e0ec;
+        border-radius: 10px;
+        padding: 7px 9px;
+        font-size: 12px;
+      }
+      .statsgrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 8px;
+      }
+      .day,
+      .method {
+        border: 1px solid #d8e0ec;
+        border-radius: 12px;
+        padding: 10px;
+        background: #fbfdff;
+      }
+      .day b,
+      .method b {
+        font-size: 13px;
+      }
+      .rate {
+        font-weight: 900;
+        color: #0757d5;
+      }
+      .priority {
+        display: inline-block;
+        background: #dcfce7;
+        color: #166534;
+        border-radius: 99px;
+        padding: 2px 7px;
+        font-size: 10px;
+        font-weight: 900;
+      }
+      .learnon {
+        color: #087443;
+        font-weight: 900;
+      }
+      .collapsed #results {
+        display: none;
+      }
+      @media (max-width: 560px) {
+        .picks {
+          grid-template-columns: 1fr;
+        }
+        .row > * {
+          width: 100%;
+        }
+        .actions {
+          flex-direction: column;
+        }
+        .actions button {
+          width: 100%;
+        }
+      }
+    </style>
+</head>
+  <body>
+    <div class="warnbar">
+      Cờ bạc là bất hợp pháp - Tool chỉ mang tính chất tham khảo - học hỏi !
+    </div>
+    <div class="wrap" id="app">
+      <div class="top">
+        <div class="card">
+          <h1>⚽ Kèo bóng đá R55 • BẢN CHÍNH</h1>
+          <div class="sub">
+            1 KÈO SÁNG NHẤT/TRẬN • snapshot khóa trung tâm • tự học hiệu suất • không quét
+            lại trên thiết bị
+          </div>
+        </div>
+      </div>
+      
+      <div class="card">
+        <b>1) Lấy kèo</b>
+        <div class="row" style="margin-top: 8px">
+          <button onclick="loadFeatured(5000)">
+            🔥 LẤY TRẬN LỚN NHẤT TRONG NGÀY</button
+          ><button onclick="load(20)">LẤY 20 TRẬN</button
+          ><button onclick="load(30)">LẤY 30 TRẬN</button
+          ><button onclick="load(100000)">LẤY TẤT CẢ TRẬN</button
+          ><button class="green" onclick="refreshCurrent()">CẬP NHẬT</button
+          ><button class="secondary" onclick="toggleCollapse()">
+            THU GỌN / MỞ RỘNG
+          </button>
+        </div>
+        <div class="row" style="margin-top: 8px">
+          <button class="copy" onclick="copyMode(20, 'all', '20 TRẬN')">
+            COPY TOÀN BỘ 20 TRẬN</button
+          ><button class="copy" onclick="copyMode(30, 'all', '30 TRẬN')">
+            COPY TOÀN BỘ 30 TRẬN</button
+          ><button
+            class="copy"
+            onclick="copyMode(5000, 'featured', 'TRẬN LỚN NHẤT TRONG NGÀY')"
+          >
+            COPY TOÀN BỘ TRẬN LỚN NHẤT</button
+          ><button class="copy" onclick="copyMode(5000, 'all', 'TẤT CẢ')">
+            COPY TOÀN BỘ TẤT CẢ
+          </button>
+        </div>
+        <input
+          id="q"
+          type="text"
+          placeholder="Tìm đội hoặc giải..."
+          oninput="render()"
+          style="margin-top: 9px"
+        />
+        <div id="runStatus" class="status muted" style="margin-top: 8px">
+          Đang tải snapshot đã lưu...
+        </div>
+      </div>
+
+      <div class="card">
+        <b>2) Kết quả phân tích</b>
+        <div id="summary" class="summary" style="margin-top: 8px"></div>
+        <div id="results">
+          <div class="muted" style="padding: 12px 0">Chưa có dữ liệu.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <b>3) Thống kê hàng ngày</b>
+        <div class="small" style="margin-top: 4px">
+          Tự chấm kết quả AH/T-X hằng ngày • ép đủ 100% các trận đã có kết quả.
+        </div>
+        <div id="dailyStats" class="statsgrid" style="margin-top: 8px">
+          <div class="muted">Đang tải...</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <b>4) Tự học & hiệu suất phương pháp</b>
+        <div id="learnStatus" class="status" style="margin-top: 8px">
+          <span class="learnon">● TỰ HỌC: ĐANG BẬT • PHỦ BẮT BUỘC 100%</span
+          ><br />Mỗi phương pháp phải được chấm trên 100% pool trận có AH + T/X
+          từ Bongdalu; AH và T/X tự học riêng. Chỉ dùng phương pháp đủ mẫu, tự
+          giảm trọng số phương pháp yếu và giữ snapshot đã khóa.
+        </div>
+        <div id="methodStats" class="statsgrid" style="margin-top: 8px">
+          <div class="muted">Đang tải...</div>
+        </div>
+      </div>
+      <div class="promo">
+        <div>* Bán tool Phân tích dự đoán XSMB, MT , MN</div>
+        <div>* tool Phân tích, dự đoán kèo bóng đá, chọn xiên 6,8,10 trận.</div>
+        <div>* Tool dự đoán Vietlott 6x45 6x55</div>
+        <div>* Sử dụng link trên ĐT dễ dàng - nhanh chóng - hiệu quả</div>
+        <div>
+          * Vào nhóm kèo bóng :
+          <a href="https://t.me/keochuyengia79">https://t.me/keochuyengia79</a>
+        </div>
+        <div>
+          hoặc nhóm Xổ Số :
+          <a href="https://t.me/xsbm999">https://t.me/xsbm999</a>
+        </div>
+        <div>
+          Mua tool tại:
+          <a href="https://t.me/muatool_du_doan_bot"
+            >t.me/muatool_du_doan_bot</a
+          >
+        </div>
+      </div>
+    </div>
+    <script>
+      const API =
+          'https://wbegdefpdwctolawluzo.supabase.co/functions/v1/main-football?data=1',
+        TZ = 'Asia/Ho_Chi_Minh';
+      let ALL = [],
+        current = 5000,
+        currentMode = 'featured',
+        META = {},
+        COLLAPSED = false;
+      const $ = x => document.getElementById(x);
+      function esc(s) {
+        return String(s ?? '').replace(
+          /[&<>"']/g,
+          m =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            })[m]
+        );
+      }
+      function timeVN(ts) {
+        const d = new Date(Number(ts));
+        return Number.isFinite(d.getTime())
+          ? new Intl.DateTimeFormat('vi-VN', {
+              timeZone: TZ,
+              hour: '2-digit',
+              minute: '2-digit',
+              day: '2-digit',
+              month: '2-digit',
+            }).format(d)
+          : '-';
+      }
+      function methods(x) {
+        return (x.learning_methods || []).join(', ') || 'R55 xG';
+      }
+      function numericMarketScore(x, market) {
+        const prefix = market === 'AH' ? 'ah' : 'ou';
+        const direct = [
+          x?.[prefix + '_confidence_score'],
+          x?.[prefix + '_confidence'],
+          x?.[prefix + '_score'],
+          x?.[prefix + '_edge'],
+          x?.[prefix + '_release_score'],
+          x?.market_scores?.[prefix],
+          x?.[prefix]?.confidence_score,
+          x?.[prefix]?.confidence,
+          x?.[prefix]?.score,
+          x?.[prefix]?.edge,
+        ].map(Number).find(Number.isFinite);
+        if (Number.isFinite(direct)) return direct;
+        const perf = Array.isArray(META?.method_performance) ? META.method_performance : [];
+        const wanted = new Set((x?.learning_methods || []).map(v => String(v)));
+        let rows = wanted.size ? perf.filter(r => wanted.has(String(r?.method || ''))) : [];
+        if (!rows.length) rows = perf;
+        const key = market === 'AH' ? 'ah_score' : 'ou_score';
+        let total = 0, weight = 0;
+        for (const r of rows) {
+          const v = Number(r?.[key]);
+          if (!Number.isFinite(v)) continue;
+          const w = Math.max(1, Number(r?.recent_n || r?.n || 1));
+          total += v * w;
+          weight += w;
+        }
+        return weight ? total / weight : 0;
+      }
+      function bestMarket(x) {
+        const ahOk = !!String(x?.ah?.pick || '').trim() && String(x?.ah?.pick || '').trim() !== '-';
+        const ouOk = !!String(x?.ou?.pick || '').trim() && String(x?.ou?.pick || '').trim() !== '-';
+        if (ahOk && !ouOk) return 'AH';
+        if (ouOk && !ahOk) return 'OU';
+        if (!ahOk && !ouOk) return 'AH';
+        const ahRelease = x?.ah_release === true;
+        const ouRelease = x?.ou_release === true;
+        if (ahRelease !== ouRelease) return ahRelease ? 'AH' : 'OU';
+        const ahScore = numericMarketScore(x, 'AH');
+        const ouScore = numericMarketScore(x, 'OU');
+        if (ahScore !== ouScore) return ahScore > ouScore ? 'AH' : 'OU';
+        const ahPrice = Number(x?.ah?.price);
+        const ouPrice = Number(x?.ou?.price);
+        if (Number.isFinite(ahPrice) && Number.isFinite(ouPrice) && ahPrice !== ouPrice)
+          return ahPrice < ouPrice ? 'AH' : 'OU';
+        return 'AH';
+      }
+      function leagueLabel(x) {
+        const c = String(
+          x?.country || x?.competition_country || x?.region || ''
+        ).trim();
+        const l = String(x?.league || '').trim();
+        if (c) return c + (l && l !== c ? ' • ' + l : '');
+        if (/^League\s+[ABCD]:\s*Group/i.test(l))
+          return 'UEFA Nations League • ' + l;
+        return l || '-';
+      }
+      function bookText(x) {
+        const n = Number(x.bookmaker_count || 0);
+        return n > 0
+          ? 'Nhà cái tham chiếu: ' +
+              n +
+              (x.bookmaker_names?.length
+                ? ' (' + x.bookmaker_names.join(', ') + ')'
+                : '')
+          : 'Nhà cái tham chiếu: 0 • kèo mô hình';
+      }
+      function comp(x) {
+        const c = String(x.country || '').trim(),
+          l = String(x.league || '').trim();
+        if (c && l && c.toLowerCase() !== l.toLowerCase()) return c + ' • ' + l;
+        if (c) return c;
+        if (/^League [A-D]: Group/i.test(l))
+          return 'UEFA Nations League • ' + l;
+        return l || '-';
+      }
+      function pickTxt(x) {
+        const market = bestMarket(x);
+        const p = market === 'AH' ? x.ah : x.ou;
+        const label = market === 'AH' ? 'AH' : 'T/X';
+        return (
+          '⚽ ' +
+          (x.home || '') +
+          ' - ' +
+          (x.away || '') +
+          '\n' +
+          comp(x) +
+          ' • ' +
+          timeVN(x.ts) +
+          '\nKÈO SÁNG NHẤT: ' +
+          label +
+          '\n' +
+          label +
+          ': ' +
+          (p?.pick || '-') +
+          ' ' +
+          (p?.line || '') +
+          '\nTỷ lệ ăn: ' +
+          (p?.price ?? '-') +
+          '\nTin cậy: ' +
+          (x.confidence_score ?? '-') +
+          '\n' +
+          bookText(x) +
+          '\nPP: ' +
+          methods(x) +
+          '\nNguồn: ' +
+          (x.provider || 'R55')
+        );
+      }
+      async function cp(t) {
+        try {
+          await navigator.clipboard.writeText(t);
+        } catch {
+          const a = document.createElement('textarea');
+          a.value = t;
+          document.body.appendChild(a);
+          a.select();
+          document.execCommand('copy');
+          a.remove();
+        }
+      }
+      function copyMatch(i) {
+        cp(pickTxt(ALL[i]));
+      }
+      function visible() {
+        const s = ($('q').value || '').toLowerCase().trim();
+        const a = s
+          ? ALL.filter(x =>
+              ((x.home || '') + ' ' + (x.away || '') + ' ' + comp(x))
+                .toLowerCase()
+                .includes(s)
+            )
+          : ALL;
+        return [...a].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
+      }
+      function toggleCollapse() {
+        COLLAPSED = !COLLAPSED;
+        $('app').classList.toggle('collapsed', COLLAPSED);
+      }
+      function renderDaily(a) {
+        const rows = (a || [])
+          .filter(d => Number(d.picks || 0) > 0 || Number(d.settled || 0) > 0)
+          .sort((x, y) =>
+            String(y.day || '').localeCompare(String(x.day || ''))
+          );
+        const recent = rows.slice(0, 2),
+          month = recent[0]?.day ? String(recent[0].day).slice(0, 7) : '';
+        const mr = rows.filter(
+          d => month && String(d.day || '').startsWith(month)
+        );
+        const sum = k => mr.reduce((n, d) => n + Number(d?.[k] || 0), 0);
+        const ahW = sum('ah_win') + 0.5 * sum('ah_half_win'),
+          ahL = sum('ah_loss') + 0.5 * sum('ah_half_loss'),
+          ouW = sum('ou_win') + 0.5 * sum('ou_half_win'),
+          ouL = sum('ou_loss') + 0.5 * sum('ou_half_loss');
+        const ar = ahW + ahL > 0 ? ((100 * ahW) / (ahW + ahL)).toFixed(1) : '0',
+          or = ouW + ouL > 0 ? ((100 * ouW) / (ouW + ouL)).toFixed(1) : '0';
+        const cards = recent.map(d => {
+          const due = Number(d.due_predictions || 0),
+            checked = Number(d.settled_due || 0),
+            moved = Number(d.nonfinal_or_rescheduled || 0),
+            unresolved = Number(d.unresolved_due || 0),
+            pct = due > 0 ? Math.min(100, (100 * checked) / due).toFixed(1) : '100.0',
+            full = d.coverage_ok === true && checked >= due;
+          return '<div class="day"><b>' +
+            esc(d.day) +
+            '</b><div>Lên kèo: <b>' +
+            d.picks +
+            '</b> • Đã có kết quả/chấm: <b>' +
+            d.settled +
+            '</b></div><div>Bắt buộc đến giờ: <b>' +
+            due +
+            '</b> • Đã chấm đủ: <b>' +
+            checked +
+            '</b> • <span class="rate">' +
+            (full ? 'PHỦ 100%' : ('PHỦ ' + pct + '%')) +
+            '</span></div>' +
+            ((moved || unresolved)
+              ? '<div>Hoãn/dời/chưa có KQ: <b>' + (moved + unresolved) + '</b>' +
+                (unresolved ? ' • đang tiếp tục dò: <b>' + unresolved + '</b>' : '') +
+                '</div>'
+              : '') +
+            '<div>AH: ' +
+            d.ah_win +
+            ' thắng + ' +
+            d.ah_half_win +
+            ' thắng 1/2 • ' +
+            d.ah_push +
+            ' hòa • ' +
+            d.ah_half_loss +
+            ' thua 1/2 • ' +
+            d.ah_loss +
+            ' thua • <span class="rate">' +
+            d.ah_rate +
+            '%</span></div><div>T/X: ' +
+            d.ou_win +
+            ' thắng + ' +
+            d.ou_half_win +
+            ' thắng 1/2 • ' +
+            d.ou_push +
+            ' hòa • ' +
+            d.ou_half_loss +
+            ' thua 1/2 • ' +
+            d.ou_loss +
+            ' thua • <span class="rate">' +
+            d.ou_rate +
+            '%</span></div></div>';
+        });
+        if (month) {
+          const mdue = sum('due_predictions'),
+            mchecked = sum('settled_due'),
+            mpct = mdue > 0 ? Math.min(100, (100 * mchecked) / mdue).toFixed(1) : '100.0';
+          cards.push(
+            '<div class="day"><b>THÁNG ' +
+              esc(month.slice(5, 7) + '/' + month.slice(0, 4)) +
+              '</b><div>Lên kèo: <b>' +
+              sum('picks') +
+              '</b> • Đã có kết quả/chấm: <b>' +
+              sum('settled') +
+              '</b></div><div>Bắt buộc đến giờ: <b>' +
+              mdue +
+              '</b> • Đã chấm đủ: <b>' +
+              mchecked +
+              '</b> • <span class="rate">PHỦ ' +
+              mpct +
+              '%</span></div><div>AH tháng: <span class="rate">' +
+              ar +
+              '%</span></div><div>T/X tháng: <span class="rate">' +
+              or +
+              '%</span></div></div>'
+          );
+        }
+        $('dailyStats').innerHTML =
+          cards.join('') ||
+          '<div class="muted">Chưa có ngày nào đã chấm.</div>';
+      }
+            function renderMethods(a) {
+        $('methodStats').innerHTML =
+          (a || [])
+            .map(
+              m =>
+                '<div class="method"><b>' +
+                esc(m.method) +
+                '</b> ' +
+                (m.ah_selected
+                  ? '<span class="priority">ƯU TIÊN AH</span>'
+                  : '') +
+                (m.ou_selected
+                  ? '<span class="priority">ƯU TIÊN T/X</span>'
+                  : '') +
+                (!m.coverage_gate
+                  ? '<span class="badge">CHỜ PHỦ 100%</span>'
+                  : '') +
+                '<div>Mẫu đã chấm: <b>' +
+                m.n +
+                '</b> • 14 ngày: <b>' +
+                Number(m.recent_n || 0) +
+                '</b></div><div>AH: <span class="rate">' +
+                (Number(m.ah_score || 0) * 100).toFixed(1) +
+                '%</span> • T/X: <span class="rate">' +
+                (Number(m.ou_score || 0) * 100).toFixed(1) +
+                '%</span></div><div>Hiệu suất gộp: <b>' +
+                (Number(m.combined_score || 0) * 100).toFixed(1) +
+                '%</b></div></div>'
+            )
+            .join('') ||
+          '<div class="muted">Chưa đủ dữ liệu để xếp phương pháp.</div>';
+      }
+      function render() {
+        const a = visible();
+        $('summary').innerHTML =
+          '<div class="stat">Hiển thị: <b>' +
+          a.length +
+          '</b></div><div class="stat">Snapshot: <b>' +
+          esc(META.model || '-') +
+          '</b></div><div class="stat">Tự học: <b class="learnon">BẬT</b></div>';
+        $('results').innerHTML =
+          a
+            .map(x => {
+              const idx = ALL.indexOf(x);
+              const market = bestMarket(x);
+              const p = market === 'AH' ? x.ah : x.ou;
+              const marketLabel = market === 'AH' ? 'AH' : 'T/X';
+              return (
+                '<div class="fixture"><div class="league">' +
+                esc(comp(x)) +
+                '</div><div class="kick">' +
+                timeVN(x.ts) +
+                '</div><h3 style="color:#dc2626!important;font-weight:950!important">' +
+                esc(x.home || '') +
+                ' - ' +
+                esc(x.away || '') +
+                '</h3><div><span class="badge">Tin cậy ' +
+                esc(x.confidence_score ?? '-') +
+                '</span> <span class="badge ' +
+                (x.trusted_pick ? 'good' : '') +
+                '">' +
+                ((x.ah_release === true || x.ou_release === true) ? '✅ Có kèo đạt chuẩn' : '⛔ Bỏ kèo') +
+                '</span> <span class="badge">' +
+                esc(bookText(x)) +
+                '</span></div><div class="picks"><div class="pick"><b>KÈO SÁNG NHẤT • ' +
+                marketLabel +
+                '</b><span class="market-line" style="color:#0757d5!important;font-weight:950!important">' +
+                esc(p?.pick || '-') +
+                (p?.line !== undefined &&
+                p?.line !== null &&
+                String(p.line) !== ''
+                  ? ' ' + esc(p.line)
+                  : '') +
+                '</span><div class="odds-line">Tỷ lệ ăn: <strong>' +
+                esc(p?.price ?? '-') +
+                '</strong></div></div></div><div class="small" style="margin-top:7px">Form: ' +
+                esc(x.formHome || x.home_form || '-') +
+                ' / ' +
+                esc(x.formAway || x.away_form || '-') +
+                '</div><div class="small">PP: ' +
+                esc(methods(x)) +
+                '</div><div class="actions"><button class="copy" onclick="copyMatch(' +
+                idx +
+                ')">COPY TRẬN</button></div></div>'
+              );
+            })
+            .join('') ||
+          '<div class="muted" style="padding:12px 0">Không có trận phù hợp.</div>';
+      }
+      async function fetchMode(n, mode) {
+        const lim = n >= 100000 ? 5000 : n;
+        const r = await fetch(
+          API +
+            '&mode=' +
+            encodeURIComponent(mode) +
+            '&limit=' +
+            lim +
+            '&from_ts=0',
+          { cache: 'no-store' }
+        );
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw Error(j.error || 'API lỗi');
+        return j;
+      }
+      async function copyMode(n, mode, label) {
+        try {
+          const j = await fetchMode(n, mode);
+          const a = [...(j.predictions || [])].sort(
+            (a, b) => Number(a.ts || 0) - Number(b.ts || 0)
+          );
+          await cp(a.map(pickTxt).join('\n\n'));
+          $('runStatus').textContent =
+            '✅ Đã copy ' + a.length + ' trận • ' + label;
+        } catch (e) {
+          $('runStatus').textContent = '❌ ' + e.message;
+        }
+      }
+      async function load(n, mode = 'all') {
+        current = n;
+        currentMode = mode;
+        $('runStatus').textContent = 'Đang tải dữ liệu đã lưu...';
+        try {
+          const j = await fetchMode(n, mode);
+          META = j;
+          ALL = [...(j.predictions || [])].sort(
+            (a, b) => Number(a.ts || 0) - Number(b.ts || 0)
+          );
+          $('runStatus').textContent =
+            (j.locked ? '🔒 ĐÃ KHÓA • ' : '✅ ') +
+            (mode === 'featured' ? 'TRẬN LỚN • ' : '') +
+            'Đã tải ' +
+            ALL.length +
+            ' trận • cập nhật ' +
+            (j.updated_at && Number.isFinite(new Date(j.updated_at).getTime())
+              ? new Date(j.updated_at).toLocaleString('vi-VN')
+              : 'chưa có');
+          renderDaily(j.daily_stats);
+          renderMethods(j.method_performance);
+          render();
+        } catch (e) {
+          $('runStatus').textContent = '❌ ' + e.message;
+        }
+      }
+      function loadFeatured(n) {
+        return load(n, 'featured');
+      }
+      function refreshCurrent() {
+        return load(current, currentMode);
+      }
+      loadFeatured(5000);
+    </script>
+</body>
+</html>
