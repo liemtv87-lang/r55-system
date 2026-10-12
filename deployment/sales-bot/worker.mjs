@@ -46,42 +46,74 @@ async function validClientUrl(product){
   return u.href;
  }catch{return null}
 }
+const copyButton=(text,value)=>({text,copy_text:{text:String(value).slice(0,256)}});
+const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
+const isPaidTerm=days=>[30,365,730,360,720].includes(Number(days));
+
 async function myCodes(chat,userId){
  const r=await pool.query(
   "SELECT product,code_value,duration_days,status,activated_at,expires_at FROM sales_licenses WHERE telegram_user_id=$1 AND product=ANY($2::text[]) ORDER BY created_at DESC LIMIT 120",
   [String(userId),Object.keys(PRODUCTS)]);
  let n=0;
- const lines=['🔐 <b>MÃ CỦA TÔI & LINK KHÁCH MỚI NHẤT</b>'];
+ await send(chat,'🔐 <b>MÃ CỦA TÔI & LINK BẢN KHÁCH</b>\nBấm <b>SAO CHÉP MÃ</b> hoặc <b>SAO CHÉP LINK</b> ngay dưới thông tin từng sản phẩm.',nav());
  for(const [product,title] of Object.entries(PRODUCTS)){
-  const mine=r.rows.filter(x=>x.product===product&&x.status==='active'&&(!x.expires_at||new Date(x.expires_at).getTime()>Date.now()));
-  const url=await validClientUrl(product);
+  const mine=r.rows.filter(x=>x.product===product&&x.code_value&&x.status==='active'&&(!x.expires_at||new Date(x.expires_at).getTime()>Date.now()));
   if(!mine.length)continue;
-  lines.push('\n<b>'+title+'</b>');
+  const url=await validClientUrl(product);
   for(const x of mine.slice(0,10)){
-   if(!x.code_value)continue;
    n++;
-   lines.push('Mã: <code>'+escapeHtml(x.code_value)+'</code>');
-   lines.push(x.expires_at?'Hạn: '+vnDate(x.expires_at):'Chưa kích hoạt — thời hạn bắt đầu khi sử dụng');
+   const rows=[[copyButton('📋 SAO CHÉP MÃ',x.code_value)]];
+   if(url){
+    rows.push([copyButton('🔗 SAO CHÉP LINK',url)]);
+    rows.push([{text:'🌐 MỞ BẢN KHÁCH',url}]);
+   }
+   rows.push([{text:'🛒 MUA THÊM GÓI',callback_data:'plans:'+product}]);
+   await send(chat,'<b>'+title+'</b>\nMã: <code>'+escapeHtml(x.code_value)+'</code>\nGói: '+escapeHtml(planLabel(x.duration_days))+'\n'+(x.expires_at?'Hạn: '+vnDate(x.expires_at):'Chưa kích hoạt — hạn bắt đầu khi sử dụng')+'\n'+(url?'Link bản khách: '+escapeHtml(url):'⚠️ Link bản khách đang được xác minh, không trả bản chính.'),keyboard(rows));
   }
-  if(url)lines.push('Bản khách mới nhất: '+escapeHtml(url));
-  else lines.push('⚠️ Đường dẫn bản khách đang được xác minh. Không chuyển sang bản chính.');
  }
- if(!n)lines.push('\nChưa tìm thấy mã còn sử dụng hoặc chưa kích hoạt gắn với tài khoản Telegram này. Nếu từng nhận mã qua tài khoản khác, hãy liên hệ chủ bot.');
- await send(chat,lines.join('\n'),nav());
+ if(!n)await send(chat,'Chưa tìm thấy mã hợp lệ gắn với Telegram này. Nếu đã nhận mã trên tài khoản khác, hãy liên hệ chủ bot.',nav());
 }
+
 async function showPlans(chat,product){
  if(!PRODUCTS[product])return;
  const r=await pool.query('SELECT duration_days,price_vnd,label FROM sales_plans WHERE product=$1 AND enabled=true ORDER BY duration_days',[product]);
- const lines=['<b>'+PRODUCTS[product]+'</b>','Gói và mức giá hiện hành:'];
+ const plans=r.rows||[];
+ const lines=['🛒 <b>MUA TOOL '+escapeHtml(PRODUCTS[product])+'</b>','Chọn đúng thời hạn bên dưới:'];
  const rows=[];
- for(const p of r.rows){
-  lines.push('• '+escapeHtml(p.label)+' — '+money(p.price_vnd));
-  if(Number(p.price_vnd)===0)rows.push([{text:'🆓 Nhận mã Free 10 ngày',callback_data:'trial:'+product}]);
+ const trial=plans.find(p=>Number(p.duration_days)===10&&Number(p.price_vnd)===0);
+ if(trial){
+  lines.push('🆓 Free 10 ngày — 0đ');
+  rows.push([{text:'🎁 DÙNG THỬ FREE 10 NGÀY',callback_data:'trial:'+product}]);
  }
- lines.push('\nCác đơn thanh toán chỉ được xử lý khi cổng thanh toán VPS đã được xác minh. Mã cũ vẫn giữ nguyên.');
- rows.push([{text:'🔐 Mã của tôi',callback_data:'mycodes'}],[{text:'⬅️ Menu',callback_data:'home'}]);
+ for(const [days,title] of [[30,'1 THÁNG'],[365,'1 NĂM'],[730,'2 NĂM']]){
+  const plan=plans.find(p=>Number(p.duration_days)===days||(days===365&&Number(p.duration_days)===360)||(days===730&&Number(p.duration_days)===720));
+  if(plan&&Number(plan.price_vnd)>0){
+   lines.push('💳 '+title+' — '+money(plan.price_vnd));
+   rows.push([{text:'🛒 MUA '+title+' — '+money(plan.price_vnd),callback_data:'buy:'+product+':'+plan.duration_days}]);
+  }else{
+   lines.push('💳 '+title+' — liên hệ để xác nhận giá');
+   rows.push([{text:'🛒 HỎI MUA '+title,callback_data:'ask:'+product+':'+days}]);
+  }
+ }
+ lines.push('\nChỉ cấp mã trả phí sau khi xác nhận thanh toán. Mã đang dùng giữ nguyên.');
+ rows.push([{text:'🔐 MÃ CỦA TÔI & COPY LINK',callback_data:'mycodes'}],[{text:'⬅️ MENU',callback_data:'home'}]);
  await send(chat,lines.join('\n'),keyboard(rows));
 }
+
+async function purchasePlan(chat,userId,product,days,priceInquiry=false){
+ if(!PRODUCTS[product]||!isPaidTerm(days))return;
+ const r=await pool.query('SELECT duration_days,price_vnd,label FROM sales_plans WHERE product=$1 AND enabled=true AND duration_days=$2 LIMIT 1',[product,days]);
+ const p=r.rows[0],title=planLabel(days);
+ if(!priceInquiry&&(!p||!(Number(p.price_vnd)>0)))return send(chat,'Gói chưa được thiết lập giá hợp lệ. Không tự thu tiền hoặc cấp mã. Hãy liên hệ chủ bot.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
+ const desc='Tôi muốn mua tool '+PRODUCTS[product]+' gói '+title+(p?' giá '+money(p.price_vnd):'')+'. Telegram ID: '+userId+'. Nhờ xác nhận hướng dẫn thanh toán và cấp mã.';
+ const rows=[
+  [copyButton('📋 COPY NỘI DUNG ĐẶT MUA',desc)],
+  [{text:'💬 LIÊN HỆ THANH TOÁN',url:'https://t.me/thantai7979abcd'}],
+  [{text:'⬅️ CHỌN GÓI KHÁC',callback_data:'plans:'+product},{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]
+ ];
+ await send(chat,'🛒 <b>XÁC NHẬN CHỌN GÓI</b>\nSản phẩm: '+escapeHtml(PRODUCTS[product])+'\nThời hạn: <b>'+escapeHtml(title)+'</b>\nGiá: <b>'+(p?money(p.price_vnd):'Cần xác nhận')+'</b>\n\nBấm <b>LIÊN HỆ THANH TOÁN</b>, gửi nội dung đặt mua cho quản trị viên. Đây chưa phải xác nhận thanh toán và không tự cấp mã.',keyboard(rows));
+}
+
 async function freeTrial(chat,userId,product){
  if(!PRODUCTS[product])return;
  const client=await pool.connect();
@@ -101,11 +133,15 @@ async function freeTrial(chat,userId,product){
   }
   await client.query('COMMIT');
  }catch(err){await client.query('ROLLBACK').catch(()=>{});throw err}finally{client.release()}
- if(!created)await send(chat,'Thiết bị/tài khoản đã được cấp mã thử sản phẩm này. Hãy vào <b>Mã của tôi</b> để xem mã còn hạn; không cấp thêm mã thử trùng.',nav());
- else{
-  const url=await validClientUrl(product);
-  await send(chat,'Đã cấp mã Free 10 ngày cho '+PRODUCTS[product]+':\n<code>'+escapeHtml(prior.code_value)+'</code>\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang được xác minh.')+'\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',nav());
+ if(!created){
+  await send(chat,'Tài khoản/thiết bị đã được cấp mã thử sản phẩm này. Bấm <b>MÃ CỦA TÔI</b> để lấy lại mã; không cấp trùng.',keyboard([[{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]]));
+  return myCodes(chat,userId);
  }
+ const url=await validClientUrl(product);
+ const rows=[[copyButton('📋 SAO CHÉP MÃ',prior.code_value)]];
+ if(url)rows.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
+ rows.push([{text:'🛒 MUA 1 THÁNG / 1 NĂM / 2 NĂM',callback_data:'plans:'+product}],[{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]);
+ await send(chat,'✅ Đã cấp Free 10 ngày '+PRODUCTS[product]+'\nMã: <code>'+escapeHtml(prior.code_value)+'</code>\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang xác minh.')+'\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',keyboard(rows));
 }
 
 const LEGACY_HOSTS={
@@ -132,8 +168,12 @@ function legacyProduct(text){
 }
 async function sendLatestClient(chat,product){
  const link=await validClientUrl(product);
- if(!link)return send(chat,'⚠️ Link bản khách '+escapeHtml(PRODUCTS[product])+' đang được kiểm tra, không trả link bản chính.',nav());
- return send(chat,'✅ <b>LINK BẢN KHÁCH MỚI NHẤT</b>\n'+PRODUCTS[product]+'\n'+escapeHtml(link)+'\n\nMã của khách đang sử dụng giữ nguyên. Chọn <b>MÃ CỦA TÔI</b> để lấy lại mã.',nav());
+ if(!link)return send(chat,'⚠️ Link bản khách '+escapeHtml(PRODUCTS[product])+' đang được kiểm tra, không trả bản chính.',nav());
+ return send(chat,'✅ <b>LINK BẢN KHÁCH MỚI NHẤT</b>\n'+PRODUCTS[product]+'\n'+escapeHtml(link)+'\n\nMã khách đang dùng giữ nguyên. Bấm <b>MÃ CỦA TÔI</b> để copy mã.',keyboard([
+  [copyButton('🔗 SAO CHÉP LINK',link)],
+  [{text:'🌐 MỞ BẢN KHÁCH',url:link}],
+  [{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'},{text:'⬅️ MENU',callback_data:'home'}]
+ ]));
 }
 
 async function handle(update){
@@ -147,6 +187,8 @@ async function handle(update){
  if(cmd==='mycodes'||cmd.startsWith('/mycodes')||cmd.startsWith('/mycode'))return myCodes(chat,user.id);
  const mapped=legacyProduct(cmd);if(mapped)return sendLatestClient(chat,mapped);
  if(cmd.startsWith('plans:'))return showPlans(chat,cmd.slice(6));
+ if(cmd.startsWith('buy:')){const [_,product,days]=cmd.split(':');return purchasePlan(chat,user.id,product,Number(days),false)}
+ if(cmd.startsWith('ask:')){const [_,product,days]=cmd.split(':');return purchasePlan(chat,user.id,product,Number(days),true)}
  if(cmd.startsWith('trial:'))return freeTrial(chat,user.id,cmd.slice(6));
  if(cmd==='home'||cmd.startsWith('/start')||cmd.startsWith('/menu'))return send(chat,'KQ247 — chọn sản phẩm hoặc lấy lại mã và link bản khách mới nhất.',nav());
  return send(chat,'Chọn <b>Mã của tôi & link mới nhất</b> hoặc sản phẩm cần xem.',nav());
