@@ -23,12 +23,13 @@ jobs:
           host=root@64.120.92.172
           opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
           sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/parity-research'
-          sshpass -e scp "${opts[@]}" scripts/vietlott-production-reducer-parity.mjs "$host":/opt/kq247/vietlott/versions/parity-research/
+          sshpass -e scp "${opts[@]}" scripts/vietlott-production-reducer-parity.mjs scripts/vietlott-coverage-reducer-research.mjs "$host":/opt/kq247/vietlott/versions/parity-research/
           sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
           set -euo pipefail
           name=kq247-vietlott-vps
           base=/opt/kq247/vietlott/versions/parity-research
           docker cp "$base/vietlott-production-reducer-parity.mjs" "$name":/app/scripts/vietlott-production-reducer-parity.mjs
+          docker cp "$base/vietlott-coverage-reducer-research.mjs" "$name":/app/scripts/vietlott-coverage-reducer-research.mjs
           docker exec "$name" node --check /app/scripts/vietlott-production-reducer-parity.mjs
           docker exec "$name" node scripts/vietlott-production-reducer-parity.mjs | tee "$base/reducer-parity-log.txt"
           docker cp "$name":/tmp/vietlott-production-reducer-parity.json "$base/verified-result.json"
