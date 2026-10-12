@@ -1,0 +1,66 @@
+# KQ247 R55: Bongdalu-only football source; never require API-Football or Goaloo keys.
+
+[[secret]]
+name = "R55_TELEGRAM_BOT_TOKEN"
+required = false
+description = "Telegram group admin bot credential to send verified 12:30 Vietnam-time results to @keochuyengia79. Never put it in public frontend code."
+
+# Disabled legacy non-Bongdalu hourly scanner. Bongdalu is sole scheduled
+# fixture, AH/OU bookmaker, history, and full-time results source.
+
+# 11:00 and 12:00 VN = 04:00 and 05:00 UTC: scan the complete verified Bongdalu fixture/odds feed, run a history sanity check, NEVER publish early.
+[[cron]]
+path = "/api/jobs/preflight-bongdalu"
+schedule = "0 4,5 * * *"
+
+# Before 13:00 VN, build a provisional forecast in small batches. No official snapshot is written here.
+# 06:15, 07:15, 08:15, 09:15, 10:15, 11:15, 12:15 VN. Each job resumes saved cursor if prior scan is incomplete.
+[[cron]]
+path = "/api/jobs/stage-forecast"
+schedule = "15 23,0,1,2,3,4,5 * * *"
+
+# EXACTLY 13:00 VN = 06:00 UTC: re-fetch complete Bongdalu markets, calculate ONE kèo per eligible match, and lock one immutable snapshot. 14:00 is failure-only retry. Server also rejects early writes.
+[[cron]]
+path = "/api/jobs/noon-lock"
+schedule = "0 6,7 * * *"
+
+# 13:00 VN (06:00 UTC): summarize ONLY group posts from 12:05 to 12:05 and verified FT.
+# 14:00 VN is failure-only retry. A report is de-duplicated by prediction window.
+[[cron]]
+path = "/api/jobs/noon-grade"
+schedule = "0 6,7 * * *"
+
+# Keep real final scores up to date without repeating Telegram posts or changing frozen picks.
+[[cron]]
+path = "/api/jobs/result-poll"
+schedule = "10 * * * *"
+
+# Once daily at 13:30 VN: compact verified historical Bongdalu results;
+# preserve recent/pending snapshots and never delete unsolved FT records.
+[[cron]]
+path = "/api/jobs/cleanup-r55"
+schedule = "30 6 * * *"
+
+# Football sender/watchdog: observe every 30 minutes and recover a missing official
+# snapshot or prematch queue without duplicating already-sent Telegram messages.
+[[cron]]
+path = "/api/jobs/football-bot-watchdog"
+schedule = "25 * * * *"
+
+# Lightweight lottery Telegram sender. Reads immutable Neon picks; does not run the lottery predictor.
+# All schedules are UTC (Vietnam = UTC+7). Six small jobs/day, two distinct routes.
+# Prediction pre-draw at 16:10 MN, 17:10 MT, 18:10 MB Vietnam time.
+[[cron]]
+path = "/api/jobs/xs-pre"
+schedule = "10 9,10,11 * * *"
+
+# Official lottery draw roundups: EXACT scheduled triggers at 17:00 MN and 18:00 MT VN = 10:00 and 11:00 UTC.
+# If source results are incomplete, retry without publishing unverified scores.
+[[cron]]
+path = "/api/jobs/xs-result"
+schedule = "0 10,11 * * *"
+
+# XSMB roundup at 19:30 VN = 12:30 UTC (separate route because its minute differs).
+[[cron]]
+path = "/api/jobs/xs-result-mb"
+schedule = "30 12 * * *"
