@@ -41,9 +41,9 @@ jobs:
           if docker ps -a --format '{{.Names}}' | grep -qx kq247-sales-bot-stage; then
             docker rm -f kq247-sales-bot-stage >/dev/null
           fi
-          docker run -d --name kq247-sales-bot-stage --restart unless-stopped -p 127.0.0.1:18088:3032 -e KQ247_SALES_BOT_ACTIVE=0 kq247/sales-bot-stage:latest >/dev/null
+          docker run -d --name kq247-sales-bot-stage --restart unless-stopped --network bridge -e KQ247_SALES_BOT_ACTIVE=0 kq247/sales-bot-stage:latest >/dev/null
           sleep 5
-          curl -fsS --max-time 8 http://127.0.0.1:18088/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j["ok"] and j["active"] is False and not j["tokenConfigured"] and not j["databaseConfigured"] and not j["payos"]["ready"]; print("KQ247_SALES_STAGE_HEALTH=PASS")'
-          docker exec kq247-sales-bot-stage node -e 'const fs=require("fs"); const s=fs.readFileSync("/app/worker.mjs","utf8"); for(const k of ["MỞ TOOL BÓNG ĐÁ","MỞ BẢN KHÁCH XỔ SỐ","MUA TOOL VIETLOTT","SAO CHÉP MÃ","SAO CHÉP LINK","createPayosCheckout","processPayosWebhook"]){if(!s.includes(k))process.exit(1)}console.log("KQ247_SALES_STAGE_FEATURES=PASS")'
+          docker exec kq247-sales-bot-stage node -e 'fetch("http://127.0.0.1:3032/healthz").then(r=>r.json()).then(j=>{if(!j.ok||j.active||j.tokenConfigured||j.databaseConfigured||j.payos.ready)process.exit(1);console.log("KQ247_SALES_STAGE_HEALTH=PASS")}).catch(()=>process.exit(1))'
+          docker exec kq247-sales-bot-stage node -e 'const fs=require("fs"); const s=fs.readFileSync("/app/worker.mjs","utf8"); for(const k of ["MỞ TOOL BÓNG ĐÁ","MỞ BẢN KHÁCH XỔ SỐ","MUA TOOL VIETLOTT","6 THÁNG","SAO CHÉP MÃ","SAO CHÉP LINK","createPayosCheckout","processPayosWebhook"]){if(!s.includes(k))process.exit(1)}console.log("KQ247_SALES_STAGE_FEATURES=PASS")'
           curl -fsS --max-time 8 http://127.0.0.1:18087/healthz | python3 -c 'import json,sys;j=json.load(sys.stdin); assert j["ok"] and j["active"] is True; print("KQ247_EXISTING_LIVE_BOT_UNCHANGED=PASS")'
           REMOTE
