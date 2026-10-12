@@ -18,8 +18,8 @@ ROOT=Path(__file__).resolve().parent.parent
 STORE=ROOT/"lottery-bot"/"state"
 CHAT="-1004320899120"
 NEON_READONLY_SNAPSHOT="https://br-divine-resonance-az0qxt8z-kq247full.compute.c-3.ap-southeast-1.aws.neon.tech/api/snapshot"
-REGIONS={"mn":{"pre":dt_time(16,10),"after":dt_time(17,10),"label":"XSMN","path":"mien-nam"},
-         "mt":{"pre":dt_time(17,10),"after":dt_time(18,10),"label":"XSMT","path":"mien-trung"},
+REGIONS={"mn":{"pre":dt_time(16,10),"after":dt_time(17,0),"label":"XSMN","path":"mien-nam"},
+         "mt":{"pre":dt_time(17,10),"after":dt_time(18,0),"label":"XSMT","path":"mien-trung"},
          "mb":{"pre":dt_time(18,10),"after":dt_time(20,0),"label":"XSMB","path":"mien-bac"}}
 ORDER_MT_MN=["giai8","giai7","giai6","giai5","giai4","giai3","giai2","giai1","giaidb"]
 ORDER_MB=["giaidb","giai1","giai2","giai3","giai4","giai5","giai6","giai7"]
@@ -136,6 +136,8 @@ def committed_state(path,contents):
     subprocess.run(["git","push","origin","HEAD:main"],cwd=ROOT,check=True,stdout=subprocess.DEVNULL,timeout=20)
 
 def send(day,region,phase,station,pick,draw,fp):
+    if draw is not None and not due(datetime.now(VN),region,"result"):
+        raise RuntimeError("RESULT_DEADLINE_EXPIRED_"+region)
     key=re.sub(r"[^a-z0-9]+","-",station_name(station)).strip("-")
     path=STORE/day/f"{region}-{phase}-{key}.json"
     if path.exists():
@@ -152,6 +154,9 @@ def send(day,region,phase,station,pick,draw,fp):
     # Claim BEFORE send; an uncertain Telegram timeout must never cause duplicate retries.
     entry={"date":day,"region":region,"phase":phase,"station":station,"status":"claimed","fingerprint":fp,"claimed_at":datetime.now(VN).isoformat()}
     committed_state(path,entry)
+    if draw is not None and not due(datetime.now(VN),region,"result"):
+        entry["status"]="deadline_expired";committed_state(path,entry)
+        raise RuntimeError("RESULT_DEADLINE_EXPIRED_BEFORE_SEND_"+region)
     url="https://api.telegram.org/bot"+token+"/sendMessage"
     try:
         reply=http_json(url,method="POST",payload={"chat_id":CHAT,"text":body,"parse_mode":"HTML","disable_web_page_preview":True},timeout=15)
@@ -174,7 +179,8 @@ def due(now,region,phase):
         start=REGIONS[region]["pre"]
         return dt_time(start.hour,max(0,start.minute-2))<=t<=dt_time(start.hour,25)
     after=REGIONS[region]["after"]
-    return after<=t<=dt_time(21,0) if region=="mb" else after<=t<=dt_time(19 if region=="mn" else 20,15)
+    # Hard close at 17:05 MN / 18:05 MT / 20:05 MB (Vietnam local time).
+    return after<=t<=dt_time(after.hour,5)
 
 def verify_telegram_access(token):
     if not token:
