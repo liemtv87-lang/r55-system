@@ -1,0 +1,21 @@
+name: Install Docker on KQ247 VPS
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-install-docker.yml
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install Ubuntu Docker packages
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io docker-compose-v2 && systemctl enable --now docker && docker --version && docker compose version'
