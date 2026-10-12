@@ -1,0 +1,45 @@
+name: KQ247 Vietlott Backtest Data Checkpoint
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-checkpoint.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Copy completed R39 backtest shards to persistent VPS disk
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          dir=/opt/kq247/vietlott/backtest-cache
+          mkdir -p "$dir"
+          docker cp "$name":/app/backtest-out/. "$dir/"
+          echo VIETLOTT_LOCAL_BACKTEST_CHECKPOINT=OK
+          echo VIETLOTT_LOCAL_SHARD_FILES=$(find "$dir" -maxdepth 1 -type f -name '*.json' | wc -l)
+          echo VIETLOTT_LOCAL_BACKTEST_SIZE=$(du -sh "$dir" | awk '{print $1}')
+          if test -s /opt/kq247/vietlott/public/backtest-60.json; then
+            python3 - <<'PY'
+          import json
+          f='/opt/kq247/vietlott/public/backtest-60.json'
+          s=json.load(open(f))
+          print('VIETLOTT_BACKTEST_GENERATED='+str(s.get('generated_at')))
+          print('VIETLOTT_BACKTEST_SCHEMA='+str(s.get('schema_version')))
+          for key in ('mega645','power655'):
+              p=(s.get('products') or {}).get(key) or s.get(key) or {}
+              print('VIETLOTT_'+key+'_STATS30='+json.dumps(p.get('reduced_stats30') or {},ensure_ascii=False)[:750])
+              print('VIETLOTT_'+key+'_STATS60='+json.dumps(p.get('reduced_stats60') or {},ensure_ascii=False)[:750])
+          PY
+          else
+            echo VIETLOTT_BACKTEST_AGGREGATE_MISSING=YES
+          fi
+          REMOTE
