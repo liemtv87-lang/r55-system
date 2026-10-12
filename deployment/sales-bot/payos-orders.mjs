@@ -28,21 +28,10 @@ async function payosClient(){
 }
 export async function ensurePaymentSchema(pool){
   if(prepared)return;
-  await pool.query(`CREATE TABLE IF NOT EXISTS sales_payos_orders (
-    order_code BIGINT PRIMARY KEY,
-    telegram_user_id TEXT NOT NULL,
-    product TEXT NOT NULL CHECK (product IN ('football','lottery','vietlott')),
-    duration_days INTEGER NOT NULL,
-    price_vnd BIGINT NOT NULL CHECK (price_vnd>0),
-    checkout_url TEXT,
-    payment_link_id TEXT,
-    state TEXT NOT NULL DEFAULT 'creating' CHECK (state IN ('creating','checkout_ready','paid','failed')),
-    license_hash TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    paid_at TIMESTAMPTZ
-  )`);
-  await pool.query('CREATE INDEX IF NOT EXISTS sales_payos_orders_by_user ON sales_payos_orders (telegram_user_id, product, created_at DESC)');
+  // Schema is provisioned once by the Neon administrator; do not require CREATE
+  // permissions or mutate the public schema from the restricted Telegram bot.
+  const r=await pool.query("SELECT to_regclass('public.sales_payos_orders') AS orders_table");
+  if(!r.rows[0]?.orders_table)throw Error('sales_payos_schema_missing');
   prepared=true;
 }
 export async function createPayosCheckout(pool,telegramUserId,product,days){
