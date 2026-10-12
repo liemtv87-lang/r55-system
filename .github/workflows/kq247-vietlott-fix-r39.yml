@@ -1,0 +1,60 @@
+name: KQ247 Repair Vietlott VPS R39 Shards
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-fix-r39.yml
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-live-repair
+  cancel-in-progress: false
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Patch exact 48-vs-24 shard mismatch in existing Vietlott VPS with rollback
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          app=/opt/kq247/vietlott/snapdeploy-server.mjs
+          container=kq247-vietlott-vps
+          backup=/opt/kq247/vietlott/snapdeploy-server.before-r39.mjs
+          test -s "$app"
+          docker inspect "$container" >/dev/null
+          if ! grep -q 'const BACKTEST_SHARDS=48;' "$app" && ! grep -q 'const BACKTEST_SHARDS=24;' "$app"; then
+            echo VIETLOTT_UNEXPECTED_SOURCE_VERSION; exit 2
+          fi
+          if grep -q 'const BACKTEST_SHARDS=48;' "$app"; then
+            cp -p "$app" "$backup"
+            sed -i "s/const BACKTEST_SHARDS=48;/const BACKTEST_SHARDS=24;/;s/R38_VPS_USER32_20261013_RESUMABLE_48_SHARDS/R39_VPS_USER32_20261013_BACKTEST_24_SHARDS/;s/Vietlott Auto Học R6/KQ247 Vietlott R39/g" "$app"
+          fi
+          grep -q 'const BACKTEST_SHARDS=24;' "$app"
+          docker cp "$app" "$container":/app/snapdeploy-server.mjs
+          rollback() {
+            if test -s "$backup"; then
+              cp -p "$backup" "$app"
+              docker cp "$backup" "$container":/app/snapdeploy-server.mjs || true
+              docker restart "$container" >/dev/null || true
+              echo VIETLOTT_ROLLBACK_RESTORED=YES
+            fi
+          }
+          trap rollback ERR
+          docker exec "$container" node --check /app/snapdeploy-server.mjs
+          docker exec "$container" sh -c "grep -q 'const REQUIRED_SHARDS=24;' /app/scripts/backtest-60-shard.mjs && grep -q 'const BACKTEST_SHARDS=24;' /app/snapdeploy-server.mjs"
+          docker exec "$container" sh -c "grep -q '200000:600000' /app/scripts/engine.mjs"
+          echo VIETLOTT_BACKTEST_SHARD_MATCH=PASS
+          echo VIETLOTT_POOL_TARGETS_200K_600K=PASS
+          docker restart "$container" >/dev/null
+          sleep 8
+          curl -fsS --max-time 20 https://vietlott.64-120-92-172.sslip.io/health |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["ok"] and "R39_VPS_USER32" in d["runtime"];print("VIETLOTT_R39_LIVE=YES",d["runtime"],"STATUS",d["status"])'
+          trap - ERR
+          echo VIETLOTT_CUSTOMER_DATA_VOLUMES_UNCHANGED=YES
+          REMOTE
