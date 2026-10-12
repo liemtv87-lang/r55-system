@@ -1,0 +1,62 @@
+name: KQ247 Vietlott Balanced Coverage 30 Draws
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-balanced-30.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-balanced-30
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source code checks
+        run: |
+          node --check scripts/vietlott-balanced-coverage-research.mjs
+          node --check scripts/vietlott-balanced-holdout.mjs
+          node --check deployment/vietlott/limits/pool-policy.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Historical 30-draw fixed-budget comparison of diversified vs production ticket selector
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=30)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/balanced30'
+          sshpass -e scp "${opts[@]}" scripts/vietlott-balanced-coverage-research.mjs scripts/vietlott-balanced-holdout.mjs deployment/vietlott/limits/pool-policy.mjs "$host":/opt/kq247/vietlott/versions/balanced30/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          root=/opt/kq247/vietlott/versions/balanced30
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          disk=$(df -P /opt/kq247/vietlott | awk 'NR==2{gsub(/%/,"",$5);print $5}')
+          free=$(awk '/MemAvailable:/{print int($2/1024)}' /proc/meminfo)
+          test "$disk" -lt 80 && test "$free" -gt 1024
+          for file in vietlott-balanced-coverage-research.mjs vietlott-balanced-holdout.mjs pool-policy.mjs;do
+            docker cp "$root/$file" "$name":/app/scripts/"$file"
+            docker exec "$name" node --check /app/scripts/"$file"
+          done
+          echo BALANCED_METHOD_30_DRAW_STUDY_STARTED=YES
+          docker exec -e COMPARE_DRAWS=30 "$name" sh -c 'cd /app && if command -v nice >/dev/null;then nice -n 10 node scripts/vietlott-balanced-holdout.mjs;else node scripts/vietlott-balanced-holdout.mjs;fi' | tee "$root/verified-run.log"
+          docker cp "$name":/app/data/vietlott-balanced-selector-holdout/summary-30-draws.json "$root/summary-verified.json"
+          python3 - <<'PY'
+          import json
+          p='/opt/kq247/vietlott/versions/balanced30/summary-verified.json'
+          x=json.load(open(p))
+          assert x['draws_per_product']==30 and x['final_portfolio_only'] is True
+          for key,target,cap in [('mega645',200000,220000),('power655',600000,650000)]:
+              y=x['products'][key]
+              assert y['draws']==30 and y['portfolio_target']==target and y['hard_max']==cap
+              print('BALANCED_30_RESULT_'+key+'='+json.dumps(y,ensure_ascii=False))
+          print('BALANCED_FIXED_BUDGET_30_DRAW_COMPARISON=VERIFIED')
+          PY
+          curl -fsS --max-time 10 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"];print("VIETLOTT_LIVE_UNINTERRUPTED=YES")'
+          echo CUSTOMER_LOCKED_SNAPSHOTS_UNCHANGED=YES
+          REMOTE
