@@ -5,6 +5,7 @@ COPY compat ./compat
 COPY lib ./lib
 RUN npm install --omit=dev --no-audit --no-fund
 COPY worker.mjs ./worker.mjs
+COPY publicApi.mjs ./publicApi.mjs
 COPY historyAudit.mjs ./historyAudit.mjs
 RUN mkdir -p /data/history && chown -R node:node /data
 USER node
