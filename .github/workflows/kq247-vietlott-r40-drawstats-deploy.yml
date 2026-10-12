@@ -50,11 +50,13 @@ jobs:
           }
           trap restore ERR
           cd "$root"
-          node "$base/apply-r40.mjs" scripts/merge-backtest-60.mjs snapdeploy-server.mjs
-          node --check scripts/merge-backtest-60.mjs
-          node --check snapdeploy-server.mjs
+          image=$(docker inspect -f '{{.Config.Image}}' "$name")
+          docker run --rm --network none --entrypoint node -v "$root":/work -w /work "$image" \
+             /work/versions/r40/apply-r40.mjs scripts/merge-backtest-60.mjs snapdeploy-server.mjs
           docker cp scripts/merge-backtest-60.mjs "$name":/app/scripts/merge-backtest-60.mjs
           docker cp snapdeploy-server.mjs "$name":/app/snapdeploy-server.mjs
+          docker exec "$name" node --check /app/scripts/merge-backtest-60.mjs
+          docker exec "$name" node --check /app/snapdeploy-server.mjs
           docker exec "$name" node scripts/merge-backtest-60.mjs >/tmp/kq247-r40-merge.log
           python3 - <<'PY'
           import json
