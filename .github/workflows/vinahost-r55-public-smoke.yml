@@ -11,15 +11,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
+      - uses: actions/checkout@v4
       - name: Check published VPS website and exact 20 30 and all routes
         run: |
           set -euo pipefail
           site="http://64.120.92.172"
           curl -fsS --connect-timeout 7 --max-time 20 "$site/" -o /tmp/r55.html
-          grep -q 'KQ247.*R55' /tmp/r55.html
-          grep -q 'TOÀN BỘ' /tmp/r55.html
+          grep -q 'KQ247' /tmp/r55.html
+          grep -q 'KÈO SÁNG NHẤT' /tmp/r55.html
+          cmp deployment/football-original/public/index.html /tmp/r55.html
           grep -q '30 TRẬN' /tmp/r55.html
           grep -q '20 TRẬN' /tmp/r55.html
+          echo "VPS_ORIGINAL_UI_BYTE_IDENTICAL=PASS"
+          for count in 20 30; do
+            curl -fsS --connect-timeout 7 --max-time 20 "$site/api/main-football?data=1&mode=all&limit=$count" -o "/tmp/r55-original-$count.json"
+          done
+          python3 - <<'PYORIGINAL'
+          import json
+          for n in (20,30):
+            d=json.load(open(f'/tmp/r55-original-{n}.json'))
+            assert d.get('ok') and d.get('found') and d.get('locked')
+            assert d.get('snapshot_total',0)>=n and len(d['predictions'])==n
+            assert all(bool(p.get('ah')) != bool(p.get('ou')) for p in d['predictions'])
+            assert all(p.get('trusted_pick') is False for p in d['predictions'])
+            print(f'VPS_ORIGINAL_UI_API_{n}=PASS')
+          PYORIGINAL
           echo "VPS_WEBSITE_PUBLIC=OK"
           curl -fsS --connect-timeout 7 --max-time 20 "$site/api/health" -o /tmp/health.json
           python3 -c 'import json;d=json.load(open("/tmp/health.json"));print("VPS_NATIVE_API_HEALTH="+str(d));assert d["ok"] and d["engine"]=="vps-native"'
