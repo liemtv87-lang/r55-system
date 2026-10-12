@@ -3,6 +3,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import pg from 'pg';
+import {payosStatus,createPayosCheckout,processPayosWebhook} from './payos-orders.mjs';
 const {Pool}=pg;
 const PRODUCTS={football:'⚽ Bóng đá',lottery:'🎯 Xổ số',vietlott:'🎟 Vietlott'};
 const TAG={football:'BD',lottery:'XS',vietlott:'VL'};
@@ -101,17 +102,31 @@ async function showPlans(chat,product){
 }
 
 async function purchasePlan(chat,userId,product,days,priceInquiry=false){
- if(!PRODUCTS[product]||!isPaidTerm(days))return;
+ if(!PRODUCTS[product]||![30,360,365,720,730].includes(Number(days)))return;
  const r=await pool.query('SELECT duration_days,price_vnd,label FROM sales_plans WHERE product=$1 AND enabled=true AND duration_days=$2 LIMIT 1',[product,days]);
  const p=r.rows[0],title=planLabel(days);
- if(!priceInquiry&&(!p||!(Number(p.price_vnd)>0)))return send(chat,'Gói chưa được thiết lập giá hợp lệ. Không tự thu tiền hoặc cấp mã. Hãy liên hệ chủ bot.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
- const desc='Tôi muốn mua tool '+PRODUCTS[product]+' gói '+title+(p?' giá '+money(p.price_vnd):'')+'. Telegram ID: '+userId+'. Nhờ xác nhận hướng dẫn thanh toán và cấp mã.';
- const rows=[
-  [copyButton('📋 COPY NỘI DUNG ĐẶT MUA',desc)],
-  [{text:'💬 LIÊN HỆ THANH TOÁN',url:'https://t.me/thantai7979abcd'}],
-  [{text:'⬅️ CHỌN GÓI KHÁC',callback_data:'plans:'+product},{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]
- ];
- await send(chat,'🛒 <b>XÁC NHẬN CHỌN GÓI</b>\nSản phẩm: '+escapeHtml(PRODUCTS[product])+'\nThời hạn: <b>'+escapeHtml(title)+'</b>\nGiá: <b>'+(p?money(p.price_vnd):'Cần xác nhận')+'</b>\n\nBấm <b>LIÊN HỆ THANH TOÁN</b>, gửi nội dung đặt mua cho quản trị viên. Đây chưa phải xác nhận thanh toán và không tự cấp mã.',keyboard(rows));
+ if(!p||!(Number(p.price_vnd)>0)){
+  return send(chat,'Gói '+escapeHtml(title)+' chưa có giá hợp lệ. Không cấp mã khi chưa xác minh giá.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
+ }
+ if(priceInquiry)return send(chat,'Gói '+escapeHtml(title)+' — '+money(p.price_vnd)+'. Thanh toán trực tuyến chỉ mở sau khi PayOS được kết nối và xác minh.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
+ const status=payosStatus();
+ if(!status.ready){
+  return send(chat,'⚠️ <b>PayOS chưa sẵn sàng</b>. Bot chưa thể nhận thanh toán tự động. Không chuyển khoản theo hướng dẫn không được xác thực; mã hiện có không bị thay đổi.',keyboard([
+   [{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}],
+   [{text:'⬅️ CHỌN GÓI',callback_data:'plans:'+product}]
+  ]));
+ }
+ try{
+  const order=await createPayosCheckout(pool,userId,product,days);
+  return send(chat,'💳 <b>THANH TOÁN PAYOS</b>\nSản phẩm: '+escapeHtml(PRODUCTS[product])+'\nGói: <b>'+escapeHtml(title)+'</b>\nSố tiền: <b>'+money(order.amount)+'</b>\nĐơn: <code>'+escapeHtml(order.orderCode)+'</code>\n\nBấm thanh toán để chuyển tới payOS. Bot chỉ tự cấp mã sau khi nhận và xác minh giao dịch thành công.',keyboard([
+    [{text:'💳 THANH TOÁN AN TOÀN QUA PAYOS',url:order.checkoutUrl}],
+    [{text:'📋 SAO CHÉP LINK THANH TOÁN',copy_text:{text:order.checkoutUrl.slice(0,256)}}],
+    [{text:'⬅️ CHỌN GÓI',callback_data:'plans:'+product},{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]
+  ]));
+ }catch(err){
+  console.error('PAYOS_ORDER_ERROR',String(err.message).slice(0,100));
+  return send(chat,'⚠️ Không tạo được yêu cầu thanh toán an toàn. Chưa thu tiền và chưa cấp mã. Vui lòng thử lại sau.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
+ }
 }
 
 async function freeTrial(chat,userId,product){
@@ -193,11 +208,40 @@ async function handle(update){
  if(cmd==='home'||cmd.startsWith('/start')||cmd.startsWith('/menu'))return send(chat,'KQ247 — chọn sản phẩm hoặc lấy lại mã và link bản khách mới nhất.',nav());
  return send(chat,'Chọn <b>Mã của tôi & link mới nhất</b> hoặc sản phẩm cần xem.',nav());
 }
-const health=http.createServer((req,res)=>{
+async function payosHttp(req,res){
+ if(req.method==='POST' && new URL(req.url,'http://localhost').pathname.endsWith('/payos/webhook')){
+  if(!pool){res.writeHead(503).end('not_ready');return}
+  let raw='';
+  try{
+   for await(const chunk of req){
+    raw+=chunk.toString('utf8');
+    if(raw.length>65536)throw Error('payload_too_large');
+   }
+   const payload=JSON.parse(raw);
+   await processPayosWebhook(pool,payload,async ({telegramUserId,product,code})=>{
+    const url=await validClientUrl(product).catch(()=>null);
+    const buttons=[[copyButton('📋 SAO CHÉP MÃ',code)]];
+    if(url)buttons.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
+    buttons.push([{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]);
+    await send(telegramUserId,'✅ <b>ĐÃ XÁC NHẬN THANH TOÁN PAYOS</b>\n'+escapeHtml(PRODUCTS[product])+'\nMã: <code>'+escapeHtml(code)+'</code>\n'+(url?'Bản khách: '+escapeHtml(url):'Link khách đang được kiểm tra.')+'\nThời hạn tính từ khi kích hoạt trên thiết bị.',keyboard(buttons));
+   });
+   res.writeHead(200,{'content-type':'application/json'}).end('{"success":true}');
+  }catch(err){
+   console.error('PAYOS_WEBHOOK_REJECTED',String(err.message).slice(0,100));
+   res.writeHead(400,{'content-type':'application/json'}).end('{"success":false}');
+  }
+  return;
+ }
+ if(req.method==='GET'&&['/payos/return','/payos/cancel'].includes(new URL(req.url,'http://localhost').pathname)){
+  res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store'})
+    .end('<!doctype html><html lang="vi"><meta name="viewport" content="width=device-width"><title>KQ247</title><body><h3>KQ247 — Thanh toán</h3><p>Vui lòng quay lại Telegram và bấm MÃ CỦA TÔI. Chỉ webhook PayOS hợp lệ mới kích hoạt mã.</p></body></html>');
+  return;
+ }
  if(req.url!=='/healthz'){res.writeHead(404).end();return}
  res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});
- res.end(JSON.stringify({ok:true,service:'kq247-sales-vps',active:ACTIVE,tokenConfigured:!!TOKEN,databaseConfigured:!!DB,lastPoll,lastError}));
-});
+ res.end(JSON.stringify({ok:true,service:'kq247-sales-vps',active:ACTIVE,tokenConfigured:!!TOKEN,databaseConfigured:!!DB,payos:payosStatus(),lastPoll,lastError}));
+}
+const health=http.createServer((req,res)=>{payosHttp(req,res).catch(err=>{lastError='http_handler_failed';console.error('SALES_HTTP_ERROR',String(err.message).slice(0,100));if(!res.headersSent)res.writeHead(500).end()})});
 health.listen(Number(process.env.PORT||3032),'0.0.0.0');
 async function main(){
  if(!ACTIVE){console.log('SALES_VPS_STANDBY=YES');return}
