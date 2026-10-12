@@ -1,4 +1,5 @@
 name: KQ247 Sales Migration Readiness
+# Recheck payOS credentials after merchant configuration.
 on:
   workflow_dispatch:
   push:
