@@ -1,0 +1,45 @@
+name: Deploy R55 VPS Staging Proxy
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-stage-football.yml
+      - deployment/football-staging/**
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH transfer helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Copy isolated staging files
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          tar -czf /tmp/kq247-r55-stage.tgz deployment/football-staging
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247'
+          sshpass -e scp -o StrictHostKeyChecking=accept-new /tmp/kq247-r55-stage.tgz root@64.120.92.172:/tmp/kq247-r55-stage.tgz
+      - name: Start read-only proxy and check upstream
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          tar -xzf /tmp/kq247-r55-stage.tgz -C /opt/kq247
+          cd /opt/kq247/deployment/football-staging
+          docker compose config -q
+          docker compose up -d
+          for i in 1 2 3 4 5; do
+            if curl --fail --silent --max-time 8 http://127.0.0.1:18080/_kq247/health; then break; fi
+            sleep 2
+          done
+          echo
+          curl --fail --silent --show-error --max-time 30 http://127.0.0.1:18080/api/health | python3 -c 'import json,sys; d=json.load(sys.stdin); print("R55_UPSTREAM_OK="+str(d.get("ok"))); print("R55_SOURCE="+str(d.get("source"))); print("R55_LOCKED_MATCHES="+str(d.get("lockedMatches"))) ; assert d.get("ok") is True'
+          docker compose ps
+          REMOTE
