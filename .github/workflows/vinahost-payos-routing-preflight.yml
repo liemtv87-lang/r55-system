@@ -25,6 +25,10 @@ jobs:
           if test -s /opt/kq247/.bot-secrets/r55-transfer-private.pem; then echo VPS_SEALED_KEY_AVAILABLE=YES;else echo VPS_SEALED_KEY_AVAILABLE=NO;fi
           if command -v nginx >/dev/null;then echo NGINX_BIN=YES;nginx -t 2>&1 | tail -3;else echo NGINX_BIN=NO;fi
           if test -d /etc/nginx/sites-enabled;then for f in /etc/nginx/sites-enabled/*;do echo "NGINX_SITE=$f";grep -E 'server_name|listen |location |proxy_pass' "$f" | head -35 || true;done;fi
+          echo VPS_PUBLIC_HTTP_CONTAINERS
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}' | grep -E '(0.0.0.0|:::)(80|443)->' || true
+          echo VPS_CADDY_PATHS
+          for f in /opt/kq247/Caddyfile /opt/kq247/caddy/Caddyfile /opt/kq247/deployment/Caddyfile /etc/caddy/Caddyfile;do if test -f "$f";then echo "CONFIG=$f";grep -E 'reverse_proxy|handle|route|respond|import|tls' "$f" | head -60;fi;done
           echo VPS_REVERSE_PROXY_SOFTWARE
           command -v caddy || true
           command -v apache2 || true
