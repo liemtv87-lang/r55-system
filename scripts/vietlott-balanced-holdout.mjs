@@ -5,7 +5,7 @@ import {reduceBalancedCoveragePool} from './vietlott-balanced-coverage-research.
 import {portfolioPolicy,assertPortfolioSize} from './pool-policy.mjs';
 const reportDir='/app/data/vietlott-balanced-selector-holdout';
 mkdirSync(reportDir,{recursive:true});
-const count=Math.max(1,Math.min(10,Number(process.env.COMPARE_DRAWS||3)));
+const count=Math.max(1,Math.min(30,Number(process.env.COMPARE_DRAWS||3)));
 const json=p=>JSON.parse(readFileSync(p,'utf8'));
 const save=(p,x)=>{const tmp=p+'.tmp';writeFileSync(tmp,JSON.stringify(x,null,2));renameSync(tmp,p)};
 const bt=json('./public/backtest-60.json'),xsmb=json('./data/xsmb200.json');
@@ -60,4 +60,27 @@ for(const [product,maxn] of [['mega645',45],['power655',55]]){
    console.log('BALANCED_HOLDOUT_'+product+'_'+date+'='+JSON.stringify(row));
  }
 }
+const summary={schema_version:'R41_BALANCED_CANDIDATE_SAMPLING_30_DRAW_RESEARCH',draws_per_product:count,
+  run_type:'historic_comparison_not_future_guarantee',final_portfolio_only:true,products:{}};
+for(const [product,target,cap] of [['mega645',200000,220000],['power655',600000,650000]]){
+ const dates=(bt.products?.[product]?.details30||[]).slice(-count).map(d=>d.date);
+ const rows=dates.map(date=>json(resolve(reportDir,product+'-'+date+'.json')));
+ if(rows.length!==count||rows.some(x=>x.portfolio_target!==target||x.selected!==target||x.hard_max!==cap||
+  x.baseline_from_same_live_selector?.portfolio_target!==target))throw Error('incomplete or mis-sized comparison '+product);
+ const tally=selector=>rows.reduce((v,row)=>{
+  const c=(selector==='new'?row.prize_counts:row.baseline_from_same_live_selector.prize_counts)||{};
+  for(const [k,n] of Object.entries(c))v[k]=(v[k]||0)+Number(n);
+  return v;
+ },{});
+ const avg=key=>rows.reduce((sum,row)=>sum+Number(key==='new'?row.unique_five_subsets:row.baseline_from_same_live_selector.unique_five_subsets),0)/rows.length;
+ const coverageOld=avg('old'),coverageNew=avg('new');
+ summary.products[product]={draws:count,portfolio_target:target,hard_max:cap,
+  historical_baseline_prizes:tally('old'),balanced_sampling_prizes:tally('new'),
+  average_five_subset_coverage_old:Math.round(coverageOld),
+  average_five_subset_coverage_new:Math.round(coverageNew),
+  relative_coverage_gain_pct:Number(((coverageNew/coverageOld-1)*100).toFixed(2)),
+  note:'Các con số là kết quả trên cùng các kỳ lịch sử, không phải bảo đảm tương lai'};
+ console.log('BALANCED_SELECTOR_30_RESULT_'+product+'='+JSON.stringify(summary.products[product]));
+}
+save(resolve(reportDir,'summary-'+count+'-draws.json'),summary);
 console.log('BALANCED_SELECTOR_RESEARCH_COMPLETE=YES');
