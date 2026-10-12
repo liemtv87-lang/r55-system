@@ -1,0 +1,22 @@
+name: KQ247 XS VPS One Message Test
+on:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-send-single-test.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Send one Telegram test from XS VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 "docker exec kq247-lottery-bot python /app/test_message_once.py"
