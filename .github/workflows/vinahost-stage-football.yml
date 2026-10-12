@@ -36,6 +36,10 @@ jobs:
           set -euo pipefail
           tar -xzf /tmp/kq247-r55-stage.tgz -C /opt/kq247
           cd /opt/kq247/deployment/football-staging
+          umask 077
+          if [ ! -s .env ]; then
+            printf 'R55_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env
+          fi
           docker compose config -q
           docker compose up --build -d
           docker compose up -d --force-recreate football-staging
@@ -52,5 +56,10 @@ jobs:
           python3 -c 'import json; d=json.load(open("/tmp/r55-cache-health.json")); print("CACHE_READY="+str(d["ok"])); print("CACHE_DATE="+str(d["sourceDate"])); print("CACHE_PREDICTIONS="+str(d["cachedPredictions"])); assert d["ok"] and d["cachedPredictions"]>=1'
           curl --fail --silent --show-error --max-time 20 'http://127.0.0.1:18080/api/main-football?limit=20' | python3 -c 'import json,sys; d=json.load(sys.stdin); print("VPS_20_MATCHES="+str(len(d.get("predictions",[])))); assert d.get("ok") and len(d.get("predictions",[]))==20'
           curl --fail --silent --show-error --max-time 20 'http://127.0.0.1:18080/api/main-football?limit=30' | python3 -c 'import json,sys; d=json.load(sys.stdin); print("VPS_30_MATCHES="+str(len(d.get("predictions",[])))); assert d.get("ok") and len(d.get("predictions",[]))==30'
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if docker compose exec -T football-db pg_isready -U r55app -d r55 >/dev/null 2>&1; then break; fi
+            sleep 3
+          done
+          docker compose exec -T football-db psql -U r55app -d r55 -Atc "SELECT 'R55_DB_TABLES=' || count(*) FROM pg_tables WHERE schemaname='public'"
           docker compose ps
           REMOTE
