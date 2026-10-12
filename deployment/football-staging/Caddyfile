@@ -12,6 +12,13 @@
     rewrite * /healthz
     reverse_proxy football-native:3001
   }
+  # PayOS callbacks are verified and processed exclusively by the sales bot.
+  # Do not proxy arbitrary sales admin or internal health endpoints.
+  @payos_callback path /payos/webhook /payos/return /payos/cancel
+  handle @payos_callback {
+    reverse_proxy kq247-sales-bot-primary:3032
+  }
+
   # Original unchanged UI uses ?data=1; preserve the existing native API
   # for integrations that do not send that query flag.
   @original_main {
