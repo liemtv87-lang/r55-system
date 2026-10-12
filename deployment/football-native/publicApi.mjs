@@ -36,6 +36,23 @@ async function legacy(){
  return d;
 }
 export async function readMainFootball(url){
+ // "preview=1" is intentionally distinct from the frozen 13:00 forecast;
+ // clients must opt in explicitly and it is never mislabeled as locked.
+ if(url.searchParams.get('preview')==='1'){
+  const day=getVNDay();
+  const q=await db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_native_preview_"+day]);
+  const preview=q.rows[0]?.payload;
+  if(!preview?.preview||!Array.isArray(preview.matches)||preview.matches.length<1)
+   throw Error('native_preview_not_ready');
+  const list=preview.matches.map(makePick);
+  const {matching,selected,items}=pickList(list,url);
+  return {ok:true,locked:false,preview:true,source:'Bongdalu',date:day,
+   model:'R55 VPS risk-adjusted live preview',source_detail:'native_live_preview_unlocked',
+   snapshot_total:list.length,marketPool:preview.scanProgress?.marketPool||0,
+   coverage:preview.scanProgress?.coverage||null,updated_at:q.rows[0].updated_at,
+   hidden_started:list.length-matching.length,total:selected.length,predictions:items,
+   oneMarketPerMatch:true,legacyFallback:false,stale:Date.now()-Date.parse(q.rows[0].updated_at)>4*3600000};
+ }
  const n=await locked();
  const currentDay=getVNDay();
  const sourceIsNative=n?.date===currentDay;
