@@ -1,0 +1,81 @@
+name: KQ247 Vietlott VPS HTTPS Safe Cutover
+on:
+  push:
+    paths: [.github/workflows/kq247-vietlott-vps-https-cutover.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-vps-public
+  cancel-in-progress: false
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Safely attach Vietlott container to existing Caddy network and publish dedicated HTTPS route
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          test "$(docker inspect --format '{{.State.Running}}' kq247-vietlott-vps)" = "true"
+          curl -fsS --max-time 10 http://127.0.0.1:18088/health >/tmp/vietlott-cutover-health.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/vietlott-cutover-health.json'))
+          assert j.get('ok') and 'VPS_USER32' in j.get('runtime','')
+          print('VIETLOTT_32_RULE_RUNTIME=PASS')
+          PY
+          network=$(docker inspect kq247-football-staging --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')
+          test -n "$network"
+          if ! docker inspect kq247-vietlott-vps --format '{{json .NetworkSettings.Networks}}' | grep -Fq "\"$network\""; then
+            docker network connect "$network" kq247-vietlott-vps
+          fi
+          docker exec kq247-football-staging sh -c 'wget -qO- http://kq247-vietlott-vps:8080/health' >/tmp/kq247-vietlott-network.json
+          python3 - <<'PY'
+          import json
+          assert json.load(open('/tmp/kq247-vietlott-network.json'))['ok']
+          print('VIETLOTT_DOCKER_PROXY_NETWORK=PASS')
+          PY
+          config=/opt/kq247/deployment/football-staging/Caddyfile
+          test -s "$config"
+          if ! grep -q '^vietlott\.64-120-92-172\.sslip\.io {' "$config"; then
+            cat >> "$config" <<'CADDY'
+          
+          # Vietlott dedicated VPS host; public pages are read-only.
+          vietlott.64-120-92-172.sslip.io {
+            encode zstd gzip
+            @mutations method POST PUT PATCH DELETE
+            respond @mutations 403
+            @private_file path /file
+            respond @private_file 403
+            reverse_proxy kq247-vietlott-vps:8080
+          }
+          CADDY
+          fi
+          docker exec kq247-football-staging caddy validate --config /etc/caddy/Caddyfile >/tmp/kq247-vietlott-validate.log 2>&1 || { cat /tmp/kq247-vietlott-validate.log; exit 1; }
+          docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile
+          echo VIETLOTT_CADDY_RELOAD=PASS
+          curl -fsS --max-time 10 http://127.0.0.1:18088/api/state | python3 -c 'import json,sys;s=json.load(sys.stdin);print("VIETLOTT_SOURCE_RULES="+str(len(s.get("hard_rules",[]))))'
+          REMOTE
+      - name: Check public HTTPS site and customer path without starting background computations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 10); do
+            if curl -fsS --max-time 15 'https://vietlott.64-120-92-172.sslip.io/health' -o /tmp/vietlott-public-health.json; then break; fi
+            sleep 3
+          done
+          python3 - <<'PY'
+          import json
+          h=json.load(open('/tmp/vietlott-public-health.json'))
+          assert h.get('ok') and 'VPS_USER32' in h.get('runtime','')
+          print('VIETLOTT_PUBLIC_HTTPS=PASS')
+          PY
+          curl -fsS --max-time 18 'https://vietlott.64-120-92-172.sslip.io/client.html' | grep -q 'kq247_vietlott'
+          echo VIETLOTT_CUSTOMER_VPS_HTTPS=PASS
