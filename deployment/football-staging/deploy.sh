@@ -44,6 +44,9 @@ done
 db_table_count=$(docker compose exec -T football-db psql -U r55app -d r55 -Atc "SELECT count(*) FROM pg_tables WHERE schemaname=current_schema()" | tr -d "\r")
 test "${db_table_count:-0}" -ge 5
 echo "R55_DB_TABLES=$db_table_count"
+# Fail before replacing the live public server if the new Caddy routes are invalid.
+docker compose run --rm --no-deps football-staging caddy validate --config /etc/caddy/Caddyfile >/tmp/r55-caddy-validate.log 2>&1 || { cat /tmp/r55-caddy-validate.log >&2; exit 1; }
+echo 'R55_CADDY_CONFIG=PASS'
 docker compose up --build -d </dev/null
 docker compose up -d --force-recreate football-staging </dev/null
 for i in $(seq 1 15); do
@@ -70,5 +73,11 @@ grep -q 'KQ247' /tmp/r55-original-ui.html
 curl -fsS --max-time 15 'http://127.0.0.1:18081/api/main-football?data=1&mode=all&limit=30' -o /tmp/r55-original-api.json
 python3 -c 'import json;d=json.load(open("/tmp/r55-original-api.json"));assert d.get("ok") is True and isinstance(d.get("predictions"),list);print("R55_ORIGINAL_API_READY="+str(len(d["predictions"]))+" LOCKED="+str(d.get("locked")))'
 echo 'R55_ORIGINAL_UNMODIFIED_API_AND_UI=PASS'
+# Public original UI must be byte-identical to the preserved source.
+curl -fsS --max-time 15 http://127.0.0.1:18080/ -o /tmp/r55-public-original.html
+cmp /tmp/r55-public-original.html /opt/kq247/deployment/football-original/public/index.html
+curl -fsS --max-time 15 'http://127.0.0.1:18080/api/main-football?data=1&mode=all&limit=20' -o /tmp/r55-original-public-api.json
+python3 -c 'import json;d=json.load(open("/tmp/r55-original-public-api.json"));assert d.get("ok") and d.get("found") and d.get("snapshot_total",0)>=20 and isinstance(d.get("predictions"),list);print("R55_ORIGINAL_PUBLIC_SNAPSHOT_TOTAL="+str(d["snapshot_total"]))'
+echo 'R55_PUBLIC_ORIGINAL_EXACT_UI_AND_API=PASS'
 docker compose ps
 echo 'R55_NATIVE_DEPLOY_VERIFIED=YES'
