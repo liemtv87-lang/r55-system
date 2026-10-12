@@ -13,8 +13,8 @@ for i in $(seq 1 18); do
   sleep 2
 done
 if [ "$ready" != "yes" ]; then echo "POSTGRES_NOT_READY"; exit 1; fi
-for sql in /docker-entrypoint-initdb.d/*.sql; do
-  docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -f "$sql" >/dev/null
+for sql in /opt/kq247/deployment/football-staging/sql/*.sql; do
+  docker compose exec -T football-db psql -v ON_ERROR_STOP=1 -U r55app -d r55 -f "/docker-entrypoint-initdb.d/$(basename "$sql")" >/dev/null
 done
 echo "R55_DB_TABLES=$(docker compose exec -T football-db psql -U r55app -d r55 -Atc 'SELECT count(*) FROM pg_tables WHERE schemaname='\"'\"'public'\"'\"'' | tr -d '\r')"
 docker compose up --build -d </dev/null
