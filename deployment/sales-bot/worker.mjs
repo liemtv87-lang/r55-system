@@ -54,33 +54,23 @@ const copyButton=(text,value)=>({text,copy_text:{text:String(value).slice(0,256)
 const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)===180?'6 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
 const isPaidTerm=days=>[30,180,365,730,360,720].includes(Number(days));
 const PAYOS_BRIDGE_URL='https://tool-sales-bot.onrender.com';
+let bridgeWarmUntil=0;
 async function createRemotePayosCheckout(telegramUserId,product,days){
-  if(!TOKEN)throw Error('sales_bridge_token_missing');
-  const body=JSON.stringify({telegramUserId:String(telegramUserId),product,days:Number(days)});
-  const timestamp=String(Date.now());
-  const signature=crypto.createHmac('sha256',TOKEN).update(timestamp+'.'+body).digest('hex');
-  const r=await fetch(PAYOS_BRIDGE_URL+'/sales/checkout',{
-    method:'POST',
-    headers:{'content-type':'application/json','x-kq247-time':timestamp,'x-kq247-signature':signature},
-    body,signal:AbortSignal.timeout(115000)
-  });
-  if(!r.ok)throw Error('sales_bridge_unavailable_'+r.status);
-  const order=await r.json();
-  if(!order?.checkoutUrl||!Number.isSafeInteger(Number(order.amount)))throw Error('sales_bridge_invalid_response');
-  const uri=new URL(order.checkoutUrl);
-  if(uri.protocol!=='https:')throw Error('sales_bridge_invalid_url');
-  return order;
+ const ticket=crypto.randomBytes(32).toString('hex');
+ const hash=crypto.createHash('sha256').update(ticket).digest('hex');
+ await pool.query('INSERT INTO public.sales_checkout_intents(ticket_hash,telegram_user_id,product,duration_days) VALUES($1,$2,$3,$4)',
+  [hash,String(telegramUserId),product,Number(days)]);
+ const body=JSON.stringify({ticket,telegramUserId:String(telegramUserId),product,days:Number(days)});
+ const r=await fetch(PAYOS_BRIDGE_URL+'/sales/checkout',{
+   method:'POST',headers:{'content-type':'application/json'},
+   body,signal:AbortSignal.timeout(115000)});
+ if(!r.ok)throw Error('sales_bridge_unavailable_'+r.status);
+ const order=await r.json();
+ if(!order?.checkoutUrl||!Number.isSafeInteger(Number(order.amount)))throw Error('sales_bridge_invalid_response');
+ if(new URL(order.checkoutUrl).protocol!=='https:')throw Error('sales_bridge_invalid_url');
+ bridgeWarmUntil=Date.now()+75*60*1000;
+ return order;
 }
-function bridgeSigned(req,body){
-  if(!TOKEN)return false;
-  const ts=String(req.headers['x-kq247-time']||'');
-  const sig=String(req.headers['x-kq247-signature']||'');
-  if(!/^[0-9]{13}$/.test(ts)||!Number.isFinite(Number(ts))||Math.abs(Date.now()-Number(ts))>90000)return false;
-  if(!/^[a-f0-9]{64}$/i.test(sig))return false;
-  const want=crypto.createHmac('sha256',TOKEN).update(ts+'.'+body).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(sig,'hex'),Buffer.from(want,'hex'));
-}
-
 
 async function showHome(chat){
  const r=await pool.query("SELECT product,duration_days,price_vnd FROM sales_plans WHERE enabled=true AND product=ANY($1::text[]) ORDER BY product,duration_days",[Object.keys(PRODUCTS)]);
@@ -262,12 +252,27 @@ async function payosHttp(req,res){
    let raw='';
    try{
      for await(const chunk of req){raw+=chunk.toString('utf8');if(raw.length>4096)throw Error('payload_too_large')}
-     if(!bridgeSigned(req,raw)){res.writeHead(401).end('unauthorized');return}
      const j=JSON.parse(raw);
-     if(!/^[0-9]{1,19}$/.test(String(j.telegramUserId))||!PRODUCTS[j.product]||!isPaidTerm(j.days))throw Error('invalid_request');
+     if(!/^[a-f0-9]{64}$/.test(String(j.ticket||''))||!/^[0-9]{1,19}$/.test(String(j.telegramUserId))||!PRODUCTS[j.product]||!isPaidTerm(j.days)){
+       res.writeHead(400).end('bad_request');return;
+     }
+     const digest=crypto.createHash('sha256').update(j.ticket).digest('hex');
+     const db=await pool.connect();
+     let valid=false;
+     try{
+       await db.query('BEGIN');
+       const q=await db.query(`UPDATE public.sales_checkout_intents SET used_at=now()
+           WHERE ticket_hash=$1 AND telegram_user_id=$2 AND product=$3 AND duration_days=$4
+            AND used_at IS NULL AND expires_at>now()
+            RETURNING ticket_hash`,[digest,String(j.telegramUserId),j.product,Number(j.days)]);
+       valid=q.rowCount===1;
+       await db.query('COMMIT');
+     }catch(e){await db.query('ROLLBACK').catch(()=>{});throw e}
+     finally{db.release()}
+     if(!valid){res.writeHead(401).end('unauthorized');return}
      const order=await createPayosCheckout(pool,String(j.telegramUserId),j.product,Number(j.days));
      res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'}).end(JSON.stringify(order));
-   }catch(e){console.error('SALES_BRIDGE_ERROR',String(e.message).slice(0,80));res.writeHead(400).end('bad_request')}
+   }catch(e){console.error('SALES_BRIDGE_ERROR',String(e.message).slice(0,75));if(!res.headersSent)res.writeHead(400).end('bad_request')}
    return;
  }
  if(req.method==='POST' && new URL(req.url,'http://localhost').pathname.endsWith('/payos/webhook')){
@@ -280,6 +285,7 @@ async function payosHttp(req,res){
    }
    const payload=JSON.parse(raw);
    await processPayosWebhook(pool,payload,async ({telegramUserId,product,code})=>{
+    if(!ACTIVE)return; // Render standby records payment; VPS delivers receipts from Neon
     const url=await validClientUrl(product).catch(()=>null);
     const buttons=[[copyButton('📋 SAO CHÉP MÃ',code)]];
     if(url)buttons.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
@@ -321,3 +327,39 @@ async function main(){
  }
 }
 main().catch(e=>{lastError=String(e.message).slice(0,150);console.error('SALES_BOOT_ERROR',lastError)});
+let receiptWorkerBusy=false;
+async function deliverPaidReceipts(){
+ if(!ACTIVE||!pool||receiptWorkerBusy)return;
+ receiptWorkerBusy=true;
+ let db=null;
+ try{
+  db=await pool.connect();
+  await db.query('BEGIN');
+  const q=await db.query(`SELECT o.order_code,o.telegram_user_id,o.product,l.code_value
+     FROM public.sales_payos_orders o
+     JOIN public.sales_licenses l ON l.code_hash=o.license_hash
+     WHERE o.state='paid' AND o.notified_at IS NULL
+     ORDER BY o.paid_at ASC LIMIT 3
+     FOR UPDATE OF o SKIP LOCKED`);
+  for(const r of q.rows){
+    const url=await validClientUrl(r.product).catch(()=>null);
+    const buttons=[[copyButton('📋 SAO CHÉP MÃ',r.code_value)]];
+    if(url)buttons.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
+    buttons.push([{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]);
+    await send(r.telegram_user_id,'✅ <b>PAYOS ĐÃ XÁC NHẬN THANH TOÁN</b>\\n'+escapeHtml(PRODUCTS[r.product])+'\\nMã: <code>'+escapeHtml(r.code_value)+'</code>\\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang được kiểm tra.')+'\\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',keyboard(buttons));
+    await db.query('UPDATE public.sales_payos_orders SET notified_at=now() WHERE order_code=$1',[String(r.order_code)]);
+  }
+  await db.query('COMMIT');
+ }catch(e){if(db)await db.query('ROLLBACK').catch(()=>{});console.error('SALES_RECEIPT_DELIVERY_RETRY',String(e.message).slice(0,80))}
+ finally{db?.release();receiptWorkerBusy=false}
+}
+async function keepPendingPaymentPageAwake(){
+ if(!ACTIVE||Date.now()>=bridgeWarmUntil)return;
+ try{await fetch(PAYOS_BRIDGE_URL+'/healthz',{signal:AbortSignal.timeout(30000)})}catch{}
+}
+if(ACTIVE){
+ setTimeout(()=>deliverPaidReceipts().catch(()=>{}),8000).unref();
+ setInterval(()=>deliverPaidReceipts().catch(()=>{}),45000).unref();
+ setInterval(()=>keepPendingPaymentPageAwake().catch(()=>{}),240000).unref();
+}
+
