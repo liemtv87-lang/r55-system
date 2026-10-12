@@ -14,4 +14,4 @@ jobs:
       - env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'mkdir -p /opt/kq247 && ls -ld /opt/kq247'
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'mkdir -p /opt/kq247/football /opt/kq247/xoso /opt/kq247/vietlott /opt/kq247/customers /opt/kq247/bots /opt/kq247/seo /opt/kq247/backups /opt/kq247/infrastructure /opt/kq247/logs && ls -l /opt/kq247'
