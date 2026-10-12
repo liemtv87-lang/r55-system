@@ -346,7 +346,7 @@ async function deliverPaidReceipts(){
     const buttons=[[copyButton('📋 SAO CHÉP MÃ',r.code_value)]];
     if(url)buttons.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
     buttons.push([{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}]);
-    await send(r.telegram_user_id,'✅ <b>PAYOS ĐÃ XÁC NHẬN THANH TOÁN</b>\\n'+escapeHtml(PRODUCTS[r.product])+'\\nMã: <code>'+escapeHtml(r.code_value)+'</code>\\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang được kiểm tra.')+'\\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',keyboard(buttons));
+    await send(r.telegram_user_id,'✅ <b>PAYOS ĐÃ XÁC NHẬN THANH TOÁN</b>\n'+escapeHtml(PRODUCTS[r.product])+'\nMã: <code>'+escapeHtml(r.code_value)+'</code>\n'+(url?'Link bản khách: '+escapeHtml(url):'Link bản khách đang được kiểm tra.')+'\nThời hạn bắt đầu khi kích hoạt trên thiết bị.',keyboard(buttons));
     await db.query('UPDATE public.sales_payos_orders SET notified_at=now() WHERE order_code=$1',[String(r.order_code)]);
   }
   await db.query('COMMIT');
