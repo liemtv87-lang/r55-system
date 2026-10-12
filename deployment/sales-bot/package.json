@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "start": "node worker.mjs",
-    "check": "node --check worker.mjs"
+    "check": "node --check worker.mjs && node --check payos-orders.mjs",
+    "test": "node --test sales-bot.test.mjs"
   },
   "dependencies": {
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "@payos/node": "2.0.5"
   }
 }
