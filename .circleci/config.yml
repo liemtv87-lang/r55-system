@@ -1,13 +1,6 @@
 version: 2.1
-
-# CircleCI pipeline for the KQ247 lottery Telegram sender.
-# Connecting GitHub OAuth does not enable sending by itself.
-# Live sends require all environment variables and explicit pipeline parameter.
-parameters:
-  run_sender:
-    type: boolean
-    default: false
-
+# KQ247 Telegram sending moved permanently to the VinaHost VPS.
+# CircleCI is a validation-only source; no pipeline parameter can send a message.
 jobs:
   xs_preflight:
     docker:
@@ -16,56 +9,12 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Validate lottery bot without sending messages
+          name: Validate lottery code without Telegram credentials
           command: |
             set -eu
-            python -m pip install --quiet beautifulsoup4==4.13.5
             python -m py_compile lottery-bot/sender.py
-            echo "CIRCLECI_XS_PREFLIGHT_OK - no Telegram message sent"
-
-  xs_deliver:
-    docker:
-      - image: cimg/python:3.11
-    resource_class: small
-    steps:
-      - checkout
-      - run:
-          name: Verify cutover, secrets and durable GitHub send ledger
-          command: |
-            set -eu
-            if [ "${KQ247_LOTTERY_CUTOVER:-disabled}" != "enabled" ]; then
-              echo "BLOCKED: old sender not verified disabled; CircleCI is still standby"
-              exit 1
-            fi
-            if [ -z "${TELEGRAM_LOTTERY_BOT_TOKEN:-}" ]; then
-              echo "BLOCKED: TELEGRAM_LOTTERY_BOT_TOKEN not configured"
-              exit 1
-            fi
-            if [ -z "${GITHUB_WRITE_TOKEN:-}" ]; then
-              echo "BLOCKED: GITHUB_WRITE_TOKEN not configured for deduplication ledger"
-              exit 1
-            fi
-            python -m pip install --quiet beautifulsoup4==4.13.5
-            git remote set-url origin https://github.com/liemtv87-lang/r55-system.git
-            cat > /tmp/kq247-circleci-git-askpass <<'EOF'
-            #!/bin/sh
-            case "$1" in
-              *Username*) printf 'x-access-token\n' ;;
-              *Password*) printf '%s\n' "$GITHUB_WRITE_TOKEN" ;;
-              *) exit 1 ;;
-            esac
-            EOF
-            chmod 700 /tmp/kq247-circleci-git-askpass
-            export GIT_ASKPASS=/tmp/kq247-circleci-git-askpass
-            export GIT_TERMINAL_PROMPT=0
-            export DRY_RUN=0
-            python -u lottery-bot/sender.py
-
+            echo "KQ247_LEGACY_CIRCLECI_SENDER_DISABLED=YES"
 workflows:
   xs_validation:
     jobs:
       - xs_preflight
-  xs_controlled_delivery:
-    when: << pipeline.parameters.run_sender >>
-    jobs:
-      - xs_deliver
