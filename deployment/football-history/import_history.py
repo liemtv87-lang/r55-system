@@ -50,6 +50,13 @@ compact=[]
 for f in ("learning/summary.json","learning/grade-2026-10-11.json"):
     compact.extend(load(f)["records"])
 assert len(compact)==5
+sent=load("learning/group-delivery-ledger.json")
+assert sent["source"]=="telegram_acknowledged_sent_only"
+assert sent["count"]==len(sent["records"]) and len(sent["records"])>=33
+assert all(x["scope"].startswith("r55_prematch_sent_") and
+           x["payload"].get("state")=="sent" and x["payload"].get("messageId")
+           for x in sent["records"])
+compact.extend(sent["records"])
 # Use a single transaction, avoid any replacements of existing immutable source.
 payload=literal(source)
 ft=literal(verified)
@@ -77,6 +84,8 @@ SELECT 'R55_HISTORY_SNAPSHOTS='||count(*)||' FORECASTS='||sum(jsonb_array_length
 SELECT 'R55_HISTORY_VERIFIED_FT='||count(*) FROM football_final_results WHERE source='bongdalu-ft-verified';
 SELECT 'R55_HISTORY_GRADE_SCOPE='||count(*) FROM football_compact_stats
  WHERE scope IN ('r55_method_rank','r55-bongdalu-rollup','r55_daily_grade_2026-10-09','r55_daily_grade_2026-10-10','r55_daily_grade_2026-10-11');
+SELECT 'R55_HISTORY_TELEGRAM_SENT='||count(*) FROM football_compact_stats
+ WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent' AND payload->>'messageId' IS NOT NULL;
 """
 answer=sql(query)
 print(answer)
@@ -85,4 +94,5 @@ assert "R55_HISTORY_SNAPSHOTS=3 FORECASTS=650" in answer
 vals=[line for line in answer.splitlines() if line.startswith("R55_HISTORY_VERIFIED_FT=")]
 assert vals and int(vals[-1].split("=")[1])>=537
 assert "R55_HISTORY_GRADE_SCOPE=5" in answer
+assert "R55_HISTORY_TELEGRAM_SENT=" in answer
 print("R55_HISTORY_IMPORT_VERIFIED=YES")
