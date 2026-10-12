@@ -23,3 +23,8 @@ jobs:
           for x in S1 S2 S3 S4 S5 S6; do
             if [ -n "${!x}" ]; then echo "$x=READY"; else echo "$x=NOT_CONFIGURED"; fi
           done
+          if [ -n "$S4" ] && [ -n "$S5" ] && [ -n "$S6" ]; then
+            echo KQ247_PAYOS_SECRETS_ALL_PRESENT=YES
+          else
+            echo KQ247_PAYOS_SECRETS_ALL_PRESENT=NO
+          fi
