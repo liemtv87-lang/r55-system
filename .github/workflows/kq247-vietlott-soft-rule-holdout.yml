@@ -1,0 +1,46 @@
+name: KQ247 Vietlott Soft Rules Fixed Portfolio Holdout
+on:
+  workflow_run:
+    workflows:
+      - KQ247 Vietlott Balanced Coverage 30 Draws
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-soft-rules-holdout
+  cancel-in-progress: false
+jobs:
+  ablation:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --check scripts/vietlott-softsum-head-fixedpool.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Try softer numeric sum and head rules on fixed 200k/600k pools for three predetermined draws
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          host=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=20)
+          sshpass -e ssh -T "${opts[@]}" "$host" 'mkdir -p /opt/kq247/vietlott/versions/softsum-fixed'
+          sshpass -e scp "${opts[@]}" scripts/vietlott-softsum-head-fixedpool.mjs scripts/vietlott-coverage-reducer-research.mjs deployment/vietlott/limits/pool-policy.mjs "$host":/opt/kq247/vietlott/versions/softsum-fixed/
+          sshpass -e ssh -T "${opts[@]}" "$host" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          name=kq247-vietlott-vps
+          root=/opt/kq247/vietlott/versions/softsum-fixed
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          available=$(awk '/MemAvailable:/{print int($2/1024)}' /proc/meminfo)
+          test "$available" -gt 1024
+          for p in vietlott-softsum-head-fixedpool.mjs vietlott-coverage-reducer-research.mjs pool-policy.mjs;do
+             docker cp "$root/$p" "$name":/app/scripts/"$p"
+             docker exec "$name" node --check "/app/scripts/$p"
+          done
+          docker exec -e RESEARCH_DRAW_COUNT=3 "$name" sh -c 'cd /app && if command -v nice >/dev/null;then nice -n 10 node scripts/vietlott-softsum-head-fixedpool.mjs;else node scripts/vietlott-softsum-head-fixedpool.mjs;fi' | tee "$root/softsum-holdout.log"
+          echo SOFT_SUM_HEAD_FIXED_PORTFOLIO_HOLDOUT=COMPLETED
+          curl -fsS --max-time 12 http://127.0.0.1:18088/health | python3 -c 'import json,sys;assert json.load(sys.stdin)["ok"];print("VIETLOTT_PRODUCTION_UNCHANGED=YES")'
+          REMOTE
