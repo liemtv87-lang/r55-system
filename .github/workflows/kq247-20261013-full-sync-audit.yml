@@ -1,0 +1,86 @@
+name: KQ247 20261013 Full Sync Readonly Audit
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-20261013-full-sync-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-routes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Read only main client and legacy redirects
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,urllib.error
+          from urllib.parse import urlparse
+          urls={
+            "vps_bd_main":"https://64-120-92-172.sslip.io/",
+            "vps_bd_client":"https://64-120-92-172.sslip.io/client.html",
+            "vps_xs_main_mb":"https://64-120-92-172.sslip.io/xoso?region=xsmb",
+            "vps_xs_main_mt":"https://64-120-92-172.sslip.io/xoso?region=xsmt",
+            "vps_xs_main_mn":"https://64-120-92-172.sslip.io/xoso?region=xsmn",
+            "vps_xs_client":"https://64-120-92-172.sslip.io/xoso-khach?region=xsmb",
+            "old_bd_render_client":"https://kq247-football-live.onrender.com/client.html",
+            "old_xs_render_root":"https://kq247-xoso-khach-v29.onrender.com/",
+            "old_xs_render_index":"https://kq247-xoso-khach-v29.onrender.com/index.html?neon=1&client=1&region=xsmb&v=20261010",
+            "old_bd_appdeploy_client":"https://kq247-r55-football-2jid7f.v2.appdeploy.ai/client.html",
+            "old_xs_appdeploy_client":"https://kq247-xo-so-neon-public-a2f9qy.v2.appdeploy.ai/?client=1&region=xsmb",
+            "old_bd_wix":"https://instant-ilanhgsdsxyz-liemtv87-1408.wix-site-host.com/bd.html",
+            "old_xs_wix":"https://instant-ucmxdfgdjrlt-liemtv87-1408.wix-site-host.com/?region=xsmb"
+          }
+          opener=urllib.request.build_opener()
+          for label,url in urls.items():
+            try:
+              with opener.open(urllib.request.Request(url,headers={"User-Agent":"KQ247-Live-Audit/20261013","Cache-Control":"no-cache"}),timeout=19) as r:
+                body=r.read(250000).decode("utf-8","ignore")
+                status=r.status; final_host=urlparse(r.url).hostname
+                markers={
+                  "client_code":int(("kq247_football_code" in body) or ("kq247_lottery_code" in body)),
+                  "client_auth":int("kq247auth.compute" in body),
+                  "old_xs_handoff":int("KQ247_XS_LEGACY_VPS_HANDOFF_20261012" in body),
+                  "old_bd_handoff":int("ensureLatestLink()" in body),
+                  "redirect_js":int(any(s in body for s in ("location.replace(","location.href=","window.location="))),
+                }
+                print("AUDIT_ROUTE",label,"HTTP",status,"FINAL",final_host,"MARKERS",json.dumps(markers,sort_keys=True))
+            except Exception as e:print("AUDIT_ROUTE",label,"ERROR",type(e).__name__,str(e)[:90])
+          auth="https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/"
+          for product in ["football","lottery","vietlott"]:
+            u=auth+"?action=latest-link&product="+product
+            try:
+              with opener.open(u,timeout=15) as r:
+                d=json.load(r)
+                print("AUDIT_CANONICAL",product,"STATUS",r.status,"OK",d.get("ok"),"HOST",urlparse(d.get("latest_url","")).hostname,"PATH",urlparse(d.get("latest_url","")).path)
+            except Exception as e:print("AUDIT_CANONICAL",product,"ERROR",str(e)[:80])
+          PY
+  vps-bots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check bots without sending messages or changing service
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          for entry in '18085 xs' '18083 football' '18087 sales'; do
+            set -- $entry
+            curl -fsS --max-time 10 "http://127.0.0.1:$1/healthz" > "/tmp/kq247-20261013-$2.json"
+          done
+          python3 - <<'PY'
+          import json
+          for x in ("xs","football","sales"):
+            j=json.load(open("/tmp/kq247-20261013-"+x+".json"))
+            print("AUDIT_BOT",x,"ACTIVE",j.get("active"),"OK",j.get("ok"),"TOKEN",j.get("tokenConfigured",j.get("has_token")),"LAST_POLL",bool(j.get("lastPoll")),"LAST_ERROR",bool(j.get("lastError")),"PRIMARY",j.get("primarySender"))
+          PY
+          echo 'AUDIT_VPS_CONTAINERS_BEGIN'
+          docker ps --format '{{.Names}}|{{.Status}}' | grep -E 'kq247.*(bot|sales|football|lottery)' || true
+          echo 'AUDIT_VPS_CONTAINERS_END'
+          VPS
