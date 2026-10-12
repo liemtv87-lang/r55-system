@@ -1,0 +1,40 @@
+name: KQ247 Stage Sales Bot on VinaHost Safely
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-stage-sales-bot.yml
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check worker source syntax
+        run: node --check deployment/sales-bot/worker.mjs
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Stage sales bot files on VPS without changing the existing production bot
+        env:
+          SSHPASS: \${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'mkdir -p /opt/kq247/deployment/sales-bot && chmod 700 /opt/kq247/deployment/sales-bot'
+          sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/sales-bot/worker.mjs deployment/sales-bot/package.json deployment/sales-bot/Dockerfile root@64.120.92.172:/opt/kq247/deployment/sales-bot/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          if docker ps -a --format '{{.Names}}' | grep -qx kq247-sales-bot; then
+            echo KQ247_SALES_EXISTING_CONTAINER_PRESENT_NO_OVERWRITE
+            exit 1
+          fi
+          cd /opt/kq247/deployment/sales-bot
+          docker build --quiet -t kq247-sales-bot:standby .
+          docker run -d --name kq247-sales-bot --restart unless-stopped -p 127.0.0.1:18086:3032 -e KQ247_SALES_BOT_ACTIVE=0 kq247-sales-bot:standby >/dev/null
+          sleep 3
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:18086/healthz | python3 -c 'import json,sys; j=json.load(sys.stdin); assert j.get("ok") and j.get("active") is False and j.get("tokenConfigured") is False; print("KQ247_SALES_VPS_STANDBY=PASS"); print("KQ247_SALES_VPS_HEALTH="+json.dumps(j))'
+          echo KQ247_LEGACY_SALES_BOT_UNCHANGED=YES
+          REMOTE
