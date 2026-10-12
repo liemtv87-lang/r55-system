@@ -1,0 +1,35 @@
+name: KQ247 Vietlott VPS Runtime Inventory
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-runtime-inventory.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect live Vietlott build locations and worker shard configuration
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          echo VIETLOTT_DOCKER_CONTAINERS
+          docker ps -a --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -i -E 'vietlott|kq247' | head -35
+          echo VIETLOTT_REPOSITORY_DIR
+          ls -la /opt/kq247/vietlott | head -35
+          echo VIETLOTT_DOCKER_DETAILS
+          for name in $(docker ps --format '{{.Names}}' | grep -i vietlott); do
+            echo "CONTAINER=$name"
+            docker inspect -f 'image={{.Config.Image}} workdir={{.Config.WorkingDir}} mounts={{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}' "$name"
+            docker exec "$name" sh -c "head -n 15 /app/scripts/backtest-60-shard.mjs | tail -7; grep -n 'BACKTEST_SHARDS\|RUNTIME_VERSION' /app/snapdeploy-server.mjs | head -8" || true
+          done
+          echo VIETLOTT_HOST_CAPACITY
+          free -m | awk 'NR==2 {print "ram_available_mb=" $7}'
+          df -h /opt/kq247 | tail -1
+          REMOTE
