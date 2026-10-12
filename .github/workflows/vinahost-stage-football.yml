@@ -6,6 +6,7 @@ on:
       - .github/workflows/vinahost-stage-football.yml
       - deployment/football-staging/**
       - deployment/football-native/**
+      - deployment/football-original/**
 permissions:
   contents: read
 concurrency:
