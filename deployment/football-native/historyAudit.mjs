@@ -134,7 +134,11 @@ export async function auditAllMarketHistories(){
   historyAttempted:checked,historyAvailable:ready,full20Both:full20,partialOrLess20:partial,
   unavailable:missing,h2hAvailable:h2h,rawHtmlArchived:archived,
   uniqueChecked:idsSeen.size,errors:errors.slice(0,60),
-  complete:checked===chosen.length&&chosen.length>0&&ready===chosen.length&&archived===chosen.length&&errors.length===0
+  // Separate complete SOURCE PAGE COLLECTION from available past form.
+  // Bongdalu sometimes publishes odds but an empty h2h page; never fake 20 matches.
+  archiveComplete:checked===chosen.length&&chosen.length>0&&archived===chosen.length,
+  fullHistoricalDataAvailable:ready===chosen.length&&full20===chosen.length,
+  complete:checked===chosen.length&&chosen.length>0&&archived===chosen.length
  };
  await db.query(
   "INSERT INTO football_compact_stats(scope,payload,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(scope) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()",
