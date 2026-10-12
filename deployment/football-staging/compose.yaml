@@ -150,6 +150,29 @@ services:
     cpus: "0.50"
     security_opt:
       - no-new-privileges:true
+  # Original GitHub sender runs on VPS; disabled until a verified single-sender cutover.
+  lottery-bot:
+    build:
+      context: ..
+      dockerfile: lottery-original/bot/Dockerfile
+    image: kq247/lottery-original-telegram:local
+    container_name: kq247-lottery-bot
+    restart: unless-stopped
+    environment:
+      DRY_RUN: "1"
+      KQ247_LOTTERY_CUTOVER: "disabled"
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:18085:3005"
+    volumes:
+      - lottery-bot-ledger:/app/lottery-bot/state
+      - lottery-bot-git:/app/.git
+      - lottery-bot-state:/data
+    mem_limit: 192m
+    pids_limit: 100
+    cpus: "0.35"
+    security_opt:
+      - no-new-privileges:true
   football-staging:
     image: caddy:2.10-alpine
     container_name: kq247-football-staging
@@ -178,3 +201,6 @@ volumes:
   football-cache-data:
   football-caddy-data:
   football-caddy-config:
+  lottery-bot-ledger:
+  lottery-bot-git:
+  lottery-bot-state:
