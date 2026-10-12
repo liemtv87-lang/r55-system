@@ -144,8 +144,7 @@ function parseH2HTable(html){
  const h=Number(sc[1]),a=Number(sc[2]),sp=row.indexOf("team-home-f"),fp=row.indexOf('class="fscore_3');if(sp<0||fp<0)continue;const loc=sp<fp,f=loc?h:a,g=loc?a:h;edge+=f>g?1:f<g?-1:0;total+=h+a;n++;
  }return{n,edge:n?edge/n:0,total:n?total/n:0};
 }
-async function history(base,id){try{
- const html=await get(base,"match/h2h-"+encodeURIComponent(id),"text/html",14000);
+function parseHistoryHtml(html){
  if(!html.includes("table_v1")||!html.includes("table_v2")||!html.includes("table_v3"))return null;
  const home=nativeParseFormTable(html,"table_v1","team-home-f"),
        away=nativeParseFormTable(html,"table_v2","team-away-f"),
@@ -156,6 +155,10 @@ async function history(base,id){try{
        h2hAsian=nativeParseAsianHistory(html,3,hi);
  return{bongdalu:true,home,away,h2h,home_asian:homeAsian,away_asian:awayAsian,h2h_asian:h2hAsian,
     history_games:Math.min(20,home.n,away.n),history_home_games:home.n,history_away_games:away.n,partial_history:!home.n||!away.n};
+}
+async function history(base,id){try{
+ const html=await get(base,"match/h2h-"+encodeURIComponent(id),"text/html",14000);
+ return parseHistoryHtml(html);
  }catch{return null}
 }
 function makeMarket(row,h,learned){
@@ -268,4 +271,4 @@ async function buildBongdaluR55(publish,stage=false){
  return{ok:written,day,locked:written,alreadyLocked:!written,snapshotPublished:written,lateRecovery:replacingInvalidLegacy,eligible:picked.length,checked:visited,withHistory,source:r.base,marketPool:pool.length};
 }
 // Internal functions reused by the bounded batch runner. No unverified providers.
-export const verifiedBongdaluInternals={parseOdds,parseFeed,history,makeMarket,excluded,vnDay,BOOKS};
+export const verifiedBongdaluInternals={parseOdds,parseFeed,parseHistoryHtml,history,makeMarket,excluded,vnDay,BOOKS};
