@@ -1,0 +1,2 @@
+/* Unmodified original Supabase source, archived as an inert string. */
+export const originalSource = "import \"jsr:@supabase/functions-js/edge-runtime.d.ts\";\nDeno.serve(()=>Response.json({ok:false,error:\"retired_legacy_tool\"},{status:410,headers:{\"cache-control\":\"public, max-age=86400\"}}));";
