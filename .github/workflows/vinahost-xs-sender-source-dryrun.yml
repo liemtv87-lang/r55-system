@@ -1,0 +1,48 @@
+name: KQ247 XS VPS Sender Data Audit (No Telegram)
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/vinahost-xs-sender-source-dryrun.yml
+      - lottery-bot/sender.py
+      - deployment/lottery-original/bot/github-runner/sender.py
+permissions:
+  contents: read
+jobs:
+  source-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install parser
+        run: python3 -m pip install -q beautifulsoup4==4.13.5
+      - name: Verify all three regions from real locked source and result feed without sending
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          spec=importlib.util.spec_from_file_location('sender','lottery-bot/sender.py')
+          s=importlib.util.module_from_spec(spec);spec.loader.exec_module(s)
+          errors=[]
+          for region,pre_hour,result_hour in [('mn',16,17),('mt',17,18),('mb',18,20)]:
+              for phase,hour in [('pre',pre_hour),('result',result_hour)]:
+                  assert s.due(datetime(2026,10,13,hour,0,tzinfo=s.VN),region,phase)
+                  assert s.due(datetime(2026,10,13,hour,5,0,tzinfo=s.VN),region,phase)
+                  assert not s.due(datetime(2026,10,13,hour,6,tzinfo=s.VN),region,phase)
+                  assert not s.due(datetime(2026,10,13,hour,9,tzinfo=s.VN),region,phase)
+              for day in ['2026-10-12','2026-10-13']:
+                  try:
+                      stations,fp=s.read_snapshot(day,region)
+                      print('XS_SNAPSHOT_OK',day,region,len(stations),'fingerprint_present',bool(fp))
+                      if day=='2026-10-12':
+                          draws=s.draw_results(day,region,stations)
+                          print('XS_DRAW_OK',day,region,len(draws))
+                  except Exception as e:
+                      print('XS_SOURCE_FAILURE',day,region,type(e).__name__,str(e)[:170])
+                      errors.append((region,day))
+          if errors:
+              print('XS_AUDIT_RESULT=FAIL',errors)
+              raise SystemExit(1)
+          print('XS_AUDIT_RESULT=PASS')
+          PY
