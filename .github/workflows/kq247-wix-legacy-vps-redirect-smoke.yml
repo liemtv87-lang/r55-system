@@ -1,0 +1,35 @@
+name: KQ247 Old Wix VPS Redirect Smoke
+on:
+  push:
+    paths: [.github/workflows/kq247-wix-legacy-vps-redirect-smoke.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect four published Wix pages and redirect scripts
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          routes=[
+             ('bd_main','https://instant-ilanhgsdsxyz-liemtv87-1408.wix-site-host.com/bd.html','64-120-92-172.sslip.io/'),
+             ('xs_main','https://instant-ucmxdfgdjrlt-liemtv87-1408.wix-site-host.com/?region=xsmb','64-120-92-172.sslip.io/xoso'),
+             ('bd_client','https://instant-hooyydiodwjk-liemtv87-1408.wix-site-host.com/','64-120-92-172.sslip.io/client.html'),
+             ('xs_client','https://instant-xxvnqbpglxvz-liemtv87-1408.wix-site-host.com/?region=xsmn','64-120-92-172.sslip.io/xoso-khach')]
+          for name,url,target in routes:
+            try:
+              req=urllib.request.Request(url,headers={'Cache-Control':'no-cache','User-Agent':'KQ247-Legacy-Smoke/20261013'})
+              with urllib.request.urlopen(req,timeout=22) as r:
+                body=r.read(160000).decode('utf8','replace')
+                redirect='location.replace(' in body and target in body
+                customer='client' in name
+                preserves_code=('kq247_dev' in body and 'kq247_' in body and "kq247=" in body) if customer else True
+                print('LEGACY_WIX',name,'HTTP',r.status,'REDIRECT',redirect,'CODE_MIGRATION',preserves_code)
+                assert r.status==200 and redirect and preserves_code,name
+            except Exception as e:
+              print('LEGACY_WIX_ERROR',name,type(e).__name__,str(e)[:160])
+              raise
+          PY
