@@ -23,6 +23,11 @@ jobs:
           set -euo pipefail
           curl -fsS --max-time 10 http://127.0.0.1:18087/healthz |
             python3 -c 'import json,sys;x=json.load(sys.stdin);assert x.get("active") and x.get("lastPoll") and not x.get("lastError");print("TELEGRAM_BOT_VPS_LIVE=YES")'
+          for i in $(seq 1 18); do
+            if docker exec kq247-sales-bot-primary node -e 'const f=require("fs");process.exit(f.readFileSync("/app/worker.mjs","utf8").includes("sales_checkout_intents")?0:1)'; then break; fi
+            sleep 10
+          done
+          docker exec kq247-sales-bot-primary node -e 'const f=require("fs");if(!f.readFileSync("/app/worker.mjs","utf8").includes("sales_checkout_intents"))process.exit(2);console.log("TICKET_BRIDGE_VPS_CODE=READY")'
           docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
           import crypto from 'node:crypto';
           import pg from 'pg';
@@ -31,16 +36,16 @@ jobs:
           const me=await fetch('https://api.telegram.org/bot'+token+'/getMe',{signal:AbortSignal.timeout(20000)}).then(r=>r.json());
           if(!me.ok||me.result?.username!=='muatool_du_doan_bot')throw Error('unexpected_telegram_bot');
           console.log('TELEGRAM_GETME_CORRECT_BOT=PASS');
-          const body=JSON.stringify({telegramUserId:'0',product:'lottery',days:30});
-          const timestamp=String(Date.now());
-          const signature=crypto.createHmac('sha256',token).update(timestamp+'.'+body).digest('hex');
+          const ticket=crypto.randomBytes(32).toString('hex');
+          const ticketHash=crypto.createHash('sha256').update(ticket).digest('hex');
+          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
+          await db.query('INSERT INTO public.sales_checkout_intents(ticket_hash,telegram_user_id,product,duration_days) VALUES($1,$2,$3,$4)',[ticketHash,'0','lottery',30]);
+          const body=JSON.stringify({ticket,telegramUserId:'0',product:'lottery',days:30});
           const result=await fetch('https://tool-sales-bot.onrender.com/sales/checkout',{method:'POST',
-             headers:{'content-type':'application/json','x-kq247-time':timestamp,'x-kq247-signature':signature},
-             body,signal:AbortSignal.timeout(110000)});
+             headers:{'content-type':'application/json'},body,signal:AbortSignal.timeout(110000)});
           if(!result.ok)throw Error('bridge_checkout_http_'+result.status);
           const order=await result.json();
           if(Number(order.amount)!==1500000||new URL(order.checkoutUrl).protocol!=='https:')throw Error('bridge_checkout_wrong_amount');
-          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
           try{
             const q=await db.query('SELECT state,price_vnd FROM public.sales_payos_orders WHERE order_code=$1 AND telegram_user_id=$2 LIMIT 1',[String(order.orderCode),'0']);
             if(q.rows[0]?.state!=='checkout_ready'||Number(q.rows[0]?.price_vnd)!==1500000)throw Error('checkout_order_not_persisted');
