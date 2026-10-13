@@ -10,8 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Read Caddy lottery routes
+      - name: Read Caddy config and XS client region navigation
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         run: |
-          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker exec kq247-football-staging sh -c "grep -n -E \"xoso|reverse_proxy|redir|handle|64-120-92-172\" /etc/caddy/Caddyfile | head -90"'
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -e
+          echo CADDY_CONFIG
+          docker exec kq247-football-staging cat /etc/caddy/Caddyfile | head -80
+          echo CADDY_MOUNTS
+          docker inspect -f '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}' kq247-football-staging
+          for page in 'xoso?region=xsmn' 'xoso-khach?region=xsmn'; do
+            name=${page%%\?*}
+            curl -sS --max-time 15 "http://127.0.0.1:18088/$page" > "/tmp/lottery-${name}.html" || true
+          done
+          VPS
