@@ -135,7 +135,7 @@ async function tick(){
   const hour=vnHour(),minute=vnMinute();
   let result=null;
   if(hour===13&&minute<=10)result=await noonGrade();
-  else if(hour!==13)result=await sendPick();
+  else result=await sendPick(); // Do not pause pick delivery from 13:11 to 13:59 VN.
   lastResult=result;lastCheck=new Date().toISOString();
   if(result&&(result.sent||result.messageId))log('R55_VPS_GROUP_SEND_ACK',result);
  }catch(e){lastError=String(e.message||e).slice(0,180);console.error('R55_VPS_GROUP_TICK_FAILED',lastError);}
