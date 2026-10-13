@@ -1,0 +1,45 @@
+name: KQ247 Deep Telegram Delivery and Pricing Audit 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-deep-delivery-pricing-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only schedules last send proof and plan prices
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,urllib.request
+          for name,port in [('bd',18083),('xs',18085),('sales',18087)]:
+              j=json.load(urllib.request.urlopen('http://127.0.0.1:'+str(port)+'/healthz',timeout=10))
+              fields=['active','primarySender','lastCheck','lastResult','lastError','last_run','last_exit','last_error','lastPoll','databaseConfigured']
+              print('BOT_DIAGNOSTIC',name,{k:(str(j.get(k))[:180] if j.get(k) is not None else None) for k in fields if k in j})
+          PY
+          echo 'GROUP_BOT_RECENT_DELIVERY_EVENTS'
+          docker logs --since 24h kq247-r55-group-bot 2>&1 | grep -E 'R55_VPS_GROUP_SEND_ACK|R55_VPS_GROUP_(ERROR|FAIL)' | tail -12 | cut -c1-230 || true
+          echo 'LOTTERY_BOT_RECENT_SEND_EXIT'
+          docker logs --since 24h kq247-lottery-bot 2>&1 | grep -E 'XS_VPS_SENDER_RESULT|XS_VPS_SENDER_FAILURE|STATE_COMMIT_ERROR' | tail -15 | cut -c1-180 || true
+          echo 'XS_LEDGER_FILE_COUNT'
+          docker exec kq247-lottery-bot sh -c 'find /app/lottery-bot -type f -name "*.json" 2>/dev/null | wc -l' || true
+          echo 'SALES_BOT_DB_CHECK'
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import pg from 'pg';
+          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
+          try {
+            const plans=await db.query("SELECT product,duration_days,label,price_vnd,enabled FROM public.sales_plans WHERE product IN ('lottery','football','vietlott') ORDER BY product,duration_days");
+            console.log('SALES_PLANS',JSON.stringify(plans.rows));
+            const ev=await db.query("SELECT event_type,count(*)::int AS n,max(created_at) AS latest FROM public.sales_bot_events WHERE created_at >= now()-interval '24 hours' GROUP BY event_type ORDER BY n DESC LIMIT 12").catch(()=>({rows:[]}));
+            console.log('SALES_EVENT_24H',JSON.stringify(ev.rows));
+          }finally{await db.end()}
+          JS
+          VPS
