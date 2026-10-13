@@ -1,0 +1,22 @@
+name: XS Region HTML Link Audit
+on:
+  push:
+    paths: ['.github/workflows/xs-region-html-audit.yml']
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          python3 - <<'PY'
+          import re,urllib.request
+          base='https://64-120-92-172.sslip.io'
+          for page in ['/xoso?region=xsmb','/xoso-khach?region=xsmb']:
+            with urllib.request.urlopen(base+page,timeout=20) as r:
+              s=r.read().decode('utf8','replace')
+            print('PAGE',page,'BYTES',len(s))
+            for rx in [r'.{0,100}(?:href|location|onclick|assign|replace).{0,150}(?:region|xsmt|xsmn).{0,120}',r'.{0,85}(?:region=|region:|region\s*\)).{0,120}']:
+              arr=re.findall(rx,s,re.I)
+              print('MATCHES',len(arr))
+              for x in arr[:22]: print('LINK',re.sub(r'\s+',' ',x)[:325])
+          PY
