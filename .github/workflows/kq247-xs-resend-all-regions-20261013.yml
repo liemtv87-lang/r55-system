@@ -1,0 +1,109 @@
+name: KQ247 XS Correct All Three Regions Once 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-resend-all-regions-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resend-corrected:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify new sender, all six locked station snapshots, and post exactly once per station
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          for i in $(seq 1 35); do
+            if docker exec kq247-lottery-bot grep -Fq 'DÀN 3 CÀNG (500 SỐ)' /app/lottery-bot/sender.py &&
+               docker exec kq247-lottery-bot grep -Fq 'Tool có mã sử dụng Free 10 ngày' /app/lottery-bot/sender.py; then
+              echo XS_CORRECTED_SENDER_DEPLOYED=YES
+              break
+            fi
+            if [ "$i" -eq 35 ]; then echo 'XS_CORRECTED_SENDER_DEPLOYED=NO';exit 1;fi
+            sleep 6
+          done
+          docker exec -i kq247-lottery-bot python - <<'PY'
+          import sys,os,json,re,datetime
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+          sys.path.insert(0,'/app/lottery-bot')
+          import sender
+          from manager import prepare_git
+          now=datetime.datetime.now(ZoneInfo('Asia/Ho_Chi_Minh'))
+          if now.date().isoformat()!='2026-10-13':raise ValueError('one_time_campaign_date_expired')
+          if os.environ.get('KQ247_LOTTERY_CUTOVER')!='enabled':raise ValueError('bot_not_primary')
+          if not os.environ.get('TELEGRAM_LOTTERY_BOT_TOKEN'):raise ValueError('missing_bot_token')
+          # The user explicitly requested an immediate, complete correction
+          # for all three regions; only the normal pre-message time guard is
+          # overridden for THIS date/one-time workflow. Normal daily schedule
+          # and strict 17/18/20 result deadlines are not changed.
+          previews=[]
+          for reg,size in [('mn',3),('mt',2),('mb',1)]:
+            stations,fp=sender.read_snapshot('2026-10-13',reg)
+            if len(stations)!=size:raise ValueError('unexpected_station_count_'+reg)
+            for station,pick in stations.items():
+              body=sender.message('2026-10-13',reg,station,pick,None)
+              for marker in ('DÀN ĐỀ 50 SỐ','DÀN ĐỀ 60 SỐ','DÀN ĐỀ 75 SỐ',
+                             'DÀN 3 CÀNG (500 SỐ)','Tool Vietlott','Free 10 ngày',
+                             'keochuyengia79','xsbm999','muatool_du_doan_bot'):
+                if marker not in body:raise ValueError('missing_required_line_'+reg+'_'+marker)
+              if not 2800<=len(body)<=4040:raise ValueError('unexpected_telegram_message_size_'+reg+'_'+str(len(body)))
+              expected=pick.get('de',{})
+              if [len(expected.get(k,[])) for k in ('dan50','dan60','dan75','three_digit')]!=[50,60,75,500]:
+                raise ValueError('invalid_predicted_array_'+reg)
+              previews.append((reg,station,pick,fp))
+              print('XS_PREVIEW_READY',reg,station,'chars',len(body),'50_60_75_500_PASS')
+          if len(previews)!=6:raise ValueError('incomplete_three_regions')
+          prepare_git()
+          original_due=sender.due
+          original_message=sender.message
+          sender.due=lambda *args,**kwargs: True
+          def corrected_message(day,region,station,pick,draw=None):
+            body=original_message(day,region,station,pick,draw)
+            return '<b>📌 KQ247 • BẢN ĐẦY ĐỦ / ĐÍNH CHÍNH</b>\n'+body
+          sender.message=corrected_message
+          try:
+            sent=0;already=0;blocked=[]
+            for reg,station,pick,fp in previews:
+              key=re.sub(r'[^a-z0-9]+','-',sender.station_name(station)).strip('-')
+              original=sender.STORE/'2026-10-13'/f'{reg}-pre-{key}.json'
+              phase='pre'
+              if original.exists():
+                state=json.loads(original.read_text(encoding='utf8'))
+                if state.get('status')=='sent':
+                  phase='pre-corrected-20261013'
+                elif state.get('status') in ('claimed','uncertain'):
+                  blocked.append((reg,station,state.get('status')))
+                  print('XS_CORRECTION_HELD_UNCERTAIN',reg,station)
+                  continue
+                else:
+                  raise ValueError('unknown_original_send_state_'+reg)
+              dest=sender.STORE/'2026-10-13'/f'{reg}-{phase}-{key}.json'
+              if dest.exists():
+                state=json.loads(dest.read_text(encoding='utf8'))
+                if state.get('status')=='sent':
+                  already+=1
+                  print('XS_CORRECTION_ALREADY_SENT',reg,station,'id',state.get('message_id'))
+                  continue
+                blocked.append((reg,station,state.get('status')))
+                continue
+              sender.send('2026-10-13',reg,phase,station,pick,None,fp)
+              final=json.loads(dest.read_text(encoding='utf8'))
+              if final.get('status')!='sent' or not final.get('message_id'):
+                raise RuntimeError('delivery_not_acknowledged_'+reg)
+              sent+=1
+              print('XS_CORRECTION_CONFIRMED',reg,station,'message_id',final['message_id'])
+          finally:
+            sender.due=original_due
+            sender.message=original_message
+          print('XS_THREE_REGION_CORRECTION_TOTAL','new',sent,'already',already,'blocked',len(blocked),'expected',len(previews))
+          if blocked:raise RuntimeError('undelivered_uncertain_stations')
+          if sent+already!=len(previews):raise RuntimeError('not_all_six_stations_confirmed')
+          print('XS_COMPLETE_THREE_REGION_50_60_75_500_QC_SENT=PASS')
+          PY
+          VPS
