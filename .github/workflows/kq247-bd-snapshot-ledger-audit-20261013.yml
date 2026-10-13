@@ -39,6 +39,10 @@ jobs:
            console.log('FOOTBALL_ELIGIBILITY',{upcoming,validMarkets:market,badMarkets:badMarket,nonBdl,eligible5To40:near});
            const ledger=await pool.query("SELECT scope,payload,updated_at FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' OR scope LIKE 'r55_telegram_sent_%' ORDER BY updated_at DESC LIMIT 25");
            for(const r of ledger.rows)console.log('FOOTBALL_SEND_LEDGER',JSON.stringify({scope:r.scope,state:r.payload?.state,has_message_id:!!r.payload?.messageId,day:r.payload?.day,owner:r.payload?.owner,updated_at:r.updated_at,error:r.payload?.error||null}));
+           const finals=await pool.query("SELECT source,fixture_status,count(*)::int AS total,max(fetched_at) AS last_updated FROM football_final_results GROUP BY source,fixture_status ORDER BY total DESC");
+           console.log('FT_VERIFIED_SOURCE_TOTALS',JSON.stringify(finals.rows));
+           const published=await pool.query("SELECT scope,payload FROM football_compact_stats WHERE scope IN ('r55_telegram_sent_2026-10-12','r55_group_grade_2026-10-13') ORDER BY scope");
+           for(const r of published.rows)console.log('FT_EXISTING_SUMMARY',JSON.stringify({scope:r.scope,state:r.payload?.state,settled:r.payload?.report?.settled,message_ack:!!r.payload?.messageId}));
            const sends=await pool.query("SELECT count(*) FILTER (WHERE payload->>'state'='sent')::int AS sent24h,count(*) FILTER (WHERE payload->>'state'='delivery_uncertain')::int AS uncertain24h,count(*)::int AS total24h FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND updated_at > now()-interval '24 hours'");
            console.log('FOOTBALL_24H_LEDGER_COUNTS',JSON.stringify(sends.rows[0]));
           }finally{await pool.end()}
