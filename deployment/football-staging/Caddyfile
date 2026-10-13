@@ -34,6 +34,25 @@
   handle /api/health {
     reverse_proxy football-native:3001
   }
+  # The lottery UI uses root-relative links (?region=xsmt/xsmn).
+  # Keep these on the XSMB/XSMT/XSMN primary; preserve station query.
+  # Requests without a lottery region still serve the football homepage.
+  @lottery_region_root_xsmb {
+    path /
+    query region=xsmb
+  }
+  redir @lottery_region_root_xsmb /xoso?{http.request.uri.query} 302
+  @lottery_region_root_xsmt {
+    path /
+    query region=xsmt
+  }
+  redir @lottery_region_root_xsmt /xoso?{http.request.uri.query} 302
+  @lottery_region_root_xsmn {
+    path /
+    query region=xsmn
+  }
+  redir @lottery_region_root_xsmn /xoso?{http.request.uri.query} 302
+
   @lottery_paths {
     path /xoso /xoso/ /xoso-khach /xoso-khach/ /lottery/*
   }
