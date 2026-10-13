@@ -45,7 +45,7 @@ lastpicks=np.zeros((len(variants),3),np.uint8)
 time0=time.monotonic()
 def norm(a):
  return (a-a.mean())/max(float(a.std()),1e-5)
-for k,t in enumerate(range(first,n)):
+for k,t in enumerate(range(first,first+1000)):
  j=np.arange(t-1000,t)
  samen=norm(present[j-1]@present[t-1])
  samed=norm(-np.sum((head[j-1]-head[t-1])**2+(tail[j-1]-tail[t-1])**2,axis=1))
