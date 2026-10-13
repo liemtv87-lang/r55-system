@@ -5,12 +5,12 @@
     "football": {
       "group": "https://t.me/keochuyengia79",
       "vps_landing": "https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html",
-      "verified_links": 1000
+      "verified_links": 100000
     },
     "lottery": {
       "group": "https://t.me/xsbm999",
       "vps_landing": "https://64-120-92-172.sslip.io/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html",
-      "verified_links": 1000
+      "verified_links": 100000
     }
   },
   "definitions": {
@@ -262,5 +262,7 @@
     "do not claim submissions or approvals without a public verified URL",
     "no login bypass, CAPTCHA circumvention, purchased link schemes or third party spam",
     "do not modify existing lottery, football and customer systems"
-  ]
+  ],
+  "goal_updated_utc": "2026-10-14",
+  "goal_note": "Targets only; verified counts require public listing URL evidence."
 }
