@@ -44,7 +44,7 @@ jobs:
               b,_=get(name,url)
               if name=='vietlott_client' and 'kq247_vietlott_code' not in b:errors.append('vietlott_client_code_missing')
           for name,url in [('vietlott_health',V+'/health'),('vietlott_state',V+'/api/state')]:
-              b,_=get(name,url)
+              b,_=get(name,url,3000000)
               try:
                   j=json.loads(b)
                   if name=='vietlott_health':
