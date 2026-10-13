@@ -159,7 +159,12 @@ async function noonGrade(){
   return {reason:'awaiting_confirmed_full_time_scores',posted:report.total,pending:report.pending};
  if(previous){
   if(previous.state!=='sent'||!previous.messageId)return {reason:'summary_delivery_claimed_or_uncertain'};
-  if(previous.report?.source===report.source&&JSON.stringify(previous.report)===JSON.stringify(report))return {reason:'summary_up_to_date'};
+  // Idempotence: older versions stored extra report fields, so compare the
+ // immutable visible metrics instead of serializing two whole JSON objects.
+ const compare=['total','settled','pending','notDue','win','half_win','push',
+  'half_loss','loss','units','source','windowStart','windowEnd'];
+ if(previous.report&&compare.every(k=>String(previous.report[k])===String(report[k])))
+  return {reason:'summary_up_to_date'};
   await editSummary(previous.messageId,summaryMessage(report));
   await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
    [key,JSON.stringify({...previous,report,editedAt:new Date().toISOString(),status:'corrected_after_verified_ft'})]);
@@ -185,14 +190,21 @@ async function tick(){
  try{
   const hour=vnHour(),minute=vnMinute();
   let result=null;
-  // Send or update the 12:05-to-12:05 report only after the 13:30 FT
-  // refresh has completed. Keep prematch alerts active while it catches up.
+  // FIX: sending prematch picks MUST NOT depend on whether an old report
+  // was edited. The previous branch edited a stale report every minute and
+  // indefinitely skipped all new prematch messages after 13:30 VN.
+  result=await sendPick();
+  lastResult=result;lastCheck=new Date().toISOString();lastError=null;
+  if(result?.sent)log('R55_VPS_GROUP_SEND_ACK',result);
   if(hour>=13&&!(hour===13&&minute<30)){
-   const summary=await noonGrade();
-   result=(summary.sent||summary.edited)?summary:await sendPick();
-  }else result=await sendPick();
-  lastResult=result;lastCheck=new Date().toISOString();
-  if(result&&(result.sent||result.messageId))log('R55_VPS_GROUP_SEND_ACK',result);
+   try {
+    const summary=await noonGrade();
+    if(summary?.sent||summary?.edited)log('R55_VPS_GROUP_SUMMARY_ACK',summary);
+   }catch(summaryError){
+    lastError='summary: '+String(summaryError.message||summaryError).slice(0,140);
+    console.error('R55_VPS_GROUP_SUMMARY_FAILED',lastError);
+   }
+  }
  }catch(e){lastError=String(e.message||e).slice(0,180);console.error('R55_VPS_GROUP_TICK_FAILED',lastError);}
  finally{ticking=false;}
 }
