@@ -16,7 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check independent VPS SEO source
         run: |
-          python3 -m py_compile seo-vps/groups-hourly.py
+          python3 -m py_compile seo-vps/groups-hourly.py seo-vps/indexnow-changes.py seo-vps/audit-backlinks.py
+          python3 -m json.tool seo-vps/backlink-campaign.json >/dev/null
           python3 - <<'PY'
           from pathlib import Path
           root=Path('deployment/football-original/public')
@@ -41,7 +42,7 @@ jobs:
           test -n "${SSHPASS:-}"
           REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=18 root@64.120.92.172"
           $REMOTE 'mkdir -p /opt/kq247/seo-groups/reports /opt/kq247/deployment/football-original/public'
-          tar -czf - -C seo-vps groups-hourly.py indexnow-changes.py | $REMOTE 'tar -xzf - -C /opt/kq247/seo-groups'
+          tar -czf - -C seo-vps groups-hourly.py indexnow-changes.py audit-backlinks.py backlink-campaign.json | $REMOTE 'tar -xzf - -C /opt/kq247/seo-groups'
           tar -czf - -C deployment/football-original/public             nhom-bong-da-telegram-mien-phi.html             nhom-xo-so-mb-mn-mt-telegram-mien-phi.html robots.txt sitemap.xml             | $REMOTE 'tar -xzf - -C /opt/kq247/deployment/football-original/public'
           $REMOTE 'bash -se' <<'VPS'
           set -euo pipefail
@@ -104,12 +105,39 @@ jobs:
           [Install]
           WantedBy=timers.target
           INDEXNOWTIMER
+          cat > /etc/systemd/system/kq247-seo-backlinks.service <<'BACKLINKSERVICE'
+          [Unit]
+          Description=KQ247 verified external backlinks for each Telegram group
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/python3 /opt/kq247/seo-groups/audit-backlinks.py
+          WorkingDirectory=/opt/kq247/seo-groups
+          TimeoutStartSec=170
+          NoNewPrivileges=true
+          BACKLINKSERVICE
+          cat > /etc/systemd/system/kq247-seo-backlinks.timer <<'BACKLINKTIMER'
+          [Unit]
+          Description=KQ247 hourly evidence-based 1000 backlinks each Telegram group tracking
+          [Timer]
+          OnCalendar=hourly
+          Persistent=true
+          AccuracySec=1min
+          RandomizedDelaySec=0
+          Unit=kq247-seo-backlinks.service
+          [Install]
+          WantedBy=timers.target
+          BACKLINKTIMER
           systemctl daemon-reload
           systemctl enable --now kq247-seo-groups.timer
           systemctl enable --now kq247-seo-indexnow.timer
+          systemctl enable --now kq247-seo-backlinks.timer
           systemctl start kq247-seo-groups.service
           systemctl start kq247-seo-indexnow.service
+          systemctl start kq247-seo-backlinks.service
           systemctl is-active --quiet kq247-seo-indexnow.timer
+          systemctl is-active --quiet kq247-seo-backlinks.timer
           echo 'VPS_INDEXNOW_CHANGE_ONLY_TIMER=PASS'
           systemctl is-enabled --quiet kq247-seo-groups.timer
           systemctl is-active --quiet kq247-seo-groups.timer
@@ -128,5 +156,6 @@ jobs:
           curl -fsS --max-time 12 'http://127.0.0.1:18080/seo-groups-status.json' | python3 -c 'import sys,json; j=json.load(sys.stdin);assert j["ok"] and len(j["groups"])==2;print("SEO_VPS_PUBLIC_STATUS=PASS")'
           echo 'SEO_VPS_TIMER_NEXT:'
           systemctl list-timers kq247-seo-groups.timer --no-pager | tail -4
+          curl -fsS --max-time 12 'http://127.0.0.1:18080/seo-backlinks-status.json' | python3 -c 'import json,sys; s=json.load(sys.stdin);assert all(s["goals"][g]["target_verified"]==1000 for g in ("football","lottery"));print("VPS_BACKLINKS_TRACKER=PASS",{k:v["verified_published"] for k,v in s["goals"].items()})'
           echo 'SEO_VPS_NO_OLD_PROVIDER_CALLS=YES'
           VPS
