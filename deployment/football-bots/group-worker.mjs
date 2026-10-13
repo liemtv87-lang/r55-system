@@ -79,11 +79,42 @@ async function sendPick(){
  return {reason:choices.length?'already_claimed':'no_fixture_5_to_40_min'};
 }
 const utcWindow=day=>new Date(day+'T05:05:00Z');
+const noonGradeDeadline=()=>Date.parse(vnDate()+'T13:30:00+07:00');
+async function freshFtGrade(){
+ // Never send today's summary based on yesterday's score sync or a still-running job.
+ try{
+  const r=await fetch('http://football-native:3001/healthz',{signal:AbortSignal.timeout(7000)});
+  if(!r.ok)return false;
+  const h=await r.json();
+  return h.ok===true&&h.lastGradeOK===true&&Number.isFinite(Date.parse(h.lastGrade||''))&&Date.parse(h.lastGrade)>=noonGradeDeadline();
+ }catch{return false}
+}
+async function editSummary(messageId,text){
+ if(!Number.isInteger(Number(messageId))||Number(messageId)<1)throw Error('invalid_previous_summary_message_id');
+ const r=await fetch('https://api.telegram.org/bot'+token+'/editMessageText',{method:'POST',
+  headers:{'content-type':'application/json'},body:JSON.stringify({chat_id:CHANNEL,message_id:Number(messageId),
+   text,parse_mode:'HTML',disable_web_page_preview:true}),signal:AbortSignal.timeout(11000)});
+ const j=await r.json().catch(()=>({ok:false}));
+ if(j.ok)return true;
+ if(String(j.description||'').toLowerCase().includes('message is not modified'))return true;
+ throw Error('telegram_edit_summary_failed_'+r.status);
+}
+const summaryMessage=report=>{
+ const decided=report.win+report.half_win+report.half_loss+report.loss;
+ const rate=decided?((report.win+.5*report.half_win)*100/decided).toFixed(1)+'%':'chưa đủ kết quả';
+ const body='📊 KQ247 TỔNG KẾT SAU 13:30 VN\nKhung: 12:05 hôm trước → 12:05 hôm nay\n'+
+  '⚽ Kèo bot thực sự đã đăng: '+report.total+'\n✅ FT xác minh: '+report.settled+
+  '\n⏳ Chưa có FT: '+(report.pending+report.notDue)+
+  '\n🟢 Thắng: '+report.win+' | Thắng 1/2: '+report.half_win+
+  '\n⚪ Hòa kèo: '+report.push+'\n🔴 Thua 1/2: '+report.half_loss+' | Thua: '+report.loss+
+  '\n📈 Tỷ lệ thắng quy đổi: '+rate+'\n📊 Lãi/lỗ quy đổi: '+report.units;
+ return boldTelegram(body);
+};
 async function noonGrade(){
  const today=vnDate(),yesterday=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10);
  const key='r55_telegram_sent_'+yesterday;
- const prior=await pool.query("SELECT 1 FROM football_compact_stats WHERE scope=$1 LIMIT 1",[key]);
- if(prior.rowCount)return {reason:'daily_summary_previously_claimed'};
+ if(!await freshFtGrade())return {reason:'awaiting_verified_ft_sync_after_1330'};
+ const prior=await pool.query("SELECT payload FROM football_compact_stats WHERE scope=$1 LIMIT 1",[key]);
  const start=utcWindow(yesterday),end=utcWindow(today);
  const ledger=await pool.query("SELECT scope,payload FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent' AND payload->>'messageId' IS NOT NULL AND updated_at >= $1 AND updated_at < $2 ORDER BY updated_at",[start,end]);
  const sent=[],seen=new Set();
@@ -106,19 +137,24 @@ async function noonGrade(){
   report.settled++;report[g.result]++;report.units+=g.profitUnits;
  }
  report.units=Number(report.units.toFixed(3));
- const decided=report.win+report.half_win+report.half_loss+report.loss;
- const rate=decided?((report.win+.5*report.half_win)*100/decided).toFixed(1)+'%':'chưa đủ kết quả';
- const body='📊 KQ247 TỔNG KẾT 13:00 VN\nKhung: 12:05 hôm trước → 12:05 hôm nay\n'+
-  '⚽ Kèo bot thực sự đã đăng: '+report.total+'\n✅ FT xác minh: '+report.settled+
-  '\n⏳ Chưa có FT: '+(report.pending+report.notDue)+
-  '\n🟢 Thắng: '+report.win+' | Thắng 1/2: '+report.half_win+
-  '\n⚪ Hòa kèo: '+report.push+'\n🔴 Thua 1/2: '+report.half_loss+' | Thua: '+report.loss+
-  '\n📈 Tỷ lệ thắng quy đổi: '+rate+'\n📊 Lãi/lỗ quy đổi: '+report.units;
+ const previous=prior.rows[0]?.payload;
+ // A missing verified FT must never be advertised as zero wins/losses.
+ // Leave the old message unchanged and retry when Bongdalu FT arrives.
+ if(report.total>0&&report.settled===0&&report.pending>0)
+  return {reason:'awaiting_confirmed_full_time_scores',posted:report.total,pending:report.pending};
+ if(previous){
+  if(previous.state!=='sent'||!previous.messageId)return {reason:'summary_delivery_claimed_or_uncertain'};
+  if(Number(previous.report?.settled||0)>=report.settled)return {reason:'summary_up_to_date'};
+  await editSummary(previous.messageId,summaryMessage(report));
+  await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
+   [key,JSON.stringify({...previous,report,editedAt:new Date().toISOString(),status:'corrected_after_verified_ft'})]);
+  return {edited:true,messageId:previous.messageId,summary:report};
+ }
  const claim=await pool.query("INSERT INTO football_compact_stats(scope,payload,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(scope) DO NOTHING RETURNING scope",
  [key,JSON.stringify({state:'sending',source:'bongdalu-r55',owner:'vinahost-vps',day:yesterday})]);
  if(!claim.rowCount)return {reason:'summary_claimed_by_another_process'};
  try{
-  const messageId=await send(boldTelegram(body));
+  const messageId=await send(summaryMessage(report));
   await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
    [key,JSON.stringify({state:'sent',messageId,source:'bongdalu-r55',owner:'vinahost-vps',day:yesterday,report})]);
   return {sent:true,messageId,summary:report};
@@ -134,8 +170,12 @@ async function tick(){
  try{
   const hour=vnHour(),minute=vnMinute();
   let result=null;
-  if(hour===13&&minute<=10)result=await noonGrade();
-  else result=await sendPick(); // Do not pause pick delivery from 13:11 to 13:59 VN.
+  // Send or update the 12:05-to-12:05 report only after the 13:30 FT
+  // refresh has completed. Keep prematch alerts active while it catches up.
+  if(hour>=13&&!(hour===13&&minute<30)){
+   const summary=await noonGrade();
+   result=(summary.sent||summary.edited)?summary:await sendPick();
+  }else result=await sendPick();
   lastResult=result;lastCheck=new Date().toISOString();
   if(result&&(result.sent||result.messageId))log('R55_VPS_GROUP_SEND_ACK',result);
  }catch(e){lastError=String(e.message||e).slice(0,180);console.error('R55_VPS_GROUP_TICK_FAILED',lastError);}
