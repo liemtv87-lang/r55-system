@@ -1,0 +1,68 @@
+name: KQ247 Fullstack VPS Bots and Sales Audit 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-fullstack-vps-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only primary services bot health and sales license link consistency
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo VPS_AUDIT_BEGIN
+          date -u '+VPS_CLOCK_UTC=%F %T'
+          docker ps --format 'CONTAINER {{.Names}} {{.Status}}' | grep -Ei 'kq247|football|lottery|sales' | head -25
+          for name in kq247-football-staging kq247-football-original kq247-r55-group-bot kq247-lottery-original kq247-lottery-bot kq247-sales-bot-primary kq247-vietlott-vps; do
+            docker inspect -f 'SERVICE_STATE {{.Name}} status={{.State.Status}} restart={{.RestartCount}} oom={{.State.OOMKilled}}' "$name" 2>/dev/null || echo "SERVICE_MISSING $name"
+          done
+          for row in '18083 football' '18085 lottery' '18087 sales' '18084 lotteryui'; do
+            set -- $row
+            status=$(curl -fsS --max-time 8 "http://127.0.0.1:$1/healthz" -o "/tmp/kq247-health-$2.json" -w '%{http_code}' || true)
+            echo "BOT_HEALTH_HTTP $2 $status"
+          done
+          python3 - <<'PY'
+          import json,pathlib
+          for kind in ['football','lottery','sales','lotteryui']:
+              try:j=json.loads(pathlib.Path('/tmp/kq247-health-'+kind+'.json').read_text())
+              except Exception as e:print('BOT_UNAVAILABLE',kind,type(e).__name__);continue
+              fields=['ok','active','has_token','tokenConfigured','databaseConfigured','primarySender','lastPoll','lastError','lastCheck','lastSent','lastSentAt','lastRun','lastRunAt','requests','errors','backendMigrated','neonOriginalReadThrough']
+              d={k:v for k,v in j.items() if k in fields and (not isinstance(v,(dict,list,str)) or k in ('lastPoll','lastError','lastCheck','lastSentAt','lastRunAt'))}
+              for k in list(d):
+                  if isinstance(d[k],str):d[k]=str(d[k])[:100]
+              print('BOT_SAFE_STATUS',kind,json.dumps(d,ensure_ascii=False))
+          PY
+          echo 'SALES_DB_AUDIT_BEGIN'
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import pg from 'pg';
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
+          try{
+            const licenses=await pool.query("SELECT product,status,count(*)::int AS n,count(code_value)::int AS codes,count(*) FILTER (WHERE bound_device_hash IS NOT NULL)::int AS bound FROM public.sales_licenses GROUP BY product,status ORDER BY product,status");
+            console.log('LICENSE_TOTALS',JSON.stringify(licenses.rows));
+            const config=await pool.query("SELECT key,value FROM public.sales_config WHERE key IN ('client_lottery_url','customer_lottery_url','client_football_url','customer_football_url','client_vietlott_url','customer_vietlott_url') ORDER BY key");
+            console.log('SALES_PUBLIC_URLS',JSON.stringify(config.rows));
+            const history=await pool.query("SELECT product,link_role,url,count(*)::int AS n FROM public.sales_link_history WHERE is_current=true AND link_role='client' GROUP BY product,link_role,url ORDER BY product,url");
+            console.log('CURRENT_CLIENT_URLS',JSON.stringify(history.rows));
+            const keys=await pool.query("SELECT key FROM public.sales_config WHERE key LIKE '%price%' OR key LIKE '%link%' ORDER BY key LIMIT 30");
+            console.log('SALES_CONFIG_KEY_NAMES',JSON.stringify(keys.rows.map(x=>x.key)));
+            const metadata=await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND (table_name LIKE 'sales_%' OR table_name LIKE '%plan%') ORDER BY table_name");
+            console.log('SALES_TABLE_NAMES',JSON.stringify(metadata.rows.map(x=>x.table_name)));
+            for(const x of history.rows){
+              const target=config.rows.find(c=>c.key==='client_'+x.product+'_url'||c.key==='customer_'+x.product+'_url');
+              console.log('SALES_LINK_CONSISTENCY',x.product,'current',x.url,'matching_one_of_config',config.rows.some(c=>c.value===x.url));
+            }
+            console.log('SALES_READONLY_DB_AUDIT_DONE');
+          }catch(e){console.log('SALES_DB_AUDIT_FAILED',String(e.message).slice(0,250));process.exitCode=1}
+          finally{await pool.end()}
+          JS
+          echo VPS_AUDIT_END
+          VPS
