@@ -1,0 +1,94 @@
+name: KQ247 Two Telegram Groups SEO VPS Install
+on:
+  push:
+    paths: ['.github/workflows/kq247-two-groups-seo-vps-install.yml','seo-vps/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-two-groups-seo-vps-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check independent VPS SEO source
+        run: |
+          python3 -m py_compile seo-vps/groups-hourly.py
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('deployment/football-original/public')
+          base='https://64-120-92-172.sslip.io'
+          for n in ('nhom-bong-da-telegram-mien-phi.html','nhom-xo-so-mb-mn-mt-telegram-mien-phi.html'):
+              s=(root/n).read_text()
+              assert 'rel="canonical" href="'+base+'/'+n+'"' in s,n
+              assert 'property="og:url" content="'+base+'/'+n+'"' in s,n
+              assert 'kq247-r55-football.hatchable.site' not in s,n
+          assert base+'/sitemap.xml' in (root/'robots.txt').read_text()
+          for n in ('nhom-bong-da-telegram-mien-phi.html','nhom-xo-so-mb-mn-mt-telegram-mien-phi.html'):
+              assert base+'/'+n in (root/'sitemap.xml').read_text()
+          print('VPS_SEO_TWO_GROUPS_SOURCE_CONSISTENCY_PASS')
+          PY
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install source, pages and hourly timer without restarting any existing bot
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=18 root@64.120.92.172"
+          $REMOTE 'mkdir -p /opt/kq247/seo-groups/reports /opt/kq247/deployment/football-original/public'
+          tar -czf - -C seo-vps groups-hourly.py | $REMOTE 'tar -xzf - -C /opt/kq247/seo-groups'
+          tar -czf - -C deployment/football-original/public             nhom-bong-da-telegram-mien-phi.html             nhom-xo-so-mb-mn-mt-telegram-mien-phi.html robots.txt sitemap.xml             | $REMOTE 'tar -xzf - -C /opt/kq247/deployment/football-original/public'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          cat > /etc/systemd/system/kq247-seo-groups.service <<'SERVICE'
+          [Unit]
+          Description=KQ247 two-group on-VPS SEO and public landing health audit
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          Environment=PYTHONUNBUFFERED=1
+          ExecStart=/usr/bin/python3 /opt/kq247/seo-groups/groups-hourly.py
+          WorkingDirectory=/opt/kq247/seo-groups
+          TimeoutStartSec=90
+          NoNewPrivileges=true
+          SERVICE
+          cat > /etc/systemd/system/kq247-seo-groups.timer <<'TIMER'
+          [Unit]
+          Description=KQ247 two Telegram group SEO task every hour (VPS only)
+          [Timer]
+          OnCalendar=hourly
+          Persistent=true
+          AccuracySec=1min
+          RandomizedDelaySec=0
+          Unit=kq247-seo-groups.service
+          [Install]
+          WantedBy=timers.target
+          TIMER
+          systemctl daemon-reload
+          systemctl enable --now kq247-seo-groups.timer
+          systemctl start kq247-seo-groups.service
+          systemctl is-enabled --quiet kq247-seo-groups.timer
+          systemctl is-active --quiet kq247-seo-groups.timer
+          python3 - <<'PY'
+          import json,datetime
+          from pathlib import Path
+          d=json.loads(Path('/opt/kq247/seo-groups/reports/latest.json').read_text())
+          assert d['ok'] is True, d['errors']
+          assert list(d['groups'])==['football','lottery']
+          age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(d['checked_at_utc'])).total_seconds()
+          assert 0<=age<=180, age
+          print('VPS_TWO_TELEGRAM_GROUP_SEO_HOURLY=PASS')
+          print('VPS_SEO_GROUPS',json.dumps(d['groups'],ensure_ascii=False))
+          PY
+          test -s /opt/kq247/deployment/football-original/public/seo-groups-status.json
+          curl -fsS --max-time 12 'http://127.0.0.1:18080/seo-groups-status.json' | python3 -c 'import sys,json; j=json.load(sys.stdin);assert j["ok"] and len(j["groups"])==2;print("SEO_VPS_PUBLIC_STATUS=PASS")'
+          echo 'SEO_VPS_TIMER_NEXT:'
+          systemctl list-timers kq247-seo-groups.timer --no-pager | tail -4
+          echo 'SEO_VPS_NO_OLD_PROVIDER_CALLS=YES'
+          VPS
