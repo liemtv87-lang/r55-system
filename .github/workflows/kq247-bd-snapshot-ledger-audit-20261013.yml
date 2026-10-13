@@ -59,7 +59,7 @@ jobs:
              let filtered=0,invalid=0;
              for(const m of row.payload?.matches||[]){
                const start=Date.parse(m.kickoff||''),key=String(m.id||'');
-               if(!/^BDL_\\d{5,12}$/.test(key)||!Number.isFinite(start)||!m.market?.type){invalid++;continue}
+               if(!/^BDL_\d{5,12}$/.test(key)||!Number.isFinite(start)||!m.market?.type){invalid++;continue}
                if(start>=from&&start<to){filtered++;if(!all.has(key))all.set(key,{id:key,kickoff:m.kickoff,market:m.market,day:row.day})}
              }
              diagDays.push({day:row.day,source:row.source,has_lock:!!row.locked_at,rows:row.payload?.matches?.length||0,in_window:filtered,invalid});
