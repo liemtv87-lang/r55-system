@@ -1,0 +1,17 @@
+name: XSMB 3 Lo Diversity 500-Draw Holdout
+on:
+  push:
+    paths: ['.github/workflows/xsmb-3-lo-diversity-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  calculate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numerical packages
+        run: python3 -m pip install --disable-pip-version-check --quiet numpy
+      - name: Select top models and diversify exactly three XSMB numbers
+        run: python3 research/xsmb_3_lo_diversity_20261013.py
