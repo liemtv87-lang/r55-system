@@ -1,0 +1,22 @@
+name: XSMB 3 Lo Exhaustive Position Templates
+on:
+  push:
+    paths: ['.github/workflows/xsmb-3-lo-template-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  templates:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        mode: [raw, expanded]
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numerical runtime
+        run: python3 -m pip install --quiet --disable-pip-version-check numpy
+      - name: Exhaustive position/sum/difference/triangle candidate search
+        run: python3 research/xsmb_3_lo_position_templates_20261013.py ${{ matrix.mode }}
