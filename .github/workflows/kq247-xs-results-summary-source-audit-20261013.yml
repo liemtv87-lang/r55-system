@@ -1,0 +1,45 @@
+name: KQ247 XS 17h 18h 20h Result Parsing Audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-results-summary-source-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Test actual completed lottery result reading for all regions without sending Telegram
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=18 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          docker exec -i kq247-lottery-bot python - <<'PY'
+          import sys
+          sys.path.insert(0,'/app/lottery-bot')
+          import sender
+          for region,hour,st in [('mn',17,3),('mt',18,2),('mb',20,1)]:
+              stations,fp=sender.read_snapshot('2026-10-12',region)
+              assert len(stations)==st,(region,'stations',len(stations))
+              results=sender.draw_results('2026-10-12',region,stations)
+              assert len(results)==st,(region,'draws',len(results))
+              for name,row in results.items():
+                  length=27 if region=='mb' else 18
+                  assert len(row['all2'])==length,(region,name,len(row['all2']))
+                  assert len(row['special'])==(5 if region=='mb' else 6),(region,name)
+                  match=next((p for name2,p in stations.items() if sender.station_name(name2)==sender.station_name(name)),None)
+                  assert match,(region,'no matching snapshot station')
+                  body=sender.message('2026-10-12',region,name,match,row)
+                  for marker in ('TỔNG KẾT','D50','D60','D75','3 CÀNG','Free 10 ngày','keochuyengia79','xsbm999'):
+                      assert marker in body,(region,name,'missing',marker)
+                  assert len(body)<4096,(region,name,'message too long')
+                  print('XS_PREVIOUS_DAY_REAL_FT_PARSED',region,name,'prize_numbers',len(row['all2']),'summary_chars',len(body))
+              print('XS_SUMMARY_WINDOW_CONFIG',region,str(hour)+':00-'+str(hour)+':05',
+                    'source=MinhNgoc','status=PASS')
+          print('XS_17_18_20_RESULTS_SUMMARY_PARSER_PASS')
+          PY
+          VPS
