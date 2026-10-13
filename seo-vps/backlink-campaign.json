@@ -336,14 +336,18 @@
       "name": "TGFind MCP",
       "submit_url": "https://tgfind.net/en/mcp",
       "method": "manual_review",
-      "notes": "MCP submit_listing; no sign-in; public Telegram handle checked; max 6/hour per address",
+      "notes": "Two exact t.me anchors independently verified HTTP200 on 2026-10-13 22:23 UTC",
       "groups": [
         "football",
         "lottery"
       ],
-      "status": "prospect",
-      "evidence_url": null,
-      "listing_url": null
+      "status": "verified_two_public_listings",
+      "evidence_url": "https://github.com/liemtv87-lang/r55-system/actions/runs/38477485507",
+      "listing_url": null,
+      "listing_urls": {
+        "football": "https://tgfind.net/en/resource/keochuyengia79",
+        "lottery": "https://tgfind.net/en/resource/xsbm999"
+      }
     },
     {
       "name": "TG-Hub",
@@ -411,7 +415,24 @@
       "listing_url": null
     }
   ],
-  "published_listings": [],
+  "published_listings": [
+    {
+      "group": "football",
+      "listing_url": "https://tgfind.net/en/resource/keochuyengia79",
+      "target_url": "https://t.me/keochuyengia79",
+      "first_verified_at_utc": "2026-10-13T22:23:43Z",
+      "verification": "public_http_200_exact_t_me_anchor",
+      "source": "https://github.com/liemtv87-lang/r55-system/actions/runs/38477485507"
+    },
+    {
+      "group": "lottery",
+      "listing_url": "https://tgfind.net/en/resource/xsbm999",
+      "target_url": "https://t.me/xsbm999",
+      "first_verified_at_utc": "2026-10-13T22:23:43Z",
+      "verification": "public_http_200_exact_t_me_anchor",
+      "source": "https://github.com/liemtv87-lang/r55-system/actions/runs/38477485507"
+    }
+  ],
   "rules": [
     "one relevant listing per group and independent site, never auto-create thousands of thin links",
     "do not count on-site or repeated copies as new unique referring domains",
