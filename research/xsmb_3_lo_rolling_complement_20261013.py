@@ -6,7 +6,7 @@ uses ONLY draws strictly before the target date. 500/500 chronological split.
 import csv, io, json, urllib.request, datetime, sys, itertools, time
 import numpy as np
 SRC='https://raw.githubusercontent.com/khiemdoan/vietnam-lottery-xsmb-analysis/main/data/xsmb.csv'
-data=list(csv.DictReader(io.StringIO(urllib.request.urlopen(SRC,timeout=35).read().decode('utf8-sig'))))
+data=list(csv.DictReader(io.StringIO(urllib.request.urlopen(SRC,timeout=35).read().decode('utf-8-sig'))))
 keys=list(data[0].keys())[1:]
 assert len(keys)==27
 # 13 October 2026 results independently confirmed in sxmb.com and xsmb.io.vn.
