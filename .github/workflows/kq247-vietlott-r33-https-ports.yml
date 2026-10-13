@@ -1,0 +1,29 @@
+name: KQ247 Vietlott public HTTPS listener inventory
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-https-ports.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read listener processes only, without config or credentials
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo WEB_LISTENERS
+          ss -lntp | grep -E ':(80|443|18088|18112)[[:space:]]' || true
+          echo WEB_DOCKER_CONTAINERS
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}'
+          echo WEB_SERVICE_CANDIDATES
+          systemctl --type=service --state=running --no-pager --no-legend | grep -Ei 'http|proxy|apache|nginx|caddy|traefik|cloudflare|tunnel|haproxy' || true
+          echo WEB_INVENTORY_COMPLETE
+          VPS
