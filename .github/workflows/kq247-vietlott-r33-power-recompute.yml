@@ -1,0 +1,77 @@
+name: KQ247 Vietlott R33 recompute corrected Power pool
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-power-recompute.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r33-recompute-power
+  cancel-in-progress: false
+jobs:
+  recompute:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Recompute isolated Power after parity fix, preserve rollback
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          ROOT=/opt/kq247/vietlott-r33-stage
+          NAME=kq247-vietlott-r33-candidate
+          test "$(docker inspect -f '{{.State.Running}}' "$NAME")" = true
+          grep -Fq 'if(++up0>parityCap)' "$ROOT/scripts/engine.mjs"
+          grep -Fq 'ruleset_version:RULESET_VERSION,keys:ranked.keys' "$ROOT/scripts/update-data.mjs"
+          curl -fsS --max-time 8 http://127.0.0.1:18112/status >/tmp/r33-before-recompute.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/r33-before-recompute.json'))
+          assert j['status']!='running',j['status']
+          PY
+          if [ -s "$ROOT/.power-parity-recomputed" ]; then
+            echo R33_POWER_RECOMPUTE_ALREADY_CHECKPOINTED
+            exit 0
+          fi
+          BACKUP="$ROOT/recompute-backup-$(date -u +%Y%m%d%H%M%S)"
+          mkdir -m 700 "$BACKUP"
+          for f in data/snapshot-power655.json data/predlog-power655.json public/state.json public/filter-context-power655.json public/filtered-pool-power655.json public/reduced-pool-power655.json; do
+            mkdir -p "$BACKUP/$(dirname "$f")"
+            cp -p "$ROOT/$f" "$BACKUP/$f"
+          done
+          rollback(){
+            rc=$?
+            trap - ERR
+            for f in data/snapshot-power655.json data/predlog-power655.json public/state.json public/filter-context-power655.json public/filtered-pool-power655.json public/reduced-pool-power655.json; do
+              cp -p "$BACKUP/$f" "$ROOT/$f" || true
+            done
+            echo "R33_POWER_RECOMPUTE_ROLLED_BACK_CODE=$rc"
+            exit "$rc"
+          }
+          trap rollback ERR
+          rm "$ROOT/data/snapshot-power655.json"
+          echo R33_POWER_CORRECTED_RECOMPUTE_START
+          docker exec -e ALLOW_SNAPSHOT_REPAIR=1 -e FAST_SNAPSHOT_REPAIR=1 "$NAME" node scripts/update-data.mjs
+          curl -fsS --max-time 15 http://127.0.0.1:18112/health >/tmp/r33-after-recompute-health.json
+          curl -fsS --max-time 30 http://127.0.0.1:18112/api/state >/tmp/r33-after-recompute-state.json
+          python3 - <<'PY'
+          import json
+          state=json.load(open('/tmp/r33-after-recompute-state.json'))
+          health=json.load(open('/tmp/r33-after-recompute-health.json'))
+          assert state.get('ready') is True and health.get('data_ready') is True
+          for p,cap in [('mega645',180000),('power655',450000)]:
+              snap=state['products'][p]['snapshot']
+              assert snap['locked'] and snap['ruleset_version']=='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'
+              assert 0<snap['reduced_total']<=cap and snap['filtered_total']>=snap['reduced_total']
+              print('R33_CORRECTED',p,'FULL33',snap['filtered_total'],'REDUCED',snap['reduced_total'])
+              if p=='power655':assert snap['filtered_total']>4364981,'Power parity fix did not expand full valid universe'
+          print('R33_CORRECTED_POWER_SNAPSHOT=PASS')
+          PY
+          printf 'Power R33 parity recompute verified\n' > "$ROOT/.power-parity-recomputed"
+          trap - ERR
+          echo R33_STAGE_POWER_RECOMPUTE_COMPLETE
+          VPS
