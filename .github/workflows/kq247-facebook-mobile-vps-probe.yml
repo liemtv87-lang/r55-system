@@ -1,0 +1,42 @@
+name: KQ247 Facebook Mobile VPS Readiness
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-facebook-mobile-vps-probe.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect isolated deployment options, read-only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -eu
+          for c in python3 nginx caddy docker cloudflared; do
+            printf 'CMD_%s=' "$c"; command -v "$c" || echo ABSENT
+          done
+          echo 'BINDINGS:'
+          ss -lnt | grep -E ':(80|443|18080|18721|18722)\b' || true
+          echo 'NGINX_CHECK:'
+          nginx -t 2>&1 | tail -3 || true
+          echo 'DOMAIN_ROUTE_CONFIGS:'
+          find /etc/nginx /etc/caddy -maxdepth 3 -type f \( -name '*.conf' -o -name 'Caddyfile' \) 2>/dev/null | head -25
+          echo 'MEMORY:'
+          free -m | head -3
+          echo 'DOCKER_COUNTS:'
+          docker ps -q | wc -l
+          echo 'PAGE_HEALTH:'
+          curl -s -o /dev/null -w '%{http_code}\n' --max-time 7 http://127.0.0.1:18080/ || true
+          REMOTE
