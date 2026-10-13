@@ -1,0 +1,83 @@
+name: KQ247 Multi Directory Parallel Discovery for Two Groups
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-two-groups-parallel-discovery.yml']
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  inspect-directories:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Prepare SSH
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Run isolated Chromium directory form inspector in parallel
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+          SHARD: ${{ matrix.shard }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 10 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=18 root@64.120.92.172 "bash -se -- $SHARD" <<'REMOTE'
+          set -euo pipefail
+          shard="$1"
+          base=/opt/pwremote
+          install -d -m 0750 "$base/seo"
+          original="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          cat > "$base/seo/parallel-$shard.py" <<'PY'
+          import os,json,sys,concurrent.futures
+          from playwright.sync_api import sync_playwright
+          shard=int(sys.argv[1])
+          urls=[
+            ['https://tgmania.com/','https://tg-hub.com/submit-telegram-channel-and-group-links/','https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/'],
+            ['https://telegramchannels.me/','https://telegramchannels.io/faq','https://groupverse.co.in/'],
+            ['https://groupssor.com/','https://www.telegram-groups.com/','https://tgcamp.com/'],
+            ['https://tgfind.io/en/inclusion-link','https://search-t.me/','https://toptglinks.com/']
+          ]
+          with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            for url in urls[shard]:
+              page=browser.new_page(viewport={'width':1200,'height':900})
+              try:
+                response=page.goto(url,wait_until='domcontentloaded',timeout=23000)
+                page.wait_for_timeout(650)
+                result=page.evaluate("""() => ({
+                   title:document.title.slice(0,120),
+                   forms:[...document.querySelectorAll('form')].slice(0,4).map(f=>({
+                     action:f.action.slice(0,230),method:f.method,
+                     controls:[...f.querySelectorAll('input,select,textarea,button')].slice(0,28).map(x=>({
+                      tag:x.tagName.toLowerCase(),name:x.name,type:x.type,required:x.required,
+                      placeholder:(x.placeholder||'').slice(0,85)
+                     }))
+                   })),
+                   candidateLinks:[...document.querySelectorAll('a')].filter(a=>/submit|add.+(group|channel)|list.+(channel|group)|register/i.test((a.textContent||'')+' '+a.href))
+                     .slice(0,8).map(a=>({text:a.textContent.trim().slice(0,70),url:a.href.slice(0,260)})),
+                   captcha:!!document.querySelector('[class*=captcha],iframe[src*=captcha],[data-sitekey]')
+                })""")
+                print('PARALLEL_DIRECTORY_SCAN',json.dumps({'shard':shard,'url':url,'status':response.status if response else None,'final':page.url,**result},ensure_ascii=False)[:11000],flush=True)
+              except Exception as e:
+                print('PARALLEL_DIRECTORY_SCAN_ERROR',shard,url,type(e).__name__,str(e)[:180],flush=True)
+              page.close()
+            browser.close()
+          PY
+          chmod 0644 "$base/seo/parallel-$shard.py"
+          timeout 150s docker run --rm --init --name "kq247-seo-discovery-$shard" \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 130 --cpus 0.8 --memory 900m --shm-size 192m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=400m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=100m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/seo/parallel-$shard.py,dst=/app/probe.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/probe.py "$shard"
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$original" = "$after"
+          echo "KQ247_CONTAINERS_UNCHANGED=YES shard=$shard"
+          REMOTE
