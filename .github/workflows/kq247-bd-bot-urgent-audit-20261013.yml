@@ -70,3 +70,5 @@ jobs:
           VPS
 
 # Verify after 2026-10-13 R55 prematch sender starvation hotfix deployment.
+
+# Read-only recheck after VPS football bot deployment 2026-10-13
