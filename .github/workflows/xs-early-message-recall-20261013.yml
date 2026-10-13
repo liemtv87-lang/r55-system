@@ -1,0 +1,17 @@
+name: XS early MT MB Telegram message recall
+on:
+  push:
+    paths: ['.github/workflows/xs-early-message-recall-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recall:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Recall erroneously early MT MB posts
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker exec kq247-lottery-bot python /app/lottery-bot/recall_early.py'
