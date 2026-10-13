@@ -1,0 +1,20 @@
+name: XSMB Triple Diversity Independent Historical Eras
+on:
+  push:
+    paths: ['research/xsmb_3lo_diversity_temporal_20261013.py','.github/workflows/xsmb-3lo-diversity-temporal-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shift: [1000, 2000, 3000, 4000]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_3lo_diversity_temporal_20261013.py ${{ matrix.shift }}
