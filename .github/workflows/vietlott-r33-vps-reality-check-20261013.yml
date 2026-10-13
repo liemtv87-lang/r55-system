@@ -60,8 +60,9 @@ jobs:
                 for(const product of ['mega645','power655']){
                   const p=j.products?.[product]||j[product]||{};
                   console.log('R33_BACKTEST_PRODUCT',product,'keys',Object.keys(p).slice(0,25).join(','));
+                  console.log('R33_BACKTEST_SCOPE',product,JSON.stringify(p.filter_scope||{}).slice(0,300));
                   for(const n of ['30','60','150']){
-                    const w=p.windows?.[n]||p['last'+n]||p['draws'+n]||p['range'+n]||p[n]||{};
+                    const w=p['stats'+n]||{};
                     console.log('R33_BACKTEST_WINDOW',product,n,JSON.stringify({
                       draws_tested:w.draws_tested,winning_draws:w.winning_draws,
                       jackpot:w.prize_counts?.Jackpot??w.prize_counts?.['Jackpot 1'],
@@ -85,6 +86,17 @@ jobs:
                 console.log('R33_POOL_FILE',product,kind,'bytes',meta.size);
               }catch(e){console.log('R33_POOL_MISSING',product,kind,String(e.message).slice(0,100))}
             }
+          }
+          JS
+          echo R33_DEPLOYMENT_SOURCE_CHECK
+          docker inspect -f 'R33_DOCKER_IMAGE={{.Config.Image}} MOUNTS={{range .Mounts}}{{.Source}}:{{.Destination}};{{end}} WORKDIR={{.Config.WorkingDir}}' kq247-vietlott-vps
+          docker exec -i kq247-vietlott-vps node <<'JS'
+          const fs=require('fs'),crypto=require('crypto');
+          for(const f of ['/app/scripts/update-data.mjs','/app/scripts/engine.mjs','/app/scripts/locked-reduced-policy.mjs']){
+            if(!fs.existsSync(f)){console.log('R33_LIVE_SOURCE_ABSENT',f);continue;}
+            const s=fs.readFileSync(f,'utf8');
+            console.log('R33_LIVE_SOURCE',f,'sha256',crypto.createHash('sha256').update(s).digest('hex').slice(0,16),'bytes',s.length,
+              'has_safe_reuse',s.includes('reusableLockedReducedPool'),'has_R33',s.includes('USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'));
           }
           JS
           echo VIETLOTT_VPS_CHECK_END
