@@ -1,0 +1,45 @@
+name: Vietlott R33 legacy customer device-compatibility repair
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-client-device-compat.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Correct only Vietlott client fingerprint in live mounted HTML
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          old='async function ids(){return{device_hash:await sha(dev()),fingerprint_hash:await sha([navigator.userAgent,navigator.language,screen.width+"x"+screen.height,Intl.DateTimeFormat().resolvedOptions().timeZone].join("|"))}}'
+          new='async function ids(){const d=dev(),traits=[navigator.userAgent,navigator.language,screen.width+"x"+screen.height,Intl.DateTimeFormat().resolvedOptions().timeZone].join("|");return{device_hash:await sha(d),fingerprint_hash:await sha("kq247-client-v2|"+d+"|"+traits)}}'
+          for root in ('/opt/kq247/vietlott-r33-stage','/opt/kq247/vietlott-r33-primary'):
+            f=Path(root)/'public/client.html'
+            s=f.read_text()
+            if s.count(old)==1:
+              f.with_suffix('.html.before-legacy-fingerprint').write_text(s)
+              f.write_text(s.replace(old,new))
+            elif s.count(new)!=1:raise RuntimeError('unexpected client source '+str(f))
+            assert new in f.read_text()
+            print('CLIENT_FINGERPRINT_REPAIRED',root)
+          PY
+          test "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:18088/client.html)" = 200
+          echo CLIENT_FINGERPRINT_LIVE_PATCH=PASS
+          VPS
+      - name: Verify public VPS client uses old Render device hash rule
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 12 https://vietlott.64-120-92-172.sslip.io/client.html >/tmp/vietlott-compatible-client.html
+          grep -Fq 'fingerprint_hash:await sha("kq247-client-v2|"+d+"|"+traits)' /tmp/vietlott-compatible-client.html
+          grep -q 'ensureLatestLink' /tmp/vietlott-compatible-client.html
+          echo VIETLOTT_PUBLIC_OLD_CODES_COMPATIBLE_FINGERPRINT=PASS
