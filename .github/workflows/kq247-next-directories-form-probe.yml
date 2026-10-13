@@ -1,0 +1,64 @@
+name: KQ247 Two Telegram Groups Four Directory Form Probe
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-next-directories-form-probe.yml']
+permissions: {contents: read}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect publicly permitted directory submission forms only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          base=/opt/pwremote
+          install -d -m 0750 "$base/seo"
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          cat > "$base/seo/next-probe.py" <<'PY'
+          import json
+          from playwright.sync_api import sync_playwright
+          urls=['https://groupsgyani.org/submit-telegram-group-and-channel-links',
+                'https://groupverse.co.in/submit-your-group.html',
+                'https://telegramgroup.arkservices.in/submit',
+                'https://telegramgroups.co/submit']
+          with sync_playwright() as p:
+            b=p.chromium.launch(headless=True)
+            for url in urls:
+              page=b.new_page(viewport={'width':1200,'height':900})
+              try:
+                resp=page.goto(url,wait_until='domcontentloaded',timeout=22000)
+                page.wait_for_timeout(500)
+                f=page.evaluate("""() => [...document.querySelectorAll('form')].map(frm=>({
+                  action:frm.action,method:frm.method,id:frm.id,
+                  fields:[...frm.querySelectorAll('input,select,textarea,button')].slice(0,28).map(e=>({
+                    name:e.name,id:e.id,type:e.type,required:e.required,
+                    options:e.tagName==='SELECT'?[...e.options].map(x=>x.value).filter(x=>/sport|foot|news|lottery|tele|vietnam|vietnamese/i.test(x)).slice(0,15):undefined
+                  }))}))""")
+                print('DIRECTORY_FORM_SCAN',json.dumps({'url':url,'status':resp.status if resp else None,
+                  'final':page.url,'forms':f,'captcha':page.locator('[class*=captcha],iframe[src*=captcha],[data-sitekey]').count()},ensure_ascii=False)[:7200])
+              except Exception as e:print('DIRECTORY_FORM_SCAN_ERROR',url,type(e).__name__,str(e)[:200])
+              page.close()
+            b.close()
+          PY
+          timeout 160s docker run --rm --init --name kq247-next-directories-probe \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 160 --cpus 1.5 --memory 1536m --shm-size 256m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/seo/next-probe.py,dst=/app/probe.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/probe.py
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$before" = "$after"
+          echo KQ247_CONTAINERS_UNCHANGED=YES
+          REMOTE
