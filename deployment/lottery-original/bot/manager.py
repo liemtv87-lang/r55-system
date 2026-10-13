@@ -74,6 +74,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control","no-store")
         self.send_header("Content-Length",str(len(body)));self.end_headers();self.wfile.write(body)
     def log_message(self,*a):pass
-threading.Thread(target=schedule_loop,daemon=True).start()
-print("KQ247_XS_ORIGINAL_BOT_VPS_STANDBY",flush=True)
-ThreadingHTTPServer(("0.0.0.0",3005),Handler).serve_forever()
+if __name__ == "__main__":
+    threading.Thread(target=schedule_loop,daemon=True).start()
+    print("KQ247_XS_ORIGINAL_BOT_VPS_STANDBY",flush=True)
+    ThreadingHTTPServer(("0.0.0.0",3005),Handler).serve_forever()
