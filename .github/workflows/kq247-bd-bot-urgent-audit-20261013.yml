@@ -68,3 +68,5 @@ jobs:
           ' || true
           echo 'BD_URGENT_READONLY_END'
           VPS
+
+# Verify after 2026-10-13 R55 prematch sender starvation hotfix deployment.
