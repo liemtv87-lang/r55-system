@@ -1,0 +1,17 @@
+name: XS Caddy Route Inspect
+on:
+  push:
+    paths: ['.github/workflows/xs-caddy-inspect.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read Caddy lottery routes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker exec kq247-football-staging sh -c "grep -n -E \"xoso|reverse_proxy|redir|handle|64-120-92-172\" /etc/caddy/Caddyfile | head -90"'
