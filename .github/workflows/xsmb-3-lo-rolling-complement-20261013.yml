@@ -1,0 +1,22 @@
+name: XSMB 3 Lo Rolling 18225 Templates 500 Draws
+on:
+  push:
+    paths: ['.github/workflows/xsmb-3-lo-rolling-complement-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiment:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        window: [90, 250, 500, 1000]
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numpy
+        run: python3 -m pip install --quiet --disable-pip-version-check numpy
+      - name: Run strictly historical rolling 3-number complement selections
+        run: python3 research/xsmb_3_lo_rolling_complement_20261013.py ${{ matrix.window }}
