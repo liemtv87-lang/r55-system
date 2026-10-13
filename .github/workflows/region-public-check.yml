@@ -1,0 +1,14 @@
+name: XS Region Public Check
+on:
+  push:
+    paths: ['.github/workflows/region-public-check.yml']
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          for region in xsmb xsmt xsmn; do
+            curl -sSL --max-time 20 -o /tmp/region.html -w "%{http_code} %{url_effective}\n" "https://64-120-92-172.sslip.io/?region=$region"
+            grep -oi '<title>[^<]*</title>' /tmp/region.html | head -1 || true
+          done
