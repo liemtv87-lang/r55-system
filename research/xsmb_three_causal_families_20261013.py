@@ -9,7 +9,17 @@ mode=sys.argv[1] if len(sys.argv)>1 else 'mixed'
 assert mode in ('contrarian','bridges','seasonal','mixed')
 src='https://raw.githubusercontent.com/khiemdoan/vietnam-lottery-xsmb-analysis/main/data/xsmb.csv'
 rows=list(csv.DictReader(io.StringIO(urllib.request.urlopen(src,timeout=35).read().decode('utf-8-sig'))))
-cols=list(rows[0])[1:]; dates=[datetime.date.fromisoformat(r['date']) for r in rows]
+cols=list(rows[0])[1:]
+# 13 October 2026 completed draw cross-checked on sxmb.com and xskt.net.
+# Append exactly once until the third-party CSV catches up.
+if rows[-1]['date']=='2026-10-12':
+ oct13=['53618','54279','01658','99875','58777','33062','70578',
+ '29945','03967','90070','1440','4471','5218','7377','8274',
+ '4475','3487','5399','5678','2717','719','114','363','78',
+ '95','84','51']
+ assert len(oct13)==27
+ rows.append(dict(date='2026-10-13',**dict(zip(cols,oct13))))
+dates=[datetime.date.fromisoformat(r['date']) for r in rows]
 assert len(cols)==27 and len(rows)>3500 and dates==sorted(dates)
 assert dates[-1]<=datetime.date.today()
 raw=np.array([[int(r[k][-2:]) for k in cols] for r in rows],np.uint8)
