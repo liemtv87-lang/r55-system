@@ -106,5 +106,42 @@ jobs:
             }
           }
           JS
+          echo R33_FULL_AND_REDUCED_INTEGRITY_BEGIN
+          docker exec -i kq247-vietlott-vps node <<'JS'
+          const fs=require('node:fs');
+          const state=JSON.parse(fs.readFileSync('/app/public/state.json','utf8'));
+          const version='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1';
+          for(const product of ['mega645','power655']){
+            const full=JSON.parse(fs.readFileSync('/app/public/filtered-pool-'+product+'.json','utf8'));
+            const reduced=JSON.parse(fs.readFileSync('/app/public/reduced-pool-'+product+'.json','utf8'));
+            const snap=state.products?.[product]?.snapshot;
+            const hardMax=product==='mega645'?180000:450000;
+            const maxN=product==='mega645'?45:55;
+            if(!snap?.locked||snap.ruleset_version!==version)throw Error('SNAPSHOT_LOCK_OR_RULES_INVALID_'+product);
+            if(full.ruleset_version!==version||reduced.ruleset_version!==version)throw Error('POOL_VERSION_INVALID_'+product);
+            if(full.target_date!==snap.target_date||reduced.target_date!==snap.target_date)throw Error('POOL_TARGET_MISMATCH_'+product);
+            if(!Array.isArray(full.keys)||full.keys.length!==snap.filtered_total||full.keys.length!==full.valid_total)throw Error('FULL_COUNT_MISMATCH_'+product);
+            if(!Array.isArray(reduced.keys)||reduced.keys.length!==snap.reduced_total||reduced.keys.length!==reduced.valid_total||reduced.keys.length>hardMax)throw Error('REDUCED_COUNT_MISMATCH_'+product);
+            let previous=-1;
+            for(const encoded of full.keys){
+              if(!Number.isSafeInteger(encoded)||encoded<=previous)throw Error('FULL_NOT_SORTED_'+product);
+              previous=encoded;
+              let n=encoded,last=maxN+1;
+              for(let i=0;i<6;i++){
+                const x=n%64;n=Math.floor(n/64);
+                if(x<1||x>maxN||x>=last)throw Error('INVALID_TICKET_'+product);
+                last=x;
+              }
+            }
+            let pos=0,lastSelected=-1;
+            for(const encoded of reduced.keys){
+              if(encoded<=lastSelected)throw Error('REDUCED_NOT_SORTED_'+product);
+              lastSelected=encoded;
+              while(pos<full.keys.length&&full.keys[pos]<encoded)pos++;
+              if(full.keys[pos]!==encoded)throw Error('REDUCED_NOT_IN_FULL_'+product);
+            }
+            console.log('R33_FULL_REDUCED_INTEGRITY_PASS',product,'full',full.keys.length,'reduced',reduced.keys.length,'cap',hardMax,'valid_33rule_source',true);
+          }
+          JS
           echo VIETLOTT_VPS_CHECK_END
           VPS
