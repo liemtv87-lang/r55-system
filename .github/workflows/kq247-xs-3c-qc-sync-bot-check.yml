@@ -1,0 +1,51 @@
+name: KQ247 XS 3C QC and Bot Sales Sync Check
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-3c-qc-sync-bot-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify lottery website bot sales link and existing licenses intact after UI deploy
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,json
+          for name,port in [('xs_ui',18084),('xs_group_bot',18085),('bd_group_bot',18083),('sales_bot',18087)]:
+            with urllib.request.urlopen('http://127.0.0.1:'+str(port)+'/healthz',timeout=15) as resp:
+              d=json.load(resp)
+              assert resp.status==200 and d.get('ok'),name
+              safe={k:d.get(k) for k in ['ok','active','neonOriginalReadThrough','backendMigrated','lastError'] if k in d}
+              if d.get('lastError'):raise ValueError(name+':'+str(d.get('lastError'))[:80])
+              if name=='sales_bot':assert d.get('active') and d.get('tokenConfigured') and d.get('databaseConfigured')
+              if name=='bd_group_bot':assert d.get('active')
+              print('VPS_POST_XS_QC_HEALTH',name,safe)
+          PY
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import pg from 'pg';
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
+          try{
+            const expected='https://64-120-92-172.sslip.io/xoso-khach?region=xsmb';
+            const [h,c,licenses]=await Promise.all([
+              pool.query("SELECT url FROM public.sales_link_history WHERE product='lottery' AND link_role='client' AND is_current=true"),
+              pool.query("SELECT value FROM public.sales_config WHERE key='client_lottery_url'"),
+              pool.query("SELECT count(*)::int AS n,count(code_value)::int AS codes FROM public.sales_licenses WHERE product='lottery' AND status='active'")
+            ]);
+            if(h.rows.length!==1||h.rows[0].url!==expected||c.rows.length!==1||c.rows[0].value!==expected)
+              throw Error('lottery customer bot canonical URL mismatch');
+            if(!licenses.rows[0].n||licenses.rows[0].n!==licenses.rows[0].codes)throw Error('lottery existing code database mismatch');
+            console.log('XS_SALES_BOT_CUSTOMER_LATEST_LINK=PASS',expected);
+            console.log('XS_CUSTOMER_CODES_PRESERVED=PASS',licenses.rows[0].n);
+          }finally{await pool.end()}
+          JS
+          echo XS_3C_QC_SALES_AND_BOTS_SYNC_PASS
+          VPS
