@@ -53,9 +53,9 @@ const server=http.createServer(async(req,res)=>{
   // <details> element. Open the existing DOM element, never recalculate picks.
   // This change applies to the main page and the licensed customer iframe.
   const expanded=routed.replace(
-    /<details\\b([^>]*)>(\\s*<summary[^>]*>\\s*DÀN\\s*3\\s*CÀNG\\b)/i,
+    /<details\b([^>]*)>(\s*<summary[^>]*>\s*DÀN\s*3\s*CÀNG\b)/i,
     (_all,attrs,summary)=>'<details'+(attrs||'')+
-      (/\\bopen(?:\\s|=|$)/i.test(attrs)?'':' open')+'>'+summary
+      (/\bopen(?:\s|=|$)/i.test(attrs)?'':' open')+'>'+summary
   );
   // Public footer QC; separate from prediction values and customer auth.
   const qcStyle=`<style id="kq247-xs-qc-style">
@@ -90,10 +90,10 @@ const server=http.createServer(async(req,res)=>{
     </div>
   </section>`;
   const styled=expanded.includes('id="kq247-xs-qc-style"')?expanded:
-    expanded.replace(/<\\/head>/i,qcStyle+'</head>');
+    expanded.replace(/<\/head>/i,qcStyle+'</head>');
   const finished=styled.includes('id="kq247-xs-qc"')?styled:
-    styled.replace(/<\\/footer>/i,qcBlock+'</footer>');
-  if(!/\\<details\\b[^>]*\\bopen\\b[^>]*>\\s*<summary[^>]*>\\s*DÀN\\s*3\\s*CÀNG/i.test(finished))
+    styled.replace(/<\/footer>/i,qcBlock+'</footer>');
+  if(!/<details\b[^>]*\bopen\b[^>]*>\s*<summary[^>]*>\s*DÀN\s*3\s*CÀNG/i.test(finished))
     console.warn('KQ247_XS_3C_UPSTREAM_ELEMENT_CHANGED');
   if(!finished.includes('id="kq247-xs-qc"'))console.warn('KQ247_XS_QC_FOOTER_MISSING');
   upstreamSnapshotBytes=html.length;lastCheck=new Date().toISOString();lastError=null;
