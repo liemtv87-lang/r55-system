@@ -1,0 +1,17 @@
+name: XSMB 3 Lo Conditional Coverage 500 Holdout
+on:
+  push:
+    paths: ['.github/workflows/xsmb-3-lo-conditional-coverage-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python numerical dependencies
+        run: python3 -m pip install --quiet --disable-pip-version-check numpy
+      - name: Research candidate 3-number coverage by past co-hit covariance
+        run: python3 research/xsmb_3_lo_conditional_coverage_20261013.py
