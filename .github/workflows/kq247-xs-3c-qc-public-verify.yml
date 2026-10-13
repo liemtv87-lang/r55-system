@@ -1,0 +1,49 @@
+name: KQ247 XS Three Cang Open and QC Public Check
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-3c-qc-public-verify.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check all three main regions and licensed client routes without modifying data
+        run: |
+          python3 - <<'PY'
+          import urllib.request,re
+          BASE='https://64-120-92-172.sslip.io'
+          for region in ['xsmb','xsmt','xsmn']:
+              u=BASE+'/xoso?region='+region
+              with urllib.request.urlopen(urllib.request.Request(u,headers={'Cache-Control':'no-cache','User-Agent':'KQ247-XS-ThreeCang-QC-Audit'}),timeout=23) as r:
+                  s=r.read().decode('utf-8')
+                  assert r.status==200
+              detail=re.search(r'<details\b([^>]*)>\s*<summary[^>]*>\s*DÀN\s*3\s*CÀNG\b',s,re.I)
+              assert detail,region+': no three-digit details'
+              assert re.search(r'\bopen\b',detail.group(1)),region+': three-digit group still collapsed'
+              m=re.search(r'<div\s+class="nums\s+tiny"[^>]*>(.*?)</div>\s*<p\s+class="count">500\s*số</p>',s,re.I|re.S)
+              assert m,region+': 500 digit node missing'
+              digits=re.findall(r'<span\s+class="num">(\d{3})</span>',m.group(1))
+              assert len(digits)==500,region+': actual three digit count '+str(len(digits))
+              assert len(set(digits))==500 and digits==sorted(digits),region+': three digit sequence invalid'
+              assert s.count('id="kq247-xs-qc"')==1,region+': QC duplicate or absent'
+              assert s.count('id="kq247-xs-qc-style"')==1,region+': QC style duplicate or absent'
+              for target in ('https://t.me/keochuyengia79','https://t.me/xsbm999','https://t.me/muatool_du_doan_bot'):
+                  assert target in s,region+': missing QC link '+target
+              assert s.index('id="kq247-xs-qc"')>s.index('id="copyall"'),region+': QC not at bottom'
+              assert 'href="/?region=' not in s,region+': legacy football redirect bug'
+              print('XS_MAIN_500_3C_QC=PASS',region,'numbers',len(digits),'links',3)
+              u=BASE+'/xoso-khach?region='+region
+              with urllib.request.urlopen(u,timeout=23) as r:
+                  c=r.read().decode('utf-8')
+                  assert r.status==200
+              assert 'kq247_lottery_code' in c and 'data-region="xsmt"' in c and 'data-region="xsmn"' in c
+              assert "https://64-120-92-172.sslip.io/xoso" in c
+              print('XS_LICENSED_CUSTOMER_FRAME=PASS',region)
+          with urllib.request.urlopen(BASE+'/',timeout=20) as r:
+              body=r.read(200000).decode('utf-8')
+              assert 'Soi kèo bóng đá' in body, 'root football unexpectedly modified'
+          print('XS_3C_QC_ALL_REGIONS_AND_CLIENT=PASS')
+          PY
