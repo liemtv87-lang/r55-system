@@ -1,0 +1,19 @@
+name: KQ247 XSMT XSMN Safe Caddy Refresh
+on:
+  push:
+    paths: ['.github/workflows/xs-caddy-live-refresh.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Apply updated XS route rules on existing server
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/football-staging/Caddyfile root@64.120.92.172:/tmp/kq247-xs-caddy-new
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 "cp /opt/kq247/deployment/football-staging/Caddyfile /tmp/kq247-xs-caddy-backup && cp /tmp/kq247-xs-caddy-new /opt/kq247/deployment/football-staging/Caddyfile && docker exec kq247-football-staging caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile"
