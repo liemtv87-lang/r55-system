@@ -34,7 +34,7 @@ jobs:
           cat > "$base/seo/telejoiner.py" <<'PY'
           import json,datetime,pathlib,os
           from playwright.sync_api import sync_playwright,TimeoutError as PWTimeout
-          root=pathlib.Path('/results')
+          root=pathlib.Path('/receipts')
           receipt=root/'telejoiner.json'
           try: data=json.loads(receipt.read_text())
           except (OSError,ValueError): data={}
@@ -74,9 +74,9 @@ jobs:
                 if not selected or 'Vietnam' not in countries or 'Vietnamese' not in languages:
                   raise RuntimeError('relevant classification unavailable')
                 form.locator('input[name=link]').fill(link)
-                form.locator('select[name=category]').select_option(value=selected)
-                form.locator('select[name=country]').select_option(value='Vietnam')
-                form.locator('select[name=language]').select_option(value='Vietnamese')
+                form.locator('select[name=category]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', selected)
+                form.locator('select[name=country]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', 'Vietnam')
+                form.locator('select[name=language]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', 'Vietnamese')
                 form.locator('input[name=tags]').fill(tags)
                 desc=form.locator('textarea[name=description]')
                 if desc.count():desc.fill(description)
@@ -104,14 +104,14 @@ jobs:
             b.close()
           PY
           chmod 0644 "$base/seo/telejoiner.py"
-          mkdir -p /opt/kq247/seo-groups/reports
+          install -d -m 0700 -o 1000 -g 1000 "$base/seo/receipts"
           timeout 180s docker run --rm --init --name kq247-telejoiner-one-off \
              --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
              --user pwuser --pids-limit 160 --cpus 1.5 --memory 1536m --shm-size 256m \
              --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
              --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
              --mount "type=bind,src=$base/seo/telejoiner.py,dst=/app/task.py,readonly" \
-             --mount "type=bind,src=/opt/kq247/seo-groups/reports,dst=/results" \
+             --mount "type=bind,src=$base/seo/receipts,dst=/receipts" \
              pwremote/playwright:1.56.0 python3 /app/task.py
           after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
           test "$before" = "$after"
