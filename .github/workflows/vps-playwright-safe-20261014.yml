@@ -1,4 +1,4 @@
-name: VPS Playwright Isolated Safe Audit
+name: VPS Playwright Secure Remote Controller
 on:
   push:
     branches:
@@ -6,45 +6,129 @@ on:
     paths:
       - .github/workflows/vps-playwright-safe-20261014.yml
   workflow_dispatch:
+    inputs:
+      target_url:
+        description: Public HTTPS URL for isolated Playwright navigation
+        required: false
+        default: https://example.com
 permissions:
   contents: read
 concurrency:
   group: vps-playwright-isolated
   cancel-in-progress: false
 jobs:
-  safe-audit:
+  isolated-playwright:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - name: SSH client on ephemeral runner
+      - name: Install SSH client on ephemeral runner
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: VPS read-only audit (do not modify KQ247)
+      - name: Deploy isolated Playwright image and execute non-invasive browser check
         shell: bash
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+          PW_TARGET: ${{ inputs.target_url || 'https://example.com' }}
         run: |
           set -euo pipefail
-          test -n "$SSHPASS" || { echo 'Missing VPS_ROOT_PASSWORD'; exit 1; }
-          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=10 -o NumberOfPasswordPrompts=1 root@64.120.92.172 'bash -se' <<'REMOTE'
+          test -n "$SSHPASS"
+          URL_B64="$(printf '%s' "$PW_TARGET" | base64 -w 0)"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=10 -o NumberOfPasswordPrompts=1 root@64.120.92.172 "bash -se -- '$URL_B64'" <<'REMOTE'
           set -euo pipefail
-          echo 'AUDIT_VPS_CONNECTION=OK'
-          printf 'HOST='; hostname
-          printf 'OS='; . /etc/os-release; echo "$PRETTY_NAME"
-          printf 'CPU='; nproc
-          echo 'MEMORY'; free -h | head -n 2
-          echo 'DISK'; df -h / | tail -n 1
-          printf 'PYTHON='; python3 --version 2>&1
-          printf 'VENV='; if python3 -m venv --help >/dev/null 2>&1; then echo AVAILABLE; else echo MISSING; fi
-          for name in pwremote node npm chromium chromium-browser google-chrome; do
-            if [ "$name" = pwremote ]; then
-              printf 'USER_pwremote='; id pwremote 2>/dev/null || echo MISSING
-            else
-              printf 'CMD_%s=' "$name"; command -v "$name" || echo MISSING
-            fi
-          done
-          echo 'ACTIVE_CONTAINERS_READ_ONLY'
-          docker ps --format '{{.ID}} {{.Names}} {{.Status}}'
-          echo 'PLAYWRIGHT_DIRECTORY'
-          if test -d /opt/pwremote; then ls -ld /opt/pwremote; else echo ABSENT; fi
-          echo 'AUDIT_COMPLETE_NO_CONTAINER_MUTATION'
+          umask 027
+          target_url="$(printf '%s' "$1" | base64 -d)"
+          base=/opt/pwremote
+          image=pwremote/playwright:1.56.0
+          echo 'VPS_SSH=PASS'
+          echo 'VPS_HOSTKEY_FINGERPRINT:'
+          ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub || true
+          . /etc/os-release
+          test "$ID" = ubuntu
+          test "$(uname -m)" = x86_64
+          free_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
+          test "$free_kb" -gt 5242880
+          baseline="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          echo 'KQ247_CONTAINERS_BEFORE:'
+          printf '%s\n' "$baseline"
+          install -d -m 0750 "$base"
+          cat > "$base/Dockerfile" <<'DOCKERFILE'
+          FROM mcr.microsoft.com/playwright/python:v1.56.0-noble
+          RUN python3 -m pip install --no-cache-dir --disable-pip-version-check playwright==1.56.0
+          ENV PYTHONDONTWRITEBYTECODE=1
+          WORKDIR /app
+          COPY runner.py /app/runner.py
+          USER pwuser
+          DOCKERFILE
+          cat > "$base/runner.py" <<'PY'
+          import ipaddress
+          import json
+          import sys
+          from urllib.parse import urlsplit
+          from playwright.sync_api import sync_playwright
+
+          def permitted(url):
+              try:
+                  parsed = urlsplit(url)
+                  host = (parsed.hostname or "").lower()
+                  if parsed.scheme != "https" or not host or parsed.username or parsed.password:
+                      return False
+                  if host in ("localhost", "metadata.google.internal") or host.endswith((".local", ".internal", ".localhost")):
+                      return False
+                  try:
+                      addr = ipaddress.ip_address(host)
+                      if not addr.is_global:
+                          return False
+                  except ValueError:
+                      pass
+                  return True
+              except Exception:
+                  return False
+
+          target = sys.argv[1]
+          if not permitted(target):
+              raise SystemExit("Target refused: only public HTTPS addresses are allowed")
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              context = browser.new_context(ignore_https_errors=False, viewport={"width": 1280, "height": 720})
+              page = context.new_page()
+              page.set_default_navigation_timeout(25000)
+              def guard(route):
+                  if permitted(route.request.url):
+                      route.continue_()
+                  else:
+                      route.abort()
+              page.route("**/*", guard)
+              response = page.goto(target, wait_until="domcontentloaded")
+              print("PLAYWRIGHT_RESULT=" + json.dumps({
+                  "ok": bool(response and response.status < 500),
+                  "http_status": response.status if response else None,
+                  "title": page.title()[:200],
+                  "url": page.url[:512],
+                  "browser": "chromium-headless",
+                  "exposed_debug_ports": False
+              }, ensure_ascii=False))
+              context.close()
+              browser.close()
+          PY
+          chmod 0640 "$base/Dockerfile" "$base/runner.py"
+          echo 'PLAYWRIGHT_IMAGE_BUILD_START'
+          docker build --quiet -t "$image" "$base"
+          echo 'PLAYWRIGHT_IMAGE_BUILD=PASS'
+          timeout 90s docker run --rm --init \
+            --name pwremote-safe-smoke \
+            --network bridge \
+            --read-only \
+            --security-opt no-new-privileges \
+            --cap-drop ALL \
+            --user pwuser \
+            --pids-limit 160 \
+            --cpus 1.5 \
+            --memory 1536m \
+            --shm-size 256m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            "$image" python3 /app/runner.py "$target_url"
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$baseline" = "$after" || { echo 'KQ247_BASELINE_MISMATCH_NEEDS_INSPECTION'; exit 1; }
+          echo 'KQ247_CONTAINERS_UNCHANGED=YES'
+          echo 'REMOTE_PLAYWRIGHT_READY=YES'
           REMOTE
