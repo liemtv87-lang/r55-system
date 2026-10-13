@@ -81,5 +81,26 @@ jobs:
             node scripts/reduce-coverage.test.mjs
             node scripts/verify-fast-pool-filter.mjs
           '
+          echo VIETLOTT_R33_LAUNCH_ISOLATED
+          TOKEN_FILE="$ROOT/.admin-token"
+          if [ -s "$TOKEN_FILE" ]; then ADMIN_TOKEN=$(cat "$TOKEN_FILE"); else
+            umask 077; ADMIN_TOKEN=$(openssl rand -hex 24); printf '%s' "$ADMIN_TOKEN" > "$TOKEN_FILE"
+          fi
+          docker rm -f kq247-vietlott-r33-candidate >/dev/null 2>&1 || true
+          docker run -d --name kq247-vietlott-r33-candidate --restart unless-stopped \
+            --cpus=2 --memory=6g -p 127.0.0.1:18112:8080 \
+            -e PORT=8080 -e VIETLOTT_STAGING_MODE=1 -e VIETLOTT_ADMIN_TOKEN="$ADMIN_TOKEN" \
+            -v "$ROOT/public:/app/public" -v "$ROOT/data:/app/data" \
+            kq247-vietlott-r33-candidate:20261013 >/dev/null
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18112/health > /tmp/kq247-r33-candidate-health.json; then break; fi
+            sleep 1
+          done
+          node - <<'NODE'
+          const fs=require('fs');
+          const j=JSON.parse(fs.readFileSync('/tmp/kq247-r33-candidate-health.json','utf8'));
+          if(!j.ok||!String(j.runtime||'').includes('USER33'))throw Error('wrong R33 runtime');
+          console.log('VIETLOTT_R33_CANDIDATE_HEALTH=PASS',j.runtime,'DATA_READY='+j.data_ready);
+          NODE
           echo VIETLOTT_R33_CANDIDATE_READY_NO_PRODUCTION_CHANGE
           REMOTE
