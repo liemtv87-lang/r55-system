@@ -331,6 +331,45 @@
       "status": "prospect",
       "evidence_url": null,
       "listing_url": null
+    },
+    {
+      "name": "TGFind MCP",
+      "submit_url": "https://tgfind.net/en/mcp",
+      "method": "manual_review",
+      "notes": "MCP submit_listing; no sign-in; public Telegram handle checked; max 6/hour per address",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TG-Hub",
+      "submit_url": "https://tg-hub.com/submit-telegram-channel-and-group-links/",
+      "method": "manual_review",
+      "notes": "Free submission form; reviewed; verify content eligibility",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TGDirectory",
+      "submit_url": "https://telegramchannels.io/faq",
+      "method": "manual_review",
+      "notes": "FAQ says no account for submissions; check actual form",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
     }
   ],
   "published_listings": [],
