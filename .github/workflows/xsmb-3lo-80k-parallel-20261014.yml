@@ -1,0 +1,83 @@
+name: XSMB 3 Lo 80K Parallel Chronological Research
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/xsmb-3lo-80k-parallel-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    name: ${{ matrix.mode }} 8K
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include:
+          - {mode: broad, seed: 6101401}
+          - {mode: positional, seed: 6101402}
+          - {mode: short_window, seed: 6101403}
+          - {mode: long_window, seed: 6101404}
+          - {mode: head_tail, seed: 6101405}
+          - {mode: calendar, seed: 6101406}
+          - {mode: transition, seed: 6101407}
+          - {mode: contrarian, seed: 6101408}
+          - {mode: coupling, seed: 6101409}
+          - {mode: sparse, seed: 6101410}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      XSMB_RESEARCH_MODE: ${{ matrix.mode }}
+      XSMB_RESEARCH_SEED: ${{ matrix.seed }}
+      XSMB_RESEARCH_MODELS: '8000'
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numpy
+        run: python3 -m pip install --disable-pip-version-check --quiet numpy
+      - name: Check source and algorithm syntax
+        run: python3 -m py_compile research/xsmb_3_lo_500_holdout_20261013.py
+      - name: Test 8000 policies for one family, frozen 500/500 chronological evaluation
+        run: |
+          set -euo pipefail
+          python3 research/xsmb_3_lo_500_holdout_20261013.py | tee "research-${XSMB_RESEARCH_MODE}.log"
+      - name: Verify champion daily records and holdout dates independently
+        run: |
+          python3 - <<'PY'
+          import csv,os,pathlib,json,hashlib
+          mode=os.environ['XSMB_RESEARCH_MODE']
+          seed=os.environ['XSMB_RESEARCH_SEED']
+          base=pathlib.Path('research/results')/('xsmb_mass_'+mode+'_'+seed)
+          p=base.with_name(base.name+'_1000days.csv')
+          m=base.with_name(base.name+'_summary.json')
+          d=json.loads(m.read_text())
+          rows=list(csv.DictReader(p.open()))
+          assert len(rows)==1000 and len(set(r['date'] for r in rows))==1000
+          assert [r['split'] for r in rows]==['validation']*500+['holdout']*500
+          assert len(rows[0])==10
+          for r in rows:
+              nums=[r['number_1'],r['number_2'],r['number_3']]
+              assert len(set(nums))==3 and all(len(n)==2 and n.isdigit() and int(n)<100 for n in nums)
+              hits=sum(int(r['hits_'+str(i)]) for i in range(1,4))
+              assert hits==int(r['total_nhay'])
+              assert (hits>0)==bool(int(r['at_least_one']))
+          hold=sum(int(r['at_least_one']) for r in rows[500:])
+          assert hold==d['top_validation_model']['test_days']
+          assert d['holdout_selected_using_validation_only']
+          assert d['models_tested']>=8000
+          assert hashlib.sha256(p.read_bytes()).hexdigest()==d['champion_daily_sha256']
+          print('INDEPENDENT_500_HOLDOUT_AUDIT=PASS MODE='+mode+' DAYS='+str(hold))
+          PY
+      - name: Upload per-day audit, not production forecasts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-80k-${{ matrix.mode }}
+          path: |
+            research/results/xsmb_mass_${{ matrix.mode }}_${{ matrix.seed }}_1000days.csv
+            research/results/xsmb_mass_${{ matrix.mode }}_${{ matrix.seed }}_summary.json
+            research-${{ matrix.mode }}.log
+          retention-days: 21
+          if-no-files-found: warn
