@@ -27,9 +27,11 @@ jobs:
           echo
           echo 'BD_BOT_HEALTH_END'
           docker exec kq247-r55-group-bot grep -Fq 'until<0||until>30*60000' /app/group-worker.mjs
-          docker exec kq247-r55-group-bot grep -Fq 'SEND_BATCH_LIMIT=12' /app/group-worker.mjs
+          docker exec kq247-r55-group-bot grep -Fq 'SEND_INTERVAL_MS=50*60000' /app/group-worker.mjs
+          docker exec kq247-r55-group-bot grep -Fq 'reserveGlobalSlot(x.m.id)' /app/group-worker.mjs
           docker exec kq247-r55-group-bot grep -Fq 'majorLeague(m)' /app/group-worker.mjs
-          echo 'BD_LIVE_WINDOW_0_TO_30_MAIN_LEAGUE_FIRST=PASS'
+          docker exec kq247-r55-group-bot grep -Fq 'Comfortable Telegram mobile spacing' /app/lib/r55TelegramFormat.js
+          echo 'BD_LIVE_0_TO_30_PICK_ONE_EACH_50MIN_AND_SPACED_FORMAT=PASS'
           echo 'BD_BOT_RECENT_LOGS_BEGIN'
           docker logs --since 12h --tail 110 kq247-r55-group-bot 2>&1 | grep -E 'R55_VPS_GROUP|ERROR|failed|EAI_|ECONN|ETIMED|TOKEN|BOT_' | tail -65 || true
           echo 'BD_BOT_RECENT_LOGS_END'
