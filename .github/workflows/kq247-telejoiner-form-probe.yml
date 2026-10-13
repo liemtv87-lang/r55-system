@@ -1,0 +1,62 @@
+name: KQ247 TeleJoiner Public Form Playwright Probe
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-telejoiner-form-probe.yml']
+permissions:
+  contents: read
+jobs:
+  inspect-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect public free directory form with isolated Chromium
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          base=/opt/pwremote
+          install -d -m 0750 "$base"
+          baseline="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          cat > "$base/telejoiner-form-inspect.py" <<'PY'
+          import json
+          from playwright.sync_api import sync_playwright
+          url='https://telejoiner.com/submit'
+          with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            page=browser.new_page(viewport={'width':1280,'height':900})
+            response=page.goto(url,wait_until='domcontentloaded',timeout=30000)
+            page.wait_for_timeout(1800)
+            fields=page.evaluate("""() => [...document.querySelectorAll('input,select,textarea,button')]
+                .filter(x=>x.closest('form') || x.type==='submit')
+                .map(x=>({tag:x.tagName.toLowerCase(),name:x.name,id:x.id,
+                    type:x.type,placeholder:x.placeholder || '',required:x.required,
+                    options:x.tagName==='SELECT'?[...x.options].map(z=>({value:z.value,text:z.textContent.trim()})).slice(0,35):undefined}))
+                .slice(0,60)""")
+            forms=page.evaluate("""() => [...document.querySelectorAll('form')]
+                .map(f=>({action:f.action,method:f.method,id:f.id}))""")
+            print('TELEJOINER_FORM_STATUS',response.status if response else None)
+            print('TELEJOINER_FORM_META',json.dumps(forms,ensure_ascii=False)[:3000])
+            print('TELEJOINER_FORM_FIELDS',json.dumps(fields,ensure_ascii=False)[:10000])
+            print('TELEJOINER_HAS_CAPTCHA',page.locator('[class*=captcha],iframe[src*=captcha],[data-sitekey]').count())
+            browser.close()
+          PY
+          timeout 100s docker run --rm --init --name pwremote-telejoiner-inspect \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 1.5 --memory 1536m --shm-size 256m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/telejoiner-form-inspect.py,dst=/app/probe.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/probe.py
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$baseline" = "$after"
+          echo KQ247_CONTAINERS_UNCHANGED=YES
+          REMOTE
