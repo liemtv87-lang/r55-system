@@ -83,13 +83,36 @@ mean=features.mean(axis=1,keepdims=True);std=features.std(axis=1,keepdims=True)
 features=(features-mean)/np.maximum(std,1e-5)
 val=features[:500];test=features[500:]
 val_hit=(counts[start:teststart]);test_hit=counts[teststart:]
-rng=np.random.default_rng(20261013)
-models=20000
+# Large, deterministic, strictly validation-selected parallel research.
+# Each independent job chooses its policies on the earlier 500 days only.
+seed=int(os.environ.get('XSMB_RESEARCH_SEED','20261013'))
+mode=os.environ.get('XSMB_RESEARCH_MODE','broad')
+search_models=int(os.environ.get('XSMB_RESEARCH_MODELS','20000'))
+assert 1<=search_models<=200000
+families={
+ 'broad':list(range(F)),
+ 'positional':[11,12,13,24,25,26,27,28],
+ 'short_window':[0,1,2,9,10,14,15,16,17,18,28],
+ 'long_window':[3,4,5,6,7,8,11,12,21,22],
+ 'head_tail':[13,16,17,18,19,20,23,28],
+ 'calendar':[0,1,4,5,6,19,20,21,22,23],
+ 'transition':[9,10,11,12,13,14,15,21,22],
+ 'contrarian':[0,1,2,3,4,5,6,13,14,15,18],
+ 'coupling':[7,8,11,12,13,21,22,24,25,26,27],
+ 'sparse':[0,2,4,6,10,12,14,16,18,20,22,24,26,28]
+}
+assert mode in families
+pool=np.array(families[mode],dtype=np.int32)
+assert len(pool)>=2 and pool.max()<F
+rng=np.random.default_rng(seed)
+models=search_models
 weights=np.zeros((models+F*2,F),dtype=np.float32)
 for i in range(models):
-    k=int(rng.integers(2,7))
-    js=rng.choice(F,size=k,replace=False)
-    weights[i,js]=rng.choice([-1.0,1.0],size=k)*rng.uniform(0.2,2,size=k)
+    k=int(rng.integers(2,min(7,len(pool))+1))
+    js=rng.choice(pool,size=k,replace=False)
+    signs=rng.choice([-1.,1.],size=k)
+    if mode=='contrarian': signs=-abs(signs)
+    weights[i,js]=signs*rng.uniform(0.2,2,size=k)
 for j in range(F):
     weights[models+2*j,j]=1
     weights[models+2*j+1,j]=-1
@@ -129,9 +152,36 @@ for w in [7,14,30,60,120,250,500,1000,2500]:
         top3=np.argpartition(sign*fw,-3,axis=1)[:,-3:]
         h=np.take_along_axis(test_hit,top3,axis=1).sum(axis=1)
         baselines.append({'window':w,'sign':sign,'days':int(np.count_nonzero(h)),'nhay':int(h.sum())})
-summary=dict(rows=n,validated_dates=[str(dates[start]),str(dates[teststart-1])],
+summary=dict(mode=mode,seed=seed,random_models=search_models,rows=n,validated_dates=[str(dates[start]),str(dates[teststart-1])],
     heldout_dates=[str(dates[teststart]),str(dates[-1])],source=URL,models_tested=models,
     features=F,top_validation_model=evaluation[0],tested_champions=evaluation[:10],
     baselines=baselines,best_holdout_among_examined=int(max(z['test_days'] for z in evaluation)),
     target_360_reached=evaluation[0]['test_days']>=360)
-print('XSMB_3_LO_BACKTEST_RESULT='+json.dumps(summary,ensure_ascii=False,separators=(',',':')))
+
+# Immutable, auditable day-by-day proof of the preselected champion.
+import hashlib
+import pathlib
+champ=leaders[0][3]
+allsc=np.einsum('tnf,f->tn',features,weights[champ],optimize=True)
+allpicks=np.argpartition(allsc,-3,axis=1)[:,-3:]
+proof_dir=pathlib.Path('research/results')
+proof_dir.mkdir(parents=True,exist_ok=True)
+proof_path=proof_dir/('xsmb_mass_'+mode+'_'+str(seed)+'_1000days.csv')
+with proof_path.open('w',encoding='utf-8',newline='') as handle:
+    wr=csv.writer(handle)
+    wr.writerow(['date','split','number_1','number_2','number_3','hits_1','hits_2','hits_3','total_nhay','at_least_one'])
+    for k,t in enumerate(range(start,n)):
+        nums=sorted(int(i) for i in allpicks[k])
+        hh=[int(counts[t,num]) for num in nums]
+        wr.writerow([dates[t],'validation' if k<500 else 'holdout',
+                     *[f'{num:02d}' for num in nums],*hh,sum(hh),int(sum(hh)>0)])
+sha=hashlib.sha256(proof_path.read_bytes()).hexdigest()
+summary['champion_daily_csv']=str(proof_path)
+summary['champion_daily_sha256']=sha
+summary['research_only']=True
+summary['holdout_selected_using_validation_only']=True
+summary['heldout_has_been_examined_in_older_research']=True
+meta=proof_dir/('xsmb_mass_'+mode+'_'+str(seed)+'_summary.json')
+meta.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+print('XSMB_3_LO_BACKTEST_RESULT='+json.dumps(summary,ensure_ascii=False,separators=(',',':')),flush=True)
+
