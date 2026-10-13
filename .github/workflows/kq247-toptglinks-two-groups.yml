@@ -1,0 +1,72 @@
+name: KQ247 TopTGLinks One-Time Two Community Submission
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-toptglinks-two-groups.yml']
+permissions: {contents: read}
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Submit each group once with isolated Chromium (no existing KQ247 changes)
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 10 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=18 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          base=/opt/pwremote/seo
+          mkdir -p "$base"
+          cat > "$base/toptg-submit.py" <<'PY'
+          import json
+          from playwright.sync_api import sync_playwright
+          groups=[
+            ('football','https://t.me/keochuyengia79','KQ247 — Bóng đá hôm nay','26',
+             'Cộng đồng miễn phí về lịch thi đấu, kết quả và phân tích số liệu bóng đá trước trận. Chia sẻ thông tin tham khảo, không bảo đảm kết quả.'),
+            ('lottery','https://t.me/xsbm999','KQ247 — Kết quả xổ số ba miền','19',
+             'Cộng đồng miễn phí cập nhật kết quả XSMB, XSMT, XSMN theo từng đài cùng thống kê và phân tích tham khảo. Dự đoán không bảo đảm chính xác.')
+          ]
+          with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            context=browser.new_context(viewport={'width':1280,'height':900})
+            for key,link,name,cat,desc in groups:
+              page=context.new_page()
+              try:
+                r=page.goto('https://toptglinks.com/submit',wait_until='domcontentloaded',timeout=28000)
+                if not r or r.status!=200: raise ValueError('submission page not HTTP 200')
+                form=page.locator('form[method=POST]')
+                if form.count()!=1 or page.locator('[data-sitekey],iframe[src*=captcha]').count():
+                  raise ValueError('form mismatch or CAPTCHA')
+                options=form.locator('select[name=category_id] option').evaluate_all('(a)=>a.map(x=>x.value)')
+                if cat not in options:raise ValueError('required category unavailable')
+                form.locator('input[name=invite_link]').fill(link)
+                form.locator('input[name=name]').fill(name)
+                form.locator('select[name=category_id]').select_option(cat)
+                form.locator('textarea[name=description]').fill(desc)
+                responses=[]
+                page.on('response',lambda v:responses.append({'status':v.status,'url':v.url[:180]}) if v.request.method=='POST' else None)
+                form.locator('button[type=submit]').click(timeout=12000)
+                page.wait_for_timeout(2800)
+                print('TOPTGLINKS_SUBMISSION',json.dumps({'group':key,'target':link,'final_url':page.url,
+                  'responses':responses[:4],'page_excerpt':page.locator('body').inner_text()[:850]},ensure_ascii=False)[:2200],flush=True)
+              except Exception as e:
+                print('TOPTGLINKS_FAILED',key,type(e).__name__,str(e)[:250],flush=True)
+              page.close()
+            browser.close()
+          PY
+          chmod 0644 "$base/toptg-submit.py"
+          timeout 120s docker run --rm --init --name kq247-seo-toptg-once \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 160 --cpus 1.1 --memory 1024m --shm-size 192m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=400m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=100m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/toptg-submit.py,dst=/app/task.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/task.py
+          echo 'TOPTGLINKS_ONE_TIME_ATTEMPT_COMPLETE'
+          REMOTE
