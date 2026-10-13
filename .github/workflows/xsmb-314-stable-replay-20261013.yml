@@ -1,0 +1,26 @@
+name: XSMB Stable 314 Daily Replay Export
+on:
+  push:
+    paths: ['research/xsmb_314_stable_replay_20261013.py','.github/workflows/xsmb-314-stable-replay-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_314_stable_replay_20261013.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb314-stable-day-by-day
+          path: |
+            research/results/xsmb_314_500_replay_20261013.csv
+            research/results/xsmb_314_500_replay_manifest.json
+          retention-days: 30
