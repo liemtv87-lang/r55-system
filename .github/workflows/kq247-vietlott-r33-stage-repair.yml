@@ -1,0 +1,107 @@
+name: KQ247 Vietlott R33 metadata and Power parity repair
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-stage-repair.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r33-repair
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Atomic isolated R33 patch with rollback, no customer cutover
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          ROOT=/opt/kq247/vietlott-r33-stage
+          NAME=kq247-vietlott-r33-candidate
+          VERSION=USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1
+          test "$(docker inspect -f '{{.State.Running}}' "$NAME")" = true
+          status=$(curl -fsS --max-time 12 http://127.0.0.1:18112/status | python3 -c 'import json,sys;print(json.load(sys.stdin).get("status","unknown"))')
+          test "$status" != running || { echo 'R33_REPAIR_REFUSED_ACTIVE_JOB'; exit 1; }
+          BACKUP="$ROOT/repair-backup-$(date -u +%Y%m%d%H%M%S)"
+          mkdir -m 700 "$BACKUP"
+          for file in scripts/engine.mjs scripts/update-data.mjs public/reduced-pool-mega645.json public/reduced-pool-power655.json; do
+            mkdir -p "$BACKUP/$(dirname "$file")"
+            cp -p "$ROOT/$file" "$BACKUP/$file"
+          done
+          restore() {
+            code=$?
+            trap - ERR
+            for file in scripts/engine.mjs scripts/update-data.mjs public/reduced-pool-mega645.json public/reduced-pool-power655.json; do
+              cp -p "$BACKUP/$file" "$ROOT/$file" || true
+            done
+            docker cp "$BACKUP/scripts/engine.mjs" "$NAME":/app/scripts/engine.mjs || true
+            docker cp "$BACKUP/scripts/update-data.mjs" "$NAME":/app/scripts/update-data.mjs || true
+            echo "R33_PATCH_RESTORED_BECAUSE_EXIT=$code"
+            exit "$code"
+          }
+          trap restore ERR
+          python3 - <<'PY'
+          import json,os,pathlib
+          root=pathlib.Path('/opt/kq247/vietlott-r33-stage')
+          version='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'
+          patches=[
+             ('scripts/engine.mjs',
+               'if((t&1)===0){if(++up0>4)return false}else if(++up1>4)return false;',
+               'if((t&1)===0){if(++up0>parityCap)return false}else if(++up1>parityCap)return false;'),
+             ('scripts/update-data.mjs',
+               'keys:ranked.keys,methods:[...METHOD_NAMES],ruleset_version:RULESET_VERSION,',
+               'ruleset_version:RULESET_VERSION,keys:ranked.keys,methods:[...METHOD_NAMES],')
+          ]
+          for name,old,new in patches:
+            f=root/name;data=f.read_text()
+            if data.count(old)==1: f.write_text(data.replace(old,new))
+            elif data.count(new)==1: pass
+            else: raise RuntimeError('Unexpected source version: '+name)
+          state=json.loads((root/'public/state.json').read_text())
+          for name,cap in [('mega645',180000),('power655',450000)]:
+            p=root/f'public/reduced-pool-{name}.json'
+            j=json.loads(p.read_text())
+            s=state['snapshot']['products'][name]
+            assert j.get('locked') and j.get('ruleset_version')==version
+            assert j.get('target_date')==s.get('target_date')
+            assert j.get('valid_total')==s.get('reduced_total') and 0<j['valid_total']<=cap
+            keys=j.pop('keys')
+            assert len(keys)==j['valid_total'] and len(set(keys))==len(keys)
+            rule=j.pop('ruleset_version')
+            j={'ruleset_version':rule,**j,'keys':keys}
+            tmp=p.with_name(p.name+'.r33tmp')
+            tmp.write_text(json.dumps(j,ensure_ascii=False,indent=2)+'\n')
+            os.replace(tmp,p)
+            print('R33_METADATA_REORDERED',name,'TICKETS',len(keys),'CAP',cap)
+          PY
+          docker run --rm -v "$ROOT":/work -w /work --entrypoint node node:22-bookworm-slim --check scripts/engine.mjs
+          docker run --rm -v "$ROOT":/work -w /work --entrypoint node node:22-bookworm-slim --check scripts/update-data.mjs
+          docker cp "$ROOT/scripts/engine.mjs" "$NAME":/app/scripts/engine.mjs
+          docker cp "$ROOT/scripts/update-data.mjs" "$NAME":/app/scripts/update-data.mjs
+          docker exec "$NAME" node --check /app/scripts/engine.mjs
+          docker exec "$NAME" node --check /app/scripts/update-data.mjs
+          curl -fsS --max-time 15 http://127.0.0.1:18112/health > /tmp/r33-repair-health.json
+          curl -fsS --max-time 30 http://127.0.0.1:18112/api/state > /tmp/r33-repair-state.json
+          python3 - <<'PY'
+          import json
+          h=json.load(open('/tmp/r33-repair-health.json'))
+          state=json.load(open('/tmp/r33-repair-state.json'))
+          assert h.get('data_ready') and state.get('ready'),(h.get('data_ready'),state.get('ready'))
+          for name,cap in [('mega645',180000),('power655',450000)]:
+            s=state['products'][name]['snapshot']
+            assert s['ruleset_version']=='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'
+            assert s['locked'] and s['reduced_total']<=cap and s['reduced_total']>0
+            print('R33_READY',name,'FULL',s['filtered_total'],'REDUCED',s['reduced_total'],'ANALYSIS',s['analysis_date'])
+          print('R33_STAGE_READY=PASS')
+          PY
+          docker commit "$NAME" kq247-vietlott-r33-candidate:r33-metadata-parity-20261013 >/dev/null
+          trap - ERR
+          echo R33_STAGE_REPAIR_COMMITTED_NO_PRODUCTION_CHANGE
+          VPS
