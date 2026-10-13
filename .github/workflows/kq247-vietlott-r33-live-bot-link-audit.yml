@@ -1,0 +1,47 @@
+name: KQ247 Vietlott R33 live Telegram sales-bot link audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-live-bot-link-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify VPS bot live, dynamic Vietlott customer link and codes without sending messages
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          curl -fsS --max-time 10 http://127.0.0.1:18087/healthz >/tmp/r33-sales-bot-health.json
+          python3 - <<'PY'
+          import json
+          h=json.load(open('/tmp/r33-sales-bot-health.json'))
+          print('SALES_BOT_HEALTH',{'active':h.get('active'),'lastPoll':bool(h.get('lastPoll')),'lastError':bool(h.get('lastError'))})
+          assert h.get('active') is True and not h.get('lastError'),'sales bot not healthy'
+          PY
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import pg from 'pg';
+          const worker=fs.readFileSync('/app/worker.mjs','utf8');
+          for(const key of ['function sendLatestClient','function validClientUrl','sales_link_history','latest:vietlott','mycodes'])
+            if(!worker.includes(key))throw Error('missing_latest_client_code_'+key);
+          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:15000});
+          try{
+            const q=await db.query(
+              "SELECT c.value FROM public.sales_config c WHERE c.key='client_vietlott_url' AND EXISTS(SELECT 1 FROM public.sales_link_history h WHERE h.product='vietlott' AND h.link_role='client' AND h.is_current=true AND h.url=c.value)");
+            const expected='https://vietlott.64-120-92-172.sslip.io/client.html';
+            if(q.rows.length!==1||q.rows[0].value!==expected)throw Error('Vietlott latest client resolver is not current VPS');
+            const licenses=await db.query("SELECT count(*)::int AS n,count(code_value)::int AS codes,count(*) FILTER(WHERE bound_device_hash IS NOT NULL)::int AS bound FROM public.sales_licenses WHERE product='vietlott' AND status='active'");
+            if(Number(licenses.rows[0].n)!==7||Number(licenses.rows[0].codes)!==7)throw Error('Vietlott customer license count differs');
+            console.log('VPS_TELEGRAM_SALES_BOT_VIETLOTT_LATEST_URL=PASS',expected);
+            console.log('VPS_SALES_LEGACY_CODES_PRESERVED=PASS',licenses.rows[0].n,'BOUND',licenses.rows[0].bound);
+          }finally{await db.end()}
+          JS
+          VPS
