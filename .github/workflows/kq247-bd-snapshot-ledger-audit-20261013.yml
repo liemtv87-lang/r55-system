@@ -1,0 +1,46 @@
+name: KQ247 Football Snapshot Ledger and Eligibility Audit 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-bd-snapshot-ledger-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read VPS original snapshot and Telegram ledger no writes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          docker exec -i kq247-r55-group-bot node --input-type=module <<'JS'
+          import pg from 'pg';
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,connectionTimeoutMillis:10000});
+          try{
+           const summary=await pool.query("SELECT day::text AS day,updated_at,jsonb_array_length(CASE WHEN jsonb_typeof(payload->'matches')='array' THEN payload->'matches' ELSE '[]'::jsonb END)::int AS matches FROM football_snapshots ORDER BY day DESC LIMIT 5");
+           console.log('FOOTBALL_SNAPSHOT_DAYS',JSON.stringify(summary.rows));
+           const latest=await pool.query("SELECT day::text AS day,payload FROM football_snapshots ORDER BY day DESC LIMIT 2");
+           const now=Date.now();let near=0,market=0,upcoming=0,badMarket=0,nonBdl=0;
+           for(const row of latest.rows)for(const m of row.payload?.matches||[]){
+             const kickoff=Date.parse(m.kickoff||'');if(Number.isFinite(kickoff)&&kickoff>now)upcoming++;
+             if(!/^BDL_\d{5,12}$/.test(String(m.id||'')))nonBdl++;
+             const k=m.market||{},odds=Number(k.odds),line=Number(k.line);
+             const ok=['AH','OU'].includes(k.type)&&Number.isFinite(odds)&&odds>=1.5&&odds<=3.5&&Number.isFinite(line)&&Math.abs(line*4-Math.round(line*4))<1e-7&&(['AH'].includes(k.type)?['HOME','AWAY']:['OVER','UNDER']).includes(k.pick);
+             if(ok)market++;else badMarket++;
+             if(ok&&String(m.id||'').startsWith('BDL_')&&kickoff-now>=5*60000&&kickoff-now<=40*60000){
+               near++;console.log('ELIGIBLE_ANON',JSON.stringify({day:row.day,fixtureId:String(m.id).slice(0,20),kickoff:m.kickoff,market:k.type,validOdds:true}));
+             }
+           }
+           console.log('FOOTBALL_ELIGIBILITY',{upcoming,validMarkets:market,badMarkets:badMarket,nonBdl,eligible5To40:near});
+           const ledger=await pool.query("SELECT scope,payload,updated_at FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' OR scope LIKE 'r55_telegram_sent_%' ORDER BY updated_at DESC LIMIT 25");
+           for(const r of ledger.rows)console.log('FOOTBALL_SEND_LEDGER',JSON.stringify({scope:r.scope,state:r.payload?.state,has_message_id:!!r.payload?.messageId,day:r.payload?.day,owner:r.payload?.owner,updated_at:r.updated_at,error:r.payload?.error||null}));
+           const sends=await pool.query("SELECT count(*) FILTER (WHERE payload->>'state'='sent')::int AS sent24h,count(*) FILTER (WHERE payload->>'state'='delivery_uncertain')::int AS uncertain24h,count(*)::int AS total24h FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND updated_at > now()-interval '24 hours'");
+           console.log('FOOTBALL_24H_LEDGER_COUNTS',JSON.stringify(sends.rows[0]));
+          }finally{await pool.end()}
+          JS
+          VPS
