@@ -29,10 +29,13 @@ def verify(url,target):
 def main():
     with open(sys.argv[1],encoding='utf-8') as f: campaign=json.load(f)
     groups={k:v['group'] for k,v in campaign['goals'].items()}
-    results=[];domains=defaultdict(set)
+    results=[];domains=defaultdict(set);seen=set()
     for entry in campaign.get('published_listings',[]):
         group=entry.get('group');url=entry.get('listing_url')
         if group not in groups or not url:continue
+        key=(group,url.strip().rstrip('/'))
+        if key in seen: continue
+        seen.add(key)
         ok,reason=verify(url,groups[group])
         results.append({'group':group,'url':url,'verified':ok,'reason':reason})
         if ok:domains[group].add(norm(url)[0])
