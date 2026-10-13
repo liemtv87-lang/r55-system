@@ -1,6 +1,8 @@
 name: KQ247 Vietlott Nightly 33 Rule Read-only Gate
 on:
   workflow_dispatch:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-nightly-33-contract.yml']
   schedule:
     - cron: '45 13,15 * * *'
 permissions:
