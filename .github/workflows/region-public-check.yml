@@ -6,9 +6,23 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 6
     steps:
-      - run: |
+      - name: Verify three public XS menus plus customer region and station
+        run: |
+          set -euo pipefail
+          ROOT=https://64-120-92-172.sslip.io
           for region in xsmb xsmt xsmn; do
-            curl -sSL --max-time 20 -o /tmp/region.html -w "%{http_code} %{url_effective}\n" "https://64-120-92-172.sslip.io/?region=$region"
-            grep -oi '<title>[^<]*</title>' /tmp/region.html | head -1 || true
+            end=$(curl -fsSL --max-time 20 -o /tmp/xs-main.html -w '%{url_effective}' "$ROOT/?region=$region&station=TEST")
+            echo "MAIN_REGION_$region=$end"
+            test "$end" = "$ROOT/xoso?region=$region&station=TEST"
+            grep -q 'BẢN CHÍNH xổ số ba miền' /tmp/xs-main.html
+            code=$(curl -fsSL --max-time 20 -o /tmp/xs-client.html -w '%{http_code}' "$ROOT/xoso-khach?region=$region")
+            test "$code" = 200
+            grep -q 'kq247_lottery_code' /tmp/xs-client.html
+            grep -q 'data-region="xsmn"' /tmp/xs-client.html
+            echo "CLIENT_REGION_$region=PASS"
           done
+          curl -fsSL --max-time 20 "$ROOT/" -o /tmp/football-home.html
+          grep -q 'Soi kèo bóng đá' /tmp/football-home.html
+          echo XS_ROOT_REGION_AND_CLIENT=PASS
