@@ -1,0 +1,46 @@
+name: KQ247 Vietlott old Render link real redirect simulation
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-legacy-handoff-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Prove live old Render HTML migrates existing Vietlott code and device to VPS
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import vm from 'node:vm';
+          import {TextEncoder} from 'node:util';
+          const old='https://kq247-xoso-khach-v29.onrender.com/index.html?neon=1&client=1&product=vietlott&v=20261011';
+          const r=await fetch(old,{signal:AbortSignal.timeout(25000)});
+          assert.equal(r.status,200);
+          const html=await r.text();
+          const script=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+          assert.ok(script?.includes("var vnext=new URL('https://vietlott.64-120-92-172.sslip.io/client.html')"));
+          const store=new Map([['kq247_dev','test-device-123'],['kq247_vietlott_code','sha256-test-existing-code'],['kq247_lottery_session','old-saved-session']]);
+          let destination='';
+          vm.runInNewContext(script,{
+             URL,URLSearchParams,TextEncoder,
+             btoa:s=>Buffer.from(s,'binary').toString('base64'),
+             localStorage:{getItem:key=>store.get(key)||null},
+             location:{search:'?neon=1&client=1&product=vietlott&v=20261011',replace:u=>{destination=u}},
+             console:{warn:msg=>{throw Error(String(msg))}}
+          });
+          assert.ok(destination.startsWith('https://vietlott.64-120-92-172.sslip.io/client.html#kq247='));
+          const u=new URL(destination),enc=u.hash.slice('#kq247='.length).replace(/-/g,'+').replace(/_/g,'/');
+          const m=JSON.parse(Buffer.from(enc,'base64').toString('utf8'));
+          assert.equal(m.dev,'test-device-123');
+          assert.equal(m.code,'sha256-test-existing-code');
+          assert.equal(m.session,'old-saved-session');
+          console.log('OLD_RENDER_VIETLOTT_DEVICE_AND_CODE_HANDOFF=PASS');
+          console.log('OLD_LINK',old.split('?')[0],'DEST',u.origin+u.pathname);
+          const newClient=await (await fetch('https://vietlott.64-120-92-172.sslip.io/client.html',{signal:AbortSignal.timeout(25000)})).text();
+          assert.ok(newClient.includes('fingerprint_hash:await sha("kq247-client-v2|"+d+"|"+traits)'));
+          assert.ok(newClient.includes('importLinkMigration()'));
+          console.log('NEW_VPS_VIETLOTT_ACCEPTS_LEGACY_DEVICE_PROTOCOL=PASS');
+          JS
