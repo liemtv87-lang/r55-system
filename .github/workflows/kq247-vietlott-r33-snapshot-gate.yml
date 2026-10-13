@@ -1,0 +1,47 @@
+name: Vietlott R33 snapshot metadata gate
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-snapshot-gate.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Compare locked R33 source and state metadata
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib
+          root=pathlib.Path('/opt/kq247/vietlott-r33-stage/public')
+          state=json.loads((root/'state.json').read_text())
+          for product,cap in [('mega645',180000),('power655',450000)]:
+              snap=state['snapshot']['products'][product]
+              ctx=json.loads((root/f'filter-context-{product}.json').read_text())
+              print('R33_META',product,'analysis',snap.get('analysis_date'),
+                    'target',snap.get('target_date'),'snap_cap',snap.get('reduction_target'),
+                    'ctx_cap',ctx.get('reduction_target'),
+                    'snap_full',snap.get('filtered_total'),'ctx_full',ctx.get('filtered_total'),
+                    'locked',snap.get('locked'),ctx.get('locked'))
+              for name in ['filtered-pool','reduced-pool']:
+                  p=root/f'{name}-{product}.json'
+                  print('R33_POOL_SIZE',product,name,p.stat().st_size)
+                  prefix=''
+                  with p.open() as f:
+                      for line in f:
+                          if line.strip().startswith('"keys"'):break
+                          prefix+=line
+                          if len(prefix)>16384:raise ValueError('large metadata')
+                  meta=json.loads(prefix+'"keys":[]}')
+                  print('R33_POOL_META',product,name,meta.get('product'),meta.get('target_date'),
+                        meta.get('ruleset_version'),meta.get('valid_total'),meta.get('locked'))
+          PY
+          VPS
