@@ -1,0 +1,60 @@
+name: KQ247 Vietlott R33 HTTPS Docker network repair
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-proxy-repair.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Attach only Vietlott primary to existing Caddy network
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          CADDY=kq247-football-staging
+          VIETLOTT=kq247-vietlott-vps
+          NET=football-staging_default
+          test "$(docker inspect -f '{{.State.Running}}' "$CADDY")" = true
+          test "$(docker inspect -f '{{.State.Running}}' "$VIETLOTT")" = true
+          test "$(docker inspect -f '{{range $n,$v:=.NetworkSettings.Networks}}{{$n}} {{end}}' "$CADDY")" = "$NET "
+          if docker inspect -f '{{range $n,$v:=.NetworkSettings.Networks}}{{$n}} {{end}}' "$VIETLOTT" | grep -qw "$NET"; then
+            echo VIETLOTT_PROXY_NETWORK_ALREADY_ATTACHED
+          else
+            docker network connect --alias "$VIETLOTT" "$NET" "$VIETLOTT"
+            echo VIETLOTT_PROXY_NETWORK_ATTACHED
+          fi
+          docker exec "$CADDY" wget -q -O /tmp/vietlott-r33-caddy-health.json "http://$VIETLOTT:8080/health"
+          docker exec "$CADDY" sh -c "grep -q 'R40_VPS_USER33_FULL30_60_150_20261013' /tmp/vietlott-r33-caddy-health.json"
+          echo VIETLOTT_UPSTREAM_FROM_CADDY=PASS
+          VPS
+      - name: Confirm public HTTPS R33 exact locked snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL=https://vietlott.64-120-92-172.sslip.io
+          for i in $(seq 1 10); do
+            if curl -fsSL --max-time 10 "$URL/api/state" >/tmp/kq247-public-vietlott-state.json; then break; fi
+            sleep 2
+          done
+          python3 - <<'PY'
+          import json
+          s=json.load(open('/tmp/kq247-public-vietlott-state.json'))
+          assert s.get('ready') is True
+          for p,full,limit in [('mega645',930732,180000),('power655',5096034,450000)]:
+            x=s['products'][p]['snapshot']
+            assert x['locked'] and x['filtered_total']==full and x['reduced_total']==limit
+            assert x['ruleset_version']=='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'
+            print('VIETLOTT_PUBLIC_R33',p,'FULL33',full,'REDUCED',limit)
+          print('VIETLOTT_R33_PUBLIC_HTTPS=PASS')
+          PY
+          curl -fsSL --max-time 10 "$URL/client.html" -o /tmp/vietlott-client.html
+          grep -q 'kq247_vietlott_code' /tmp/vietlott-client.html
+          echo VIETLOTT_PUBLIC_CLIENT_PAGE=PASS
