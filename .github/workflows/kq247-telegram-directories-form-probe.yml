@@ -1,0 +1,52 @@
+name: KQ247 Telegram directories read-only form audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-telegram-directories-form-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect public free submission forms without submitting
+        run: |
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from urllib.request import Request,urlopen
+          from urllib.parse import urljoin
+          sites=[
+           'https://groupsgyani.org/submit-telegram-group-and-channel-links',
+           'https://telegramgroups.co/submit',
+           'https://telegramgroup.arkservices.in/submit',
+           'https://groupmandi.com',
+           'https://groupverse.co.in',
+           'https://tgcamp.com']
+          class H(HTMLParser):
+           def __init__(self):super().__init__();self.forms=[];self.active=None;self.links=[]
+           def handle_starttag(self,tag,attrs):
+            attrs=dict(attrs)
+            if tag=='form':
+             self.active={'action':attrs.get('action',''),'method':attrs.get('method','get'),'inputs':[]}
+             self.forms.append(self.active)
+            if tag=='input' and self.active is not None:
+             self.active['inputs'].append({'name':attrs.get('name'),'type':attrs.get('type','text'),'required':'required' in attrs,'placeholder':attrs.get('placeholder','')[:60]})
+            if tag=='select' and self.active is not None:
+             self.active['inputs'].append({'name':attrs.get('name'),'type':'select'})
+            if tag=='a':
+             href=attrs.get('href','')
+             if 'submit' in href.lower() or 'add-group' in href.lower():self.links.append(href)
+           def handle_endtag(self,tag):
+            if tag=='form':self.active=None
+          for site in sites:
+           try:
+            with urlopen(Request(site,headers={'user-agent':'Mozilla/5.0 KQ247 public directory audit'}),timeout=16) as r:
+             html=r.read(320000).decode('utf8','replace')
+             status=r.status
+            h=H();h.feed(html)
+            forms=[{'method':f['method'],'action':urljoin(site,f['action']),'fields':[i for i in f['inputs'] if not i['name'] or not any(s in str(i['name']).lower() for s in ('token','csrf','secret'))][:18]} for f in h.forms]
+            print('DIRECTORY_FORM',site,'status',status,'form_count',len(forms),'forms',repr(forms)[:1500],'submit_links',repr(h.links[:7]))
+           except Exception as exc:
+            print('DIRECTORY_FAILED',site,type(exc).__name__,str(exc)[:140])
+          PY
