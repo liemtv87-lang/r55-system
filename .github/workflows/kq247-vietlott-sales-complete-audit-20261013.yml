@@ -1,0 +1,94 @@
+name: KQ247 Vietlott Sales Complete Sync Audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-sales-complete-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify Vietlott public customer, canonical link and legacy handoff
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const newest='https://vietlott.64-120-92-172.sslip.io/client.html';
+          const neon='https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/';
+          const j=await (await fetch(neon+'?action=latest-link&product=vietlott',{signal:AbortSignal.timeout(20000)})).json();
+          assert.equal(j.ok,true);
+          assert.equal(j.latest_url,newest);
+          console.log('VIETLOTT_AUTH_CANONICAL=PASS',j.latest_url);
+          const s=await (await fetch(newest,{signal:AbortSignal.timeout(20000)})).text();
+          for(const mark of ['kq247_vietlott_code','ensureLatestLink','importLinkMigration','kq247-client-v2|'])assert.ok(s.includes(mark),'missing customer '+mark);
+          console.log('VIETLOTT_CUSTOMER_ACCESS_SOURCE=PASS');
+          const old='https://kq247-xoso-khach-v29.onrender.com/index.html?neon=1&client=1&product=vietlott';
+          const res=await fetch(old,{signal:AbortSignal.timeout(22000)});
+          assert.equal(res.status,200);
+          const body=await res.text();
+          assert.ok(body.includes(newest),'legacy Vietlott link not canonical');
+          assert.ok(body.includes('kq247_vietlott_code'),'legacy code handoff not found');
+          console.log('VIETLOTT_LEGACY_CODE_HANDOFF=PASS');
+          const health=await (await fetch('https://vietlott.64-120-92-172.sslip.io/health',{signal:AbortSignal.timeout(15000)})).json();
+          const state=await (await fetch('https://vietlott.64-120-92-172.sslip.io/api/state',{signal:AbortSignal.timeout(25000)})).json();
+          assert.ok(health.ok&&health.data_ready&&state.ready);
+          for(const [p,cap] of [['mega645',180000],['power655',450000]]){
+            const sn=state.products[p].snapshot;
+            assert.equal(sn.locked,true);
+            assert.equal(sn.ruleset_version,'USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1');
+            assert.ok(sn.reduced_total>0&&sn.reduced_total<=cap);
+          }
+          console.log('VIETLOTT_CUSTOMER_DATA_R33=PASS');
+          JS
+  sales:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify live sales worker, canonical URL, licenses and selling plans without modifications
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=18 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,json
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:18087/healthz',timeout=12))
+          assert data.get('ok') and data.get('active') and data.get('tokenConfigured') and data.get('databaseConfigured'),data
+          assert not data.get('lastError'),data.get('lastError')
+          print('SALES_BOT_ACTIVE=PASS','hasLastPoll',bool(data.get('lastPoll')))
+          PY
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import pg from 'pg';
+          const worker=fs.readFileSync('/app/worker.mjs','utf8');
+          for(const x of ['latest:vietlott','plans:vietlott','myCodes','sendLatestClient','function validClientUrl','sales_link_history','copy_text']){
+            if(!worker.includes(x))throw Error('live bot missing '+x);
+          }
+          console.log('LIVE_SALES_BOT_VIETLOTT_MENU_RECOVERY=PASS');
+          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:15000});
+          try{
+            const expected='https://vietlott.64-120-92-172.sslip.io/client.html';
+            const config=await db.query("SELECT key,value FROM public.sales_config WHERE key IN ('client_vietlott_url','customer_vietlott_url')");
+            const current=await db.query("SELECT url FROM public.sales_link_history WHERE product='vietlott' AND link_role='client' AND is_current=true");
+            const actual=config.rows.find(x=>x.key==='client_vietlott_url')?.value;
+            if(actual!==expected||current.rows.length!==1||current.rows[0].url!==expected)throw Error('Vietlott sales customer URL not synchronized');
+            console.log('VIETLOTT_SALES_CANONICAL=PASS',actual);
+            const licenses=await db.query("SELECT status,count(*)::int as n,count(code_value)::int as codes,count(*) FILTER(WHERE bound_device_hash IS NOT NULL)::int as bound,count(*) FILTER(WHERE telegram_user_id IS NOT NULL)::int as linked FROM public.sales_licenses WHERE product='vietlott' GROUP BY status ORDER BY status");
+            console.log('VIETLOTT_LICENSE_TOTALS_SAFE',JSON.stringify(licenses.rows));
+            const active=licenses.rows.find(x=>x.status==='active');
+            if(!active||active.n!==active.codes)throw Error('Vietlott license codes unavailable');
+            const plans=await db.query("SELECT duration_days,price_vnd,enabled FROM public.sales_plans WHERE product='vietlott' ORDER BY duration_days");
+            console.log('VIETLOTT_SALES_PLANS',JSON.stringify(plans.rows));
+            const month=plans.rows.find(x=>x.duration_days===30&&x.enabled);
+            const trial=plans.rows.find(x=>x.duration_days===10&&x.enabled);
+            if(!month||Number(month.price_vnd)!==1500000||!trial||Number(trial.price_vnd)!==0)throw Error('Vietlott monthly or Free term mismatch');
+            console.log('VIETLOTT_MONTHLY_AND_FREE=PASS');
+            const orders=await db.query("SELECT state,count(*)::int AS n FROM public.sales_payos_orders WHERE product='vietlott' GROUP BY state ORDER BY state").catch(()=>({rows:[]}));
+            console.log('VIETLOTT_ORDER_STATE_TOTALS',JSON.stringify(orders.rows));
+          }finally{await db.end()}
+          JS
+          echo VIETLOTT_BOT_SALES_DATABASE_SYNC_PASS
+          VPS
