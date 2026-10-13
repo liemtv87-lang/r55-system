@@ -1,0 +1,85 @@
+name: KQ247 Vietlott R33 guarded VPS staging
+on:
+  push:
+    paths: [.github/workflows/kq247-vietlott-r33-vps-stage.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r33-vps-stage
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Restore verified private Vietlott sources via existing VPS Neon connection and start isolated service
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o BatchMode=no -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          ROOT=/opt/kq247/vietlott-r33-stage
+          mkdir -p "$ROOT"
+          echo VIETLOTT_MIGRATION_START
+          docker exec -i kq247-sales-bot-primary node --input-type=module - <<'NODE' > /tmp/kq247-vietlott-transfer.ndjson
+          import pg from 'pg';
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
+          try{
+            const r=await pool.query('SELECT path,source_text,source_sha256 FROM kq247_vps_bridge.vietlott_files ORDER BY path');
+            if(r.rows.length<37)throw Error('R33 source count too low: '+r.rows.length);
+            for(const row of r.rows){
+              process.stdout.write(JSON.stringify({path:row.path,sha:row.source_sha256,base64:Buffer.from(row.source_text,'utf8').toString('base64')})+'\n');
+            }
+          }finally{await pool.end()}
+          NODE
+          python3 - <<'PY'
+          import base64,hashlib,json,pathlib
+          base=pathlib.Path('/opt/kq247/vietlott-r33-stage').resolve()
+          count=0
+          with open('/tmp/kq247-vietlott-transfer.ndjson','r',encoding='utf8') as src:
+            for line in src:
+              row=json.loads(line)
+              rel=pathlib.PurePosixPath(row['path'])
+              assert not rel.is_absolute() and '..' not in rel.parts and (rel.parts[0]!='.git') and (rel.parts[0]!='.github' or str(rel)=='.github/workflows/vietlott-auto.yml'),rel
+              data=base64.b64decode(row['base64'],validate=True)
+              assert hashlib.sha256(data).hexdigest()==row['sha'],rel
+              target=base.joinpath(*rel.parts)
+              assert target.resolve().is_relative_to(base),rel
+              target.parent.mkdir(parents=True,exist_ok=True)
+              temp=target.with_name(target.name+'.incoming')
+              temp.write_bytes(data)
+              temp.replace(target)
+              count+=1
+          for p in ('Dockerfile','package.json','scripts/engine.mjs','scripts/update-data.mjs','scripts/pool-policy.mjs','scripts/reduce-coverage.mjs','snapdeploy-server.mjs','public/index.html','public/client.html','public/state.json'):
+            assert (base/p).stat().st_size>0,p
+          assert count>=37,count
+          print('VIETLOTT_VPS_SOURCE_TRANSFER=PASS files='+str(count))
+          PY
+          rm -f /tmp/kq247-vietlott-transfer.ndjson
+          cd "$ROOT"
+          echo VIETLOTT_SYNTAX
+          docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim node --check scripts/engine.mjs
+          docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim node --check scripts/update-data.mjs
+          docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim node --check snapdeploy-server.mjs
+          echo VIETLOTT_R33_SOURCE_TESTS
+          docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim sh -ec '
+            node --check snapdeploy-server.mjs
+            node --check scripts/engine.mjs
+            node --check scripts/update-data.mjs
+            node test.mjs
+            node test-daily.mjs
+            node test-export.mjs
+            node test-restore.mjs
+            node test-snapshot.mjs
+            node scripts/reduce-coverage.test.mjs
+            node scripts/verify-fast-pool-filter.mjs
+          '
+          echo VIETLOTT_R33_BUILD
+          docker build -t kq247-vietlott-r33-candidate:20261013 "$ROOT"
+          echo VIETLOTT_R33_CANDIDATE_READY_NO_PRODUCTION_CHANGE
+          REMOTE
