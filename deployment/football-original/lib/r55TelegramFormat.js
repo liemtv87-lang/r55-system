@@ -11,7 +11,7 @@ export const QC_TEXT=[
 "🎯 hoặc nhóm Xổ Số : https://t.me/xsbm999",
 "🎁 Tool có mã sử dụng Free 10 ngày tại: @muatool_du_doan_bot",
 "Để nhận dự đoán sớm nhất !"
-].join("\n");
+].join("\n\n");
 // Always render the entire announcement and full approved advertisement bold.
 // Strip legacy public confidence/rating claims; they are not part of Telegram messages.
 const withoutRating=s=>String(s||"").split("\n").filter(line=>!/(?:độ\s+tin\s+cậy|tin\s+cậy\s+tham\s+khảo|điểm\s+(?:r55|chọn\s+kèo)|confidence\s*\d*\s*\/\s*100)/i.test(line)).join("\n");
@@ -27,9 +27,20 @@ export const matchMessage=(m)=>{
  const pick=market.type==="AH"?(market.pick==="HOME"?m.home:m.away):(market.pick==="OVER"?"TÀI":"XỈU");
  const line=Number(market.line),signed=market.type==="AH"?(line>=0?"+":"")+line:String(line);
  const isAsian=market.type==="AH";
- const body="⚽ KQ247 • KÈO "+(isAsian?"CHÂU Á":"TÀI/XỈU")+"\n"+clean(m.home)+" - "+clean(m.away)+
- "\n"+clean(m.country)+" • "+clean(m.league)+"\n⏰ "+vn+
- "\n🎯 "+(isAsian?"CHÂU Á":"TÀI/XỈU")+": "+clean(pick)+" "+signed+
- "\n📊 Tỷ lệ ăn: "+Number(market.odds||0).toFixed(2);
+ // Comfortable Telegram mobile spacing: keep original headings and exact markets.
+ const body=[
+  "⚽ KQ247 • KÈO "+(isAsian?"CHÂU Á":"TÀI/XỈU"),
+  "━━━━━━━━━━━━━━",
+  "",
+  "🏟 "+clean(m.home)+" - "+clean(m.away),
+  "",
+  "🌍 "+clean(m.country)+" • "+clean(m.league),
+  "",
+  "⏰ "+vn,
+  "",
+  "🎯 "+(isAsian?"CHÂU Á":"TÀI/XỈU")+": "+clean(pick)+" "+signed,
+  "",
+  "📊 TỶ LỆ ĂN: "+Number(market.odds||0).toFixed(2)
+ ].join("\n");
  return boldTelegram(body);
 };
