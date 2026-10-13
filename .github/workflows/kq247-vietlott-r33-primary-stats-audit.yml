@@ -1,0 +1,45 @@
+name: Vietlott R33 primary 30/60/150 stats and scheduler audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-primary-stats-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read production R33 status and statistics only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          curl -fsS --max-time 10 http://127.0.0.1:18088/health >/tmp/r33-stats-health.json
+          curl -fsS --max-time 10 http://127.0.0.1:18088/status >/tmp/r33-stats-job.json
+          python3 - <<'PY'
+          import json,pathlib
+          root=pathlib.Path('/opt/kq247/vietlott-r33-primary/public')
+          h=json.load(open('/tmp/r33-stats-health.json'))
+          j=json.load(open('/tmp/r33-stats-job.json'))
+          print('PRIMARY_HEALTH',{k:h.get(k) for k in ('runtime','data_ready','status','expected_analysis_date')})
+          print('PRIMARY_JOB',{k:j.get(k) for k in ('type','status','started_at','finished_at','exit_code')})
+          print('PRIMARY_JOB_ERROR',str(j.get('error') or '')[:200])
+          for file in ['backtest-60.json','draw-windows.json']:
+            f=root/file
+            print('STATS_FILE',file,'EXISTS',f.exists(),'BYTES',f.stat().st_size if f.exists() else 0)
+            if not f.exists():continue
+            d=json.loads(f.read_text())
+            print('STATS_SCHEMA',file,d.get('schema_version'),d.get('source'),d.get('generated_at'))
+            for p in ['mega645','power655']:
+              x=d.get('products',{}).get(p,{})
+              for n in [30,60,150]:
+                s=x.get('stats'+str(n)) or x.get(str(n)) or {}
+                print('STATS_WINDOW',p,n,'AVAILABLE',s.get('available_draws',s.get('draws_tested')),'COMPLETE',s.get('complete'),'FULL',s.get('scope',d.get('source')))
+          PY
+          echo VIETLOTT_PRIMARY_STATS_AUDIT_DONE
+          VPS
