@@ -144,9 +144,9 @@ jobs:
           }
           JS
           echo R33_FAST_FILTER_PARITY_MARKER
-          docker exec -i kq247-vietlott-vps grep -n 'parityCap=' /app/scripts/engine.mjs || true
+          docker exec kq247-vietlott-vps grep -n 'parityCap=' /app/scripts/engine.mjs || true
           echo R33_PRODUCTION_SOURCE_REGRESSION_BEGIN
-          docker exec -i kq247-vietlott-vps sh -c 'cd /app && node --check scripts/engine.mjs && node test-snapshot.mjs && node test-export.mjs && node scripts/verify-fast-pool-filter.mjs'
+          docker exec kq247-vietlott-vps sh -c 'cd /app && node --check scripts/engine.mjs && node test-snapshot.mjs && node test-export.mjs && node scripts/verify-fast-pool-filter.mjs'
           echo R33_PRODUCTION_SOURCE_REGRESSION_PASS
           echo VIETLOTT_VPS_CHECK_END
           VPS
