@@ -79,7 +79,7 @@ jobs:
                 form.locator('select[name=language]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', 'Vietnamese')
                 form.locator('input[name=tags]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}))}', tags)
                 desc=form.locator('textarea[name=description]')
-                if desc.count():desc.fill(description)
+                if desc.count():desc.evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}))}', description)
                 toggle=form.locator('input#use_default_description')
                 if toggle.count():toggle.evaluate('(e)=>{if(e.checked){e.checked=false;e.dispatchEvent(new Event("change",{bubbles:true}))}}')
                 form.locator('input[name=terms]').evaluate('(e)=>{e.checked=true;e.dispatchEvent(new Event("change",{bubbles:true}))}')
