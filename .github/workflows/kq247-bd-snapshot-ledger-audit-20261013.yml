@@ -22,7 +22,7 @@ jobs:
           import pg from 'pg';
           const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,connectionTimeoutMillis:10000});
           try{
-           const summary=await pool.query("SELECT day::text AS day,updated_at,jsonb_array_length(CASE WHEN jsonb_typeof(payload->'matches')='array' THEN payload->'matches' ELSE '[]'::jsonb END)::int AS matches FROM football_snapshots ORDER BY day DESC LIMIT 5");
+           const summary=await pool.query("SELECT day::text AS day,jsonb_array_length(CASE WHEN jsonb_typeof(payload->'matches')='array' THEN payload->'matches' ELSE '[]'::jsonb END)::int AS matches FROM football_snapshots ORDER BY day DESC LIMIT 5");
            console.log('FOOTBALL_SNAPSHOT_DAYS',JSON.stringify(summary.rows));
            const latest=await pool.query("SELECT day::text AS day,payload FROM football_snapshots ORDER BY day DESC LIMIT 2");
            const now=Date.now();let near=0,market=0,upcoming=0,badMarket=0,nonBdl=0;
