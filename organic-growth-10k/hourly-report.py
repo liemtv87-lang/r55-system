@@ -30,12 +30,12 @@ LOGS = [
     pathlib.Path("/var/log/apache2/access.log"),
 ]
 UA_BOT = re.compile(r"bot|crawler|spider|slurp|headless|python-requests|curl/|wget/|monitor|uptime|googleother|bingpreview", re.I)
-COMMON = re.compile(r'^(?P<ip>\\S+) - \\S+ \\[([^]]+)\\] "(?:GET|HEAD) (?P<path>\\S+) HTTP/[\\d.]+" (?P<status>\\d{3}) \\S+ "(?P<referer>[^"]*)" "(?P<ua>[^"]*)"')
+COMMON = re.compile(r'^(?P<ip>\S+) - \S+ \[([^]]+)\] "(?:GET|HEAD) (?P<path>\S+) HTTP/[\d.]+" (?P<status>\d{3}) \S+ "(?P<referer>[^"]*)" "(?P<ua>[^"]*)"')
 # nginx combined log format; safely ignore unknown formats.
 def atomic_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp=path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2)+"\\n",encoding="utf-8")
+    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2)+"\n",encoding="utf-8")
     os.replace(tmp,path)
 
 def parse_timestamp(t):
