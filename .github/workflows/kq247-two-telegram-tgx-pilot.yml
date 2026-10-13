@@ -1,0 +1,104 @@
+name: KQ247 Two Telegram TGX Directory Pilot
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-two-telegram-tgx-pilot.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-tgx-submission-once
+  cancel-in-progress: false
+jobs:
+  register-two-public-communities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Submit only the two KQ247 Telegram groups to TGX's public directory interface
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=18 -o ServerAliveInterval=10 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          baseline="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          python3 - <<'PY'
+          import json, datetime, pathlib, urllib.request, urllib.error, time
+          target = pathlib.Path('/opt/kq247/seo-groups/reports/tgx-directory-pilot.json')
+          target.parent.mkdir(parents=True, exist_ok=True)
+          try: previous=json.loads(target.read_text('utf8'))
+          except (FileNotFoundError, json.JSONDecodeError): previous={}
+          groups={
+            'football':'https://t.me/keochuyengia79',
+            'lottery':'https://t.me/xsbm999'
+          }
+          # TGX documents a free, two-group MCP directory submission,
+          # limited to six submissions per source IP per hour.
+          endpoint='https://tgfind.net/api/mcp'
+          def store():
+            temp=target.with_suffix('.tmp')
+            temp.write_text(json.dumps(previous,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+            temp.replace(target)
+          for index,(name,handle) in enumerate(groups.items(),1):
+            prior=previous.get(name,{})
+            if prior.get('state') in ('submitted_pending_verification','listed','already_exists'):
+              print('TGX_SKIPPED_PREVIOUS_ATTEMPT',name,prior['state'])
+              continue
+            args={'jsonrpc':'2.0','id':index,
+                  'method':'tools/call',
+                  'params':{'name':'submit_listing','arguments':{'handle':handle,'type':'auto'}}}
+            req=urllib.request.Request(endpoint,
+                  data=json.dumps(args).encode('utf8'),method='POST',
+                  headers={'Accept':'application/json, text/event-stream',
+                           'Content-Type':'application/json',
+                           'MCP-Protocol-Version':'2025-03-26',
+                           'User-Agent':'KQ247-Community-Directory/1.0'})
+            now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+            try:
+              with urllib.request.urlopen(req,timeout=25) as r:
+                raw=r.read(15000).decode('utf8','replace')
+                http=r.status
+              events=[s[5:].strip() for s in raw.splitlines() if s.startswith('data:')]
+              body=json.loads(events[-1] if events else raw)
+              result=body.get('result',{})
+              # Public directory receipt is not proof of an external live backlink.
+              details=json.dumps(result,ensure_ascii=False).lower()
+              if body.get('error') or result.get('isError'):
+                state='api_error'
+              elif any(token in details for token in ['already','exists','duplicate']):
+                state='already_exists'
+              elif result:
+                state='submitted_pending_verification'
+              else:
+                state='ambiguous_reply'
+              previous[name]={'state':state,'group':handle,'http':http,
+                              'checked_at_utc':now,'response':str(body)[:1500],
+                              'public_listing_url':None}
+              store()
+              print('TGX_SUBMISSION_RESULT',name,state,'HTTP',http,'RESPONSE',str(body)[:650])
+            except urllib.error.HTTPError as e:
+              previous[name]={'state':'http_error','group':handle,'http':e.code,
+                             'checked_at_utc':now,'response':e.read(1200).decode('utf8','replace')[:700]}
+              store()
+              print('TGX_SUBMISSION_HTTP_ERROR',name,e.code,previous[name]['response'][:250])
+            except Exception as e:
+              previous[name]={'state':'request_failed','group':handle,'checked_at_utc':now,
+                             'error':type(e).__name__+': '+str(e)[:230]}
+              store()
+              print('TGX_SUBMISSION_FAILED',name,type(e).__name__,str(e)[:200])
+            time.sleep(2)
+          print('KQ247_GROUPS_ONLY=football,lottery')
+          print('TGX_PILOT_RECEIPT_FILE='+str(target))
+          PY
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$baseline" = "$after" || { echo 'KQ247_CONTAINER_LIST_CHANGED'; exit 1; }
+          echo 'KQ247_CONTAINERS_UNCHANGED=YES'
+          REMOTE
