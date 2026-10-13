@@ -1,0 +1,53 @@
+name: KQ247 Vietlott Nightly 33 Rule Read-only Gate
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 13,15 * * *'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Verify live snapshots, daily refresh, full-only 30 60 150 and both customer/export pages
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json,datetime,zoneinfo
+          BASE='https://vietlott.64-120-92-172.sslip.io'
+          def read(path,timeout=35):
+              with urllib.request.urlopen(urllib.request.Request(BASE+path,headers={'User-Agent':'KQ247-Vietlott-Nightly-ReadOnly','Cache-Control':'no-cache'}),timeout=timeout) as r:
+                  if r.status!=200:raise ValueError((path,r.status))
+                  return r.read().decode('utf8','replace')
+          h=json.loads(read('/health'))
+          st=json.loads(read('/api/state'))
+          bt=json.loads(read('/backtest-60.json'))
+          dw=json.loads(read('/draw-windows.json'))
+          auto=json.loads(read('/api/automation-status'))
+          now=datetime.datetime.now(zoneinfo.ZoneInfo('Asia/Ho_Chi_Minh'))
+          expected=now.date() if now.hour>=19 else now.date()-datetime.timedelta(days=1)
+          expected=expected.isoformat()
+          assert h.get('ok') and h.get('data_ready') and st.get('ready'),('runner not ready',h.get('status'))
+          assert h.get('expected_analysis_date')==expected,('runner timezone/date',h.get('expected_analysis_date'),expected)
+          assert bt.get('schema_version')=='R33_USER33_ALL_METHODS_SAME_DAY_30DRAWS_60DRAWS_365D'
+          assert dw.get('source')=='FULL_33_RULES_ONLY'
+          assert auto.get('ok') and auto.get('schedule_vn')==['19:00','19:10','19:20']
+          print('VIETLOTT_NIGHTLY_SCHEDULE=PASS',auto.get('schedule_vn'),'VN',now.strftime('%Y-%m-%d %H:%M'))
+          for product,cap in [('mega645',180000),('power655',450000)]:
+              snap=st['products'][product]['snapshot']
+              assert snap.get('analysis_date')==expected and snap.get('locked') is True,('stale snapshot',product,snap.get('analysis_date'),expected)
+              assert snap.get('ruleset_version')=='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'
+              assert 0<snap.get('reduced_total',0)<=cap
+              pr=bt['products'][product]
+              assert pr['filter_scope']['mode']=='FULL_33_RULES_ONLY' and pr['filter_scope']['reduction_applied'] is False
+              assert not any('reduced_stats' in x for x in pr)
+              for n in (30,60,150):
+                  row=pr.get('stats'+str(n),{})
+                  assert row.get('complete') and row.get('draws_tested')==n,('incomplete 33-rule stats',product,n,row.get('draws_tested'))
+              print('VIETLOTT_SNAPSHOT_FRESH',product,'date',expected,'FULL',snap['filtered_total'],'REDUCED',snap['reduced_total'],'CAP',cap)
+          for path in ['/','/client.html']:
+              html=read(path)
+              assert 'exportFull33' in html if path=='/' else 'kq247_vietlott_code' in html
+              print('VIETLOTT_UI_OK',path,len(html))
+          print('VIETLOTT_NIGHTLY_R33_CONTRACT_PASS')
+          PY
