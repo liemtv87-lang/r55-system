@@ -88,7 +88,10 @@ async function tick(){
     try{await build('official')}catch(e){state.lastError=String(e.message||e);log('NATIVE_OFFICIAL_FAILED',state.lastError);}
    }
   }
-  if(hour>=13&&date>=minimum&&minute>=30&&hour%2===1&&lastGradeSlot!==hour){
+  // Populate verified FT before the 13:00 Telegram summary; previously the
+  // first daily grade was at 13:30, too late for the public noon report.
+  // Keep the post-noon regular catch-up checks for late FT as well.
+  if(date>=minimum&&((hour===12&&minute>=35)||(hour>=13&&minute>=30&&hour%2===1))&&lastGradeSlot!==hour){
    lastGradeSlot=hour;
    try{await grade()}catch(e){state.lastError=String(e.message||e);log('NATIVE_GRADE_FAILED',state.lastError);}
   }
