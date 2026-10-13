@@ -41,7 +41,7 @@ jobs:
           test -n "${SSHPASS:-}"
           REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=18 root@64.120.92.172"
           $REMOTE 'mkdir -p /opt/kq247/seo-groups/reports /opt/kq247/deployment/football-original/public'
-          tar -czf - -C seo-vps groups-hourly.py | $REMOTE 'tar -xzf - -C /opt/kq247/seo-groups'
+          tar -czf - -C seo-vps groups-hourly.py indexnow-changes.py | $REMOTE 'tar -xzf - -C /opt/kq247/seo-groups'
           tar -czf - -C deployment/football-original/public             nhom-bong-da-telegram-mien-phi.html             nhom-xo-so-mb-mn-mt-telegram-mien-phi.html robots.txt sitemap.xml             | $REMOTE 'tar -xzf - -C /opt/kq247/deployment/football-original/public'
           $REMOTE 'bash -se' <<'VPS'
           set -euo pipefail
@@ -70,9 +70,47 @@ jobs:
           [Install]
           WantedBy=timers.target
           TIMER
+          # IndexNow ownership is proven by one VPS-hosted UTF-8 key file.
+          # Submit only when either of the two public landing pages changes.
+          KEY_FILE=/opt/kq247/seo-groups/indexnow.key
+          if test ! -s "$KEY_FILE"; then
+            openssl rand -hex 16 > "$KEY_FILE"
+            chmod 600 "$KEY_FILE"
+          fi
+          KEY=$(cat "$KEY_FILE")
+          test "${#KEY}" -eq 32
+          printf '%s\n' "$KEY" > "/opt/kq247/deployment/football-original/public/$KEY.txt"
+          cat > /etc/systemd/system/kq247-seo-indexnow.service <<'INDEXNOWSERVICE'
+          [Unit]
+          Description=KQ247 IndexNow only when either Telegram group landing page changes
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/python3 /opt/kq247/seo-groups/indexnow-changes.py
+          WorkingDirectory=/opt/kq247/seo-groups
+          TimeoutStartSec=90
+          NoNewPrivileges=true
+          INDEXNOWSERVICE
+          cat > /etc/systemd/system/kq247-seo-indexnow.timer <<'INDEXNOWTIMER'
+          [Unit]
+          Description=KQ247 VPS two-group changed-page IndexNow check hourly
+          [Timer]
+          OnCalendar=hourly
+          Persistent=true
+          AccuracySec=1min
+          RandomizedDelaySec=0
+          Unit=kq247-seo-indexnow.service
+          [Install]
+          WantedBy=timers.target
+          INDEXNOWTIMER
           systemctl daemon-reload
           systemctl enable --now kq247-seo-groups.timer
+          systemctl enable --now kq247-seo-indexnow.timer
           systemctl start kq247-seo-groups.service
+          systemctl start kq247-seo-indexnow.service
+          systemctl is-active --quiet kq247-seo-indexnow.timer
+          echo 'VPS_INDEXNOW_CHANGE_ONLY_TIMER=PASS'
           systemctl is-enabled --quiet kq247-seo-groups.timer
           systemctl is-active --quiet kq247-seo-groups.timer
           python3 - <<'PY'
