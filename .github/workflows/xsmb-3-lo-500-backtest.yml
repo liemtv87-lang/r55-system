@@ -1,0 +1,17 @@
+name: XSMB 3 Lo 500-Draw Holdout Parallel Research
+on:
+  push:
+    paths: ['.github/workflows/xsmb-3-lo-500-backtest.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  calculate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numerical packages
+        run: python3 -m pip install --disable-pip-version-check --quiet numpy
+      - name: Run 20000 models 500 validation and separate latest 500 holdout
+        run: python3 research/xsmb_3_lo_500_holdout_20261013.py
