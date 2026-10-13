@@ -1,0 +1,29 @@
+name: KQ247 XS Three Cang and QC Live DOM Inspect
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-3c-qc-inspect-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Inspect real three-region upstream lottery HTML structure read only
+        run: |
+          python3 - <<'PY'
+          import urllib.request,re,html
+          roots=['https://64-120-92-172.sslip.io/xoso?region='+p for p in ['xsmb','xsmt','xsmn']]
+          for url in roots:
+              with urllib.request.urlopen(url,timeout=22) as r:
+                  t=r.read(750000).decode('utf-8','replace')
+                  print('XS_LIVE_DOM',url,'size',len(t))
+                  for pattern in ['DÀN 3 CÀNG','Dàn 3 càng','3 CÀNG','<details','<summary','500 số','Mua tool','Nhóm xổ số','COPY TOÀN BỘ ĐÀI','</body>']:
+                      hits=list(re.finditer(re.escape(pattern),t,re.I))
+                      print('DOM_PATTERN',pattern,'count',len(hits))
+                      for m in hits[:3]:
+                          a=max(0,m.start()-380);b=min(len(t),m.end()+460)
+                          excerpt=re.sub(r'[\\s\\n]+',' ',t[a:b])
+                          print('DOM_EXCERPT',pattern,excerpt[:920])
+          PY
