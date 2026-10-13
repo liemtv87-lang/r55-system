@@ -1,0 +1,25 @@
+name: XSMB 316 Replay Reproducibility Across Runners
+on:
+  push:
+    paths: ['.github/workflows/xsmb-316-replay-reproducibility-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        replicate: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 -c 'import numpy; print("NUMPY_VERSION",numpy.__version__)'
+      - run: python3 research/xsmb_316_independent_replay_20261013.py
