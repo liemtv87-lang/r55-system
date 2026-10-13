@@ -53,3 +53,51 @@ jobs:
               print('VIETLOTT_UI_OK',path,len(html))
           print('VIETLOTT_NIGHTLY_R33_CONTRACT_PASS')
           PY
+
+  sales_sync:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Ensure Vietlott bot client link and existing license count remain synchronized
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,urllib.request
+          j=json.load(urllib.request.urlopen('http://127.0.0.1:18087/healthz',timeout=12))
+          assert j.get('ok') and j.get('active') and j.get('databaseConfigured') and not j.get('lastError'),'sales bot unhealthy'
+          print('R33_SALES_BOT_VPS_ACTIVE=PASS')
+          PY
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import pg from 'pg';
+          import fs from 'node:fs';
+          const worker=fs.readFileSync('/app/worker.mjs','utf8');
+          for(const s of ['latest:vietlott','plans:vietlott','myCodes','sendLatestClient','validClientUrl','sales_link_history']){
+            if(!worker.includes(s))throw Error('missing sales worker '+s);
+          }
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:12000});
+          try{
+            const expected='https://vietlott.64-120-92-172.sslip.io/client.html';
+            const c=await pool.query("SELECT value FROM public.sales_config WHERE key='client_vietlott_url'");
+            const h=await pool.query("SELECT url FROM public.sales_link_history WHERE product='vietlott' AND link_role='client' AND is_current=true");
+            if(c.rows.length!==1||c.rows[0].value!==expected||h.rows.length!==1||h.rows[0].url!==expected)
+              throw Error('sales customer URL differs from main R33 customer URL');
+            const counts=await pool.query("SELECT count(*)::int AS active,count(code_value)::int AS codes,count(*) FILTER (WHERE telegram_user_id IS NOT NULL)::int AS linked FROM public.sales_licenses WHERE product='vietlott' AND status='active'");
+            const q=counts.rows[0];
+            if(q.active<1||q.active!==q.codes||q.linked!==q.active)throw Error('active licenses missing code or Telegram owner');
+            const prices=await pool.query("SELECT duration_days,price_vnd,enabled FROM public.sales_plans WHERE product='vietlott' AND duration_days IN (10,30)");
+            const tr=prices.rows.find(x=>x.duration_days===10&&x.enabled);
+            const mo=prices.rows.find(x=>x.duration_days===30&&x.enabled);
+            if(!tr||Number(tr.price_vnd)!==0||!mo||Number(mo.price_vnd)!==1500000)
+              throw Error('Vietlott pricing mismatch');
+            console.log('R33_VIETLOTT_BOT_LATEST_LINK=PASS',expected);
+            console.log('R33_VIETLOTT_EXISTING_CODES=PASS',q.active,'active; no code values disclosed');
+            console.log('R33_VIETLOTT_FREE_MONTHLY=PASS');
+          }finally{await pool.end()}
+          JS
+          VPS
