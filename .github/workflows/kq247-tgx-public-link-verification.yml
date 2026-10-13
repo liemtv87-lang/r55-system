@@ -1,0 +1,49 @@
+name: Verify two TGX Telegram directory backlinks
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-tgx-public-link-verification.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-public-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm two live public listing pages contain exact Telegram anchor links
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.parse, html.parser, json
+          class Anchors(html.parser.HTMLParser):
+              def __init__(self):super().__init__();self.links=[]
+              def handle_starttag(self,t,a):
+                  if t=='a':
+                      self.links += [v for k,v in a if k=='href' and v]
+          groups={'football':('https://tgfind.net/en/resource/keochuyengia79','https://t.me/keochuyengia79'),
+                  'lottery':('https://tgfind.net/en/resource/xsbm999','https://t.me/xsbm999')}
+          for name,(listing,target) in groups.items():
+              try:
+                  req=urllib.request.Request(listing,headers={'User-Agent':'Mozilla/5.0 (compatible; KQ247-verifier/1.0)'})
+                  with urllib.request.urlopen(req,timeout=22) as r:
+                      code=r.status
+                      final=r.geturl()
+                      content_type=r.headers.get('content-type','')
+                      page=r.read(400000).decode('utf8','replace')
+                  parser=Anchors();parser.feed(page)
+                  def norm(s):
+                      p=urllib.parse.urlsplit(s)
+                      return (p.hostname or '').lower().removeprefix('www.'),p.path.rstrip('/').lower()
+                  links=[urllib.parse.urljoin(final,v) for v in parser.links]
+                  matched=any(norm(x)==norm(target) for x in links)
+                  verified=(code==200 and 'html' in content_type and matched and
+                            urllib.parse.urlsplit(final).hostname=='tgfind.net')
+                  print('TGX_PUBLIC_EVIDENCE',json.dumps({
+                    'group':name,'status':code,'listing':listing,'matched_target_anchor':matched,
+                    'verified':verified,'final_url':final,'html_bytes':len(page),
+                    'telegram_link_examples':[x for x in links if 't.me/' in x][:4]
+                  }))
+              except Exception as e:
+                  print('TGX_PUBLIC_EVIDENCE',json.dumps({'group':name,'listing':listing,
+                    'verified':False,'error':str(e)[:230]}))
+          PY
