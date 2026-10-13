@@ -1,0 +1,31 @@
+name: Vietlott R33 public reverse proxy audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-proxy-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect reverse proxy targets on VPS (read only)
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo R33_PROXY_SOFTWARE
+          for x in nginx caddy traefik; do command -v "$x" || true;systemctl is-active "$x" 2>/dev/null || true;done
+          echo R33_PROXY_UPSTREAM_CONFIG
+          for p in /etc/caddy/Caddyfile /etc/nginx/sites-enabled /etc/nginx/conf.d;do
+            if [ -e "$p" ];then grep -R -n -E 'vietlott|18088|18112|18113|reverse_proxy|proxy_pass' "$p" 2>/dev/null | head -60 || true;fi
+          done
+          echo R33_BACKEND_PORTS
+          for port in 18088 18112 18113;do code=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/health" || true);echo "BACKEND_$port=$code";done
+          echo R33_PROXY_AUDIT_DONE
+          VPS
