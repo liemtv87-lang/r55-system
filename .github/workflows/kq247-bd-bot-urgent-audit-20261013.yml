@@ -1,0 +1,70 @@
+name: KQ247 R55 Football Bot Urgent Live Audit
+on:
+  push:
+    paths: [.github/workflows/kq247-bd-bot-urgent-audit-20261013.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only actual football bot Telegram readiness and send eligibility
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo "AUDIT_TIME_UTC=$(date -u +%FT%TZ)"
+          echo "BD_BOT_CONTAINER=$(docker inspect -f '{{.State.Status}} {{.State.StartedAt}}' kq247-r55-group-bot || true)"
+          echo 'BD_BOT_HEALTH_BEGIN'
+          curl -fsS --max-time 9 http://127.0.0.1:18083/healthz || true
+          echo
+          echo 'BD_BOT_HEALTH_END'
+          echo 'BD_BOT_RECENT_LOGS_BEGIN'
+          docker logs --since 12h --tail 110 kq247-r55-group-bot 2>&1 | grep -E 'R55_VPS_GROUP|ERROR|failed|EAI_|ECONN|ETIMED|TOKEN|BOT_' | tail -65 || true
+          echo 'BD_BOT_RECENT_LOGS_END'
+          echo 'BD_PRIMARY_HTTP'
+          for url in 'https://64-120-92-172.sslip.io/' 'https://64-120-92-172.sslip.io/api/main-football?data=1&limit=20'; do
+            curl -k -sS -o /dev/null --max-time 16 -w 'HTTP=%{http_code} URL=%{url_effective}\n' "$url" || true
+          done
+          echo 'BD_DATABASE_AUDIT_BEGIN'
+          docker exec kq247-r55-group-bot node --input-type=module -e '
+          import pg from "pg";
+          const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,connectionTimeoutMillis:8000});
+          try {
+            const state=await pool.query("SELECT day::text AS day, source, locked_at, jsonb_array_length(CASE WHEN jsonb_typeof(payload->\x27matches\x27)=\x27array\x27 THEN payload->\x27matches\x27 ELSE \x27[]\x27::jsonb END) AS matches FROM football_snapshots ORDER BY day DESC LIMIT 4");
+            console.log("BD_SNAPSHOT_STATE",JSON.stringify(state.rows));
+            const ledger=await pool.query("SELECT scope, payload->>\x27state\x27 AS state, payload->>\x27error\x27 AS error, updated_at FROM football_compact_stats WHERE scope LIKE \x27r55_prematch_sent_%\x27 ORDER BY updated_at DESC LIMIT 8");
+            console.log("BD_LAST_SEND_ROWS",JSON.stringify(ledger.rows));
+            const m=await pool.query("SELECT day::text,payload FROM football_snapshots ORDER BY day DESC LIMIT 2");
+            const now=Date.now();let eligible=0,soon=0,upcoming=0,missed=0;
+            for(const row of m.rows)for(const x of row.payload?.matches||[]) {
+              const kickoff=Date.parse(x.kickoff||""), until=kickoff-now,market=x.market||{},odds=Number(market.odds),line=Number(market.line);
+              const valid=/^BDL_\d{5,12}$/.test(String(x.id||"")) && ["AH","OU"].includes(market.type) && Number.isFinite(odds)&&odds>=1.5&&odds<=3.5&&Number.isFinite(line)&&Math.abs(line*4-Math.round(line*4))<1e-7;
+              if(until>0)upcoming++;if(valid&&until>=5*60000&&until<=40*60000)eligible++;if(valid&&until>=40*60000&&until<=90*60000)soon++;if(valid&&until<0&&until>-12*3600000)missed++;
+            }
+            console.log("BD_ELIGIBILITY_NOW",JSON.stringify({upcoming,eligible5to40:eligible,eligible40to90:soon,playedWithin12h:missed}));
+          }catch(e){console.log("BD_DB_QUERY_FAILED",String(e).slice(0,240));process.exitCode=1}
+          finally{await pool.end()}
+          ' || true
+          echo 'BD_DATABASE_AUDIT_END'
+          echo 'BD_TELEGRAM_API_DIAGNOSTIC'
+          docker exec kq247-r55-group-bot node -e '
+          const token=process.env.R55_GROUP_BOT_TOKEN||process.env.TELEGRAM_LOTTERY_BOT_TOKEN;
+          if(!token){console.log("BD_TOKEN_NOT_SET");process.exit(0)}
+          (async()=>{
+           for(const [name,query] of [["getMe","getMe"],["getChat","getChat?chat_id=%40keochuyengia79"]]){
+             try{const r=await fetch("https://api.telegram.org/bot"+token+"/"+query,{signal:AbortSignal.timeout(9000)});
+             const x=await r.json();console.log("BD_TELEGRAM",name,"status",r.status,"ok",x.ok,"description",x.ok?"":String(x.description||"").slice(0,85),"bot",name==="getMe"?x.result?.username:null);}
+             catch(e){console.log("BD_TELEGRAM",name,"error",String(e).slice(0,100))}
+           }
+          })()
+          ' || true
+          echo 'BD_URGENT_READONLY_END'
+          VPS
