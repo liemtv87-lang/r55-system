@@ -5,7 +5,7 @@ The production XSMB tool is never accessed or modified.
 """
 import csv,hashlib,json,os,runpy,sys
 sys.argv=['research/xsmb_3lo_stable_diversity_20261013.py','hybrid']
-m=runpy.run_path('research/xsmb_3lo_covariance_diversity_20261013.py')
+m=runpy.run_path('research/xsmb_3lo_stable_diversity_20261013.py')
 R=m['R'];chosen=m['chosen'];counts=m['counts'];rows=m['rows'];START=m['START'];target=m['target']
 params=m['parameters']
 assert tuple(round(float(x),5) for x in params)==(.12,.15,0.),params
