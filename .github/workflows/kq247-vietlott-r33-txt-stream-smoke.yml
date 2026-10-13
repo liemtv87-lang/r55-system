@@ -1,0 +1,48 @@
+name: Vietlott R33 4 TXT downloads stream QA
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-txt-stream-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Validate streaming 33-rule full and reduced TXT from public VPS
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const BASE='https://vietlott.64-120-92-172.sslip.io';
+          const state=await (await fetch(BASE+'/api/state',{signal:AbortSignal.timeout(25000)})).json();
+          assert.equal(state.ready,true);
+          for(const p of ['mega645','power655']){
+            const snap=state.products[p].snapshot;
+            for(const scope of ['full33','reduced']){
+              const expected=scope==='full33'?snap.filtered_total:snap.reduced_total;
+              const controller=new AbortController();
+              const url=BASE+'/api/export-txt?product='+p+'&scope='+scope;
+              const r=await fetch(url,{signal:controller.signal,headers:{'accept':'text/plain'}});
+              assert.equal(r.status,200,p+scope);
+              assert.equal(Number(r.headers.get('x-ticket-count')),expected,'TXT count '+p+scope);
+              assert.match(r.headers.get('content-disposition')||'',/\.txt/i);
+              const reader=r.body.getReader(),dec=new TextDecoder();
+              let body='';
+              for(let k=0;k<8&&body.split('\n').length<8;k++){
+                const c=await reader.read();if(c.done)break;
+                body+=dec.decode(c.value,{stream:true});
+              }
+              await reader.cancel().catch(()=>{});
+              controller.abort();
+              assert.match(body,/SO BO: /);
+              assert.match(body,/DINH DANG: 5 BO\/DONG/);
+              const lines=body.split('\n');
+              const ticketline=lines.find(x=>x.includes(' ; ')&&/[𝟎-𝟗]/u.test(x));
+              assert.ok(ticketline,'Missing bold-ticket rows '+p+scope);
+              assert.equal(ticketline.split(' ; ').length,5,'TXT must have 5 tickets per complete row');
+              console.log('TXT_STREAM_PASS',p,scope,'count='+expected,'sample_tickets=5','filename='+r.headers.get('content-disposition'));
+            }
+          }
+          JS
