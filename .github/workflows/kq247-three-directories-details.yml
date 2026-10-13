@@ -1,0 +1,67 @@
+name: KQ247 Next Three Directories Detailed Form Audit
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-three-directories-details.yml']
+permissions: {contents: read}
+jobs:
+  inspect-form:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect exact public form fields in dedicated Chromium
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 10 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=18 root@64.120.92.172 "bash -se -- $SHARD" <<'REMOTE'
+          set -euo pipefail
+          index="$1"
+          base=/opt/pwremote/seo
+          mkdir -p "$base"
+          cat > "$base/details-$index.py" <<'PY'
+          from playwright.sync_api import sync_playwright
+          import json,sys
+          urls=['https://toptglinks.com/submit','https://groupssor.com/submit','https://tgmania.com/submit']
+          url=urls[int(sys.argv[1])]
+          with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True)
+            page=browser.new_page(viewport={'width':1200,'height':900})
+            response=page.goto(url,wait_until='domcontentloaded',timeout=25000)
+            page.wait_for_timeout(500)
+            d=page.evaluate("""() => ({
+              url:location.href, title:document.title, 
+              forms:[...document.querySelectorAll('form')].slice(0,5).map(f=>({
+                method:f.method,action:typeof f.action==='string'?f.action:'',
+                html:f.outerHTML.slice(0,500),
+                fields:[...f.querySelectorAll('input,select,textarea,button')].map(e=>({
+                  tag:e.tagName.toLowerCase(),name:e.name,id:e.id,type:e.type,
+                  required:e.required,placeholder:e.placeholder||'',text:(e.textContent||'').trim().slice(0,70),
+                  checked:e.checked,options:e.tagName==='SELECT'?[...e.options].map(o=>({value:o.value,text:o.textContent.trim()})).slice(0,70):undefined
+                }))
+              })),
+              bodyText:document.body.innerText.slice(0,1200),
+              captcha:!!document.querySelector('iframe[src*=captcha],[data-sitekey],[class*=captcha]')
+            })""")
+            print('TARGET_FORM_DETAIL',json.dumps({'index':int(sys.argv[1]),'http':response.status if response else None,**d},ensure_ascii=False)[:20000])
+            browser.close()
+          PY
+          chmod 0644 "$base/details-$index.py"
+          timeout 100s docker run --rm --init --name "kq247-detail-$index" \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 140 --cpus 1 --memory 1024m --shm-size 192m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=400m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=100m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/details-$index.py,dst=/app/probe.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/probe.py "$index"
+          REMOTE
