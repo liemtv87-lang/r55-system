@@ -66,8 +66,10 @@ jobs:
           docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim node --check scripts/engine.mjs
           docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim node --check scripts/update-data.mjs
           docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim node --check snapdeploy-server.mjs
+          echo VIETLOTT_R33_BUILD
+          docker build -t kq247-vietlott-r33-candidate:20261013 "$ROOT"
           echo VIETLOTT_R33_SOURCE_TESTS
-          docker run --rm -v "$ROOT":/app -w /app node:22-bookworm-slim sh -ec '
+          docker run --rm -v "$ROOT":/app -w /app kq247-vietlott-r33-candidate:20261013 sh -ec '
             node --check snapdeploy-server.mjs
             node --check scripts/engine.mjs
             node --check scripts/update-data.mjs
@@ -79,7 +81,5 @@ jobs:
             node scripts/reduce-coverage.test.mjs
             node scripts/verify-fast-pool-filter.mjs
           '
-          echo VIETLOTT_R33_BUILD
-          docker build -t kq247-vietlott-r33-candidate:20261013 "$ROOT"
           echo VIETLOTT_R33_CANDIDATE_READY_NO_PRODUCTION_CHANGE
           REMOTE
