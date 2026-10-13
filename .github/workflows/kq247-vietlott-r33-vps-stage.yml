@@ -96,11 +96,12 @@ jobs:
             if curl -fsS --max-time 3 http://127.0.0.1:18112/health > /tmp/kq247-r33-candidate-health.json; then break; fi
             sleep 1
           done
-          node - <<'NODE'
-          const fs=require('fs');
-          const j=JSON.parse(fs.readFileSync('/tmp/kq247-r33-candidate-health.json','utf8'));
-          if(!j.ok||!String(j.runtime||'').includes('USER33'))throw Error('wrong R33 runtime');
-          console.log('VIETLOTT_R33_CANDIDATE_HEALTH=PASS',j.runtime,'DATA_READY='+j.data_ready);
-          NODE
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/kq247-r33-candidate-health.json'))
+          assert j.get('ok') is True and 'USER33' in str(j.get('runtime','')), j
+          print('VIETLOTT_R33_CANDIDATE_HEALTH=PASS',j['runtime'],'DATA_READY='+str(j.get('data_ready')))
+          PY
+          docker inspect -f 'VIETLOTT_R33_CANDIDATE_CONTAINER={{.State.Status}}' kq247-vietlott-r33-candidate
           echo VIETLOTT_R33_CANDIDATE_READY_NO_PRODUCTION_CHANGE
           REMOTE
