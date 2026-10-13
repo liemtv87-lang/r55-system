@@ -88,9 +88,12 @@ async function tick(){
     try{await build('official')}catch(e){state.lastError=String(e.message||e);log('NATIVE_OFFICIAL_FAILED',state.lastError);}
    }
   }
-  // A confirmed Bongdalu FT refresh starts at 13:30 VN; only after this
-  // completes may the Telegram group bot publish the day's summary.
-  if(date>=minimum&&hour>=13&&minute>=30&&hour%2===1&&lastGradeSlot!==hour){
+  // Grade from 13:30 VN onward. On a redeploy/restart after 13:30,
+  // immediately run the missed grade instead of waiting until 15:30.
+  // This is necessary because the Telegram report waits for a fresh FT sync.
+  const afterReportDeadline=hour>13||(hour===13&&minute>=30);
+  const regularGrade=hour>=13&&hour%2===1&&minute>=30&&lastGradeSlot!==hour;
+  if(date>=minimum&&afterReportDeadline&&(lastGradeSlot===-1||regularGrade)){
    lastGradeSlot=hour;
    try{await grade()}catch(e){state.lastError=String(e.message||e);log('NATIVE_GRADE_FAILED',state.lastError);}
   }
