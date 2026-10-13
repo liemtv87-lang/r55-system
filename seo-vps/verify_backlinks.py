@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Read-only backlink verifier. Never submits links or edits other services."""
-import json, sys, urllib.request, urllib.parse
+import json, sys, urllib.request, urllib.parse, ipaddress, socket
 from html.parser import HTMLParser
 from collections import defaultdict
 
@@ -13,10 +13,27 @@ def norm(url):
     p=urllib.parse.urlparse(url.strip())
     return p.netloc.lower().removeprefix('www.'),p.path.rstrip('/').lower()
 
+def public_http_url(url):
+    p=urllib.parse.urlparse(url)
+    if p.scheme not in ('http','https') or not p.hostname or p.username or p.password:
+        return False
+    try:
+        addresses=socket.getaddrinfo(p.hostname,p.port or (443 if p.scheme=='https' else 80))
+        return bool(addresses) and all(ipaddress.ip_address(a[4][0]).is_global for a in addresses)
+    except (OSError,ValueError):
+        return False
+
+class SafeRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        if not public_http_url(newurl): raise ValueError('unsafe redirect')
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
 def verify(url,target):
     try:
+        if not public_http_url(url): return False,'unsafe or non-public URL'
+        opener=urllib.request.build_opener(SafeRedirect())
         req=urllib.request.Request(url,headers={'User-Agent':'KQ247BacklinkVerifier/1.0'})
-        with urllib.request.urlopen(req,timeout=12) as resp:
+        with opener.open(req,timeout=12) as resp:
             if resp.status!=200: return False,f'HTTP {resp.status}'
             if 'text/html' not in resp.headers.get('Content-Type',''): return False,'not HTML'
             p=Links();p.feed(resp.read(1500000).decode('utf-8','replace'))
