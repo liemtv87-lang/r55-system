@@ -1,0 +1,25 @@
+name: KQ247 groupmandi public form contract
+on:
+  push:
+    paths: ['.github/workflows/kq247-groupmandi-form-contract.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Read form options and field types without submitting
+        run: |
+          python3 - <<'PY'
+          import urllib.request,re
+          from html.parser import HTMLParser
+          t=urllib.request.urlopen('https://groupmandi.com/',timeout=14).read().decode('utf8','replace')
+          for name in ('name','platform','category','members','link','description','website'):
+           pat=re.compile(r'<(?:input|textarea|select)\b[^>]*name=["\']'+re.escape(name)+r'["\'][^>]*>',re.I)
+           for m in pat.finditer(t):print('GROUPMANDI_INPUT',name,re.sub(r'\s+',' ',t[m.start():m.end()])[:350])
+          for m in re.finditer('<select',t,re.I):
+           print('GROUPMANDI_SELECT',re.sub(r'\s+',' ',t[m.start():t.find('</select>',m.start())+9])[:850])
+          for match in re.finditer('submit.php',t,re.I):
+           print('GROUPMANDI_HANDLER',re.sub(r'\s+',' ',t[max(0,match.start()-160):match.start()+500])[:700])
+          PY
