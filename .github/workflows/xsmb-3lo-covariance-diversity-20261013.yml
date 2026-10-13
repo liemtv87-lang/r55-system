@@ -1,0 +1,20 @@
+name: XSMB 3-Lotto Triple Diversity & Covariance
+on:
+  push:
+    paths: ['research/xsmb_3lo_covariance_diversity_20261013.py','.github/workflows/xsmb-3lo-covariance-diversity-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        mode: [hybrid, positional, rank, split]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_3lo_covariance_diversity_20261013.py ${{ matrix.mode }}
