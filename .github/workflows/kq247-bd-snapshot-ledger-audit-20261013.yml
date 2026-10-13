@@ -39,6 +39,17 @@ jobs:
            console.log('FOOTBALL_ELIGIBILITY',{upcoming,validMarkets:market,badMarkets:badMarket,nonBdl,eligible5To40:near});
            const ledger=await pool.query("SELECT scope,payload,updated_at FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' OR scope LIKE 'r55_telegram_sent_%' ORDER BY updated_at DESC LIMIT 25");
            for(const r of ledger.rows)console.log('FOOTBALL_SEND_LEDGER',JSON.stringify({scope:r.scope,state:r.payload?.state,has_message_id:!!r.payload?.messageId,day:r.payload?.day,owner:r.payload?.owner,updated_at:r.updated_at,error:r.payload?.error||null}));
+           const nativeHealth=await fetch('http://football-native:3001/healthz').then(r=>r.json()).catch(e=>({error:String(e).slice(0,140)}));
+           console.log('NATIVE_SCORE_SYNC_HEALTH',JSON.stringify({lastGrade:nativeHealth.lastGrade,lastGradeOK:nativeHealth.lastGradeOK,lastError:nativeHealth.lastError,active:nativeHealth.active}));
+           const reportSent=await pool.query("SELECT scope,payload,updated_at FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent' AND payload->>'messageId' IS NOT NULL AND updated_at >= $1::timestamptz AND updated_at < $2::timestamptz",['2026-10-12T12:05:00+07:00','2026-10-13T12:05:00+07:00']);
+           const days=await pool.query("SELECT day::text,payload FROM football_snapshots WHERE day IN ('2026-10-12'::date,'2026-10-11'::date,'2026-10-13'::date)");
+           const byMatch=new Map();for(const v of days.rows)for(const x of v.payload?.matches||[])byMatch.set(v.day+'|'+x.id,x);
+           const mids=reportSent.rows.map(v=>v.scope.match(/^r55_prematch_sent_(\\d{4}-\\d{2}-\\d{2})_(BDL_\\d+)$/)).filter(Boolean);
+           const ftById=await pool.query("SELECT fixture_id::text AS id FROM football_final_results WHERE fixture_id::text=ANY($1::text[]) AND source='bongdalu-ft-verified' AND fixture_status='FT'",[mids.map(m=>m[2].slice(4))]);
+           const verified=new Set(ftById.rows.map(x=>x.id));
+           const diag={posts:mids.length,found_snapshot:0,not_due:0,due:0,stored_ft:0,due_without_ft:0};
+           for(const m of mids){const x=byMatch.get(m[1]+'|'+m[2]);if(!x)continue;diag.found_snapshot++;const kickoff=Date.parse(x.kickoff||'');if(!Number.isFinite(kickoff)||kickoff>Date.now()-150*60000){diag.not_due++;continue}diag.due++;if(verified.has(m[2].slice(4)))diag.stored_ft++;else diag.due_without_ft++;}
+           console.log('NOON_17_POSTS_FT_DIAG',JSON.stringify(diag));
            const finals=await pool.query("SELECT source,fixture_status,count(*)::int AS total,max(fetched_at) AS last_updated FROM football_final_results GROUP BY source,fixture_status ORDER BY total DESC");
            console.log('FT_VERIFIED_SOURCE_TOTALS',JSON.stringify(finals.rows));
            const published=await pool.query("SELECT scope,payload FROM football_compact_stats WHERE scope IN ('r55_telegram_sent_2026-10-12','r55_group_grade_2026-10-13') ORDER BY scope");
