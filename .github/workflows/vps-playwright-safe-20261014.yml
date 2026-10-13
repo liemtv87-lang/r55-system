@@ -1,0 +1,50 @@
+name: VPS Playwright Isolated Safe Audit
+on:
+  push:
+    branches:
+      - vps-playwright-isolated-20261014
+    paths:
+      - .github/workflows/vps-playwright-safe-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vps-playwright-isolated
+  cancel-in-progress: false
+jobs:
+  safe-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: SSH client on ephemeral runner
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: VPS read-only audit (do not modify KQ247)
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo 'Missing VPS_ROOT_PASSWORD'; exit 1; }
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=10 -o NumberOfPasswordPrompts=1 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          echo 'AUDIT_VPS_CONNECTION=OK'
+          printf 'HOST='; hostname
+          printf 'OS='; . /etc/os-release; echo "$PRETTY_NAME"
+          printf 'CPU='; nproc
+          echo 'MEMORY'; free -h | head -n 2
+          echo 'DISK'; df -h / | tail -n 1
+          printf 'PYTHON='; python3 --version 2>&1
+          printf 'VENV='; if python3 -m venv --help >/dev/null 2>&1; then echo AVAILABLE; else echo MISSING; fi
+          for name in pwremote node npm chromium chromium-browser google-chrome; do
+            if [ "$name" = pwremote ]; then
+              printf 'USER_pwremote='; id pwremote 2>/dev/null || echo MISSING
+            else
+              printf 'CMD_%s=' "$name"; command -v "$name" || echo MISSING
+            fi
+          done
+          echo 'ACTIVE_CONTAINERS_READ_ONLY'
+          docker ps --format '{{.ID}} {{.Names}} {{.Status}}'
+          echo 'PLAYWRIGHT_DIRECTORY'
+          if test -d /opt/pwremote; then ls -ld /opt/pwremote; else echo ABSENT; fi
+          echo 'AUDIT_COMPLETE_NO_CONTAINER_MUTATION'
+          REMOTE
