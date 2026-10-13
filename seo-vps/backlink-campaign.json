@@ -370,6 +370,45 @@
       "status": "prospect",
       "evidence_url": null,
       "listing_url": null
+    },
+    {
+      "name": "TGFind inclusion",
+      "submit_url": "https://tgfind.io/en/inclusion-link",
+      "method": "manual_review",
+      "notes": "Web submission form; requires interaction",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "Groupsor",
+      "submit_url": "https://groupssor.com/",
+      "method": "manual_review",
+      "notes": "Public directory with submit option",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TG.app",
+      "submit_url": "https://tg.app/",
+      "method": "manual_review",
+      "notes": "Telegram sign-in and admin confirmation required",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
     }
   ],
   "published_listings": [],
