@@ -253,6 +253,84 @@
       "status": "prospect",
       "evidence_url": null,
       "listing_url": null
+    },
+    {
+      "name": "TelegramHub",
+      "submit_url": "https://telegramhub.org/submit",
+      "method": "manual_review",
+      "notes": "eligibility_and_submission_not_yet_verified",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "Search-t.me",
+      "submit_url": "https://en.search-t.me/add",
+      "method": "manual_review",
+      "notes": "eligibility_and_submission_not_yet_verified",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TGFinder",
+      "submit_url": "https://tgfinder.net/submit",
+      "method": "manual_review",
+      "notes": "eligibility_and_submission_not_yet_verified",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelegramRadar",
+      "submit_url": "https://telegramradar.com/en",
+      "method": "manual_review",
+      "notes": "eligibility_and_submission_not_yet_verified",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TeleHub",
+      "submit_url": "https://telehub.to/",
+      "method": "manual_review",
+      "notes": "eligibility_and_submission_not_yet_verified",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelegramHub.app",
+      "submit_url": "https://telegramhub.app/",
+      "method": "manual_review",
+      "notes": "eligibility_and_submission_not_yet_verified",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
     }
   ],
   "published_listings": [],
