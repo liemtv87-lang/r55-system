@@ -38,7 +38,7 @@ jobs:
           $REMOTE 'bash -se' <<'VPS'
           set -euo pipefail
           before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
-          install -m 0644 /opt/kq247/organic-growth-10k/hourly-report.py /opt/kq247/organic-growth-10k/hourly-report.py
+          chmod 0644 /opt/kq247/organic-growth-10k/hourly-report.py
           cat > /etc/systemd/system/kq247-organic-10k.service <<'SERVICE'
           [Unit]
           Description=KQ247 organic reach experiment only (separate from backlinks)
