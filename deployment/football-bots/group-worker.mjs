@@ -103,7 +103,7 @@ const summaryMessage=report=>{
  const decided=report.win+report.half_win+report.half_loss+report.loss;
  const rate=decided?((report.win+.5*report.half_win)*100/decided).toFixed(1)+'%':'chưa đủ kết quả';
  const body='📊 KQ247 TỔNG KẾT SAU 13:30 VN\nKhung: 12:05 hôm trước → 12:05 hôm nay\n'+
-  '⚽ Kèo bot thực sự đã đăng: '+report.total+'\n✅ FT xác minh: '+report.settled+
+  '⚽ Tổng số trận TOOL đã lên kèo: '+report.total+'\n✅ FT xác minh: '+report.settled+
   '\n⏳ Chưa có FT: '+(report.pending+report.notDue)+
   '\n🟢 Thắng: '+report.win+' | Thắng 1/2: '+report.half_win+
   '\n⚪ Hòa kèo: '+report.push+'\n🔴 Thua 1/2: '+report.half_loss+' | Thua: '+report.loss+
@@ -116,27 +116,42 @@ async function noonGrade(){
  if(!await freshFtGrade())return {reason:'awaiting_verified_ft_sync_after_1330'};
  const prior=await pool.query("SELECT payload FROM football_compact_stats WHERE scope=$1 LIMIT 1",[key]);
  const start=utcWindow(yesterday),end=utcWindow(today);
- const ledger=await pool.query("SELECT scope,payload FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent' AND payload->>'messageId' IS NOT NULL AND updated_at >= $1 AND updated_at < $2 ORDER BY updated_at",[start,end]);
- const sent=[],seen=new Set();
- for(const row of ledger.rows){
-  const hit=row.scope.match(/^r55_prematch_sent_(\d{4}-\d{2}-\d{2})_(BDL_\d{5,12})$/);
-  if(!hit||seen.has(hit[2]))continue;seen.add(hit[2]);sent.push({day:hit[1],id:hit[2]});
+ const beforeYesterday=new Date(Date.parse(yesterday+'T00:00:00Z')-86400000).toISOString().slice(0,10);
+ // The public tool publishes one immutable daily Bongdalu snapshot. Count
+ // ALL eligible market selections whose kickoff belongs to this report
+ // window, not just the small subset the Telegram bot happened to post.
+ // The previous two locked daily snapshots can contain fixtures in this
+ // 12:05-to-12:05 reporting window.
+ const snapshots=await pool.query(
+  "SELECT day::text AS day,locked_at,payload FROM football_snapshots WHERE source='bongdalu-r55' AND day IN ($1::date,$2::date) ORDER BY day",
+  [beforeYesterday,yesterday]);
+ const byFixture=new Map(),from=start.getTime(),to=end.getTime();
+ for(const snap of snapshots.rows){
+  if(!snap.locked_at)continue;
+  const lockedAt=new Date(snap.locked_at).getTime();
+  const matches=typeof snap.payload==='string'?JSON.parse(snap.payload).matches:snap.payload?.matches;
+  for(const m of matches||[]){
+   const id=fixture(m),kick=Date.parse(m.kickoff||'');
+   if(!id||!cleanMarket(m)||!Number.isFinite(kick)||kick<from||kick>=to||
+      !Number.isFinite(lockedAt)||lockedAt>kick)continue;
+   // Newer, still-prematch snapshot takes priority, never grade a retrospective selection.
+   byFixture.set(id,{market:m.market,kickoff:kick,id});
+  }
  }
- const snapshots=await pool.query("SELECT day::text AS day,payload FROM football_snapshots WHERE day IN ($1::date,$2::date)",[today,yesterday]);
- const matchById=new Map();
- for(const row of snapshots.rows)for(const m of row.payload?.matches||[])matchById.set(row.day+'|'+m.id,m);
- const final=await pool.query("SELECT fixture_id::text AS id,home_score,away_score FROM football_final_results WHERE source='bongdalu-ft-verified' AND fixture_status='FT'");
+ const final=await pool.query(
+  "SELECT fixture_id::text AS id,home_score,away_score FROM football_final_results WHERE source='bongdalu-ft-verified' AND fixture_status='FT'");
  const finals=new Map(final.rows.map(x=>[x.id,x]));
- const report={total:sent.length,settled:0,pending:0,notDue:0,win:0,half_win:0,push:0,half_loss:0,loss:0,units:0};
- for(const row of sent){
-  const m=matchById.get(row.day+'|'+row.id),kick=Date.parse(m?.kickoff||'');
-  if(!m||!Number.isFinite(kick)){report.pending++;continue;}
-  if(kick>Date.now()-150*60000){report.notDue++;continue;}
-  const ft=finals.get(fixture(row.id)),g=ft?settle(m.market,Number(ft.home_score),Number(ft.away_score)):null;
-  if(!g){report.pending++;continue;}
-  report.settled++;report[g.result]++;report.units+=g.profitUnits;
+ const report={total:byFixture.size,settled:0,pending:0,notDue:0,win:0,half_win:0,push:0,half_loss:0,loss:0,units:0,
+  source:'all_locked_tool_predictions',windowStart:start.toISOString(),windowEnd:end.toISOString()};
+ for(const entry of byFixture.values()){
+  if(entry.kickoff>Date.now()-150*60000){report.notDue++;continue}
+  const ft=finals.get(entry.id);
+  const result=ft?settle(entry.market,Number(ft.home_score),Number(ft.away_score)):null;
+  if(!result){report.pending++;continue}
+  report.settled++;report[result.result]++;report.units+=result.profitUnits;
  }
  report.units=Number(report.units.toFixed(3));
+ if(!snapshots.rows.length||!report.total)return {reason:'no_locked_tool_predictions_for_reporting_window'};
  const previous=prior.rows[0]?.payload;
  // A missing verified FT must never be advertised as zero wins/losses.
  // Leave the old message unchanged and retry when Bongdalu FT arrives.
@@ -144,7 +159,7 @@ async function noonGrade(){
   return {reason:'awaiting_confirmed_full_time_scores',posted:report.total,pending:report.pending};
  if(previous){
   if(previous.state!=='sent'||!previous.messageId)return {reason:'summary_delivery_claimed_or_uncertain'};
-  if(Number(previous.report?.settled||0)>=report.settled)return {reason:'summary_up_to_date'};
+  if(previous.report?.source===report.source&&JSON.stringify(previous.report)===JSON.stringify(report))return {reason:'summary_up_to_date'};
   await editSummary(previous.messageId,summaryMessage(report));
   await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
    [key,JSON.stringify({...previous,report,editedAt:new Date().toISOString(),status:'corrected_after_verified_ft'})]);
