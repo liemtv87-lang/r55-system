@@ -1,0 +1,57 @@
+name: KQ247 Vietlott R33 VPS runtime diagnosis (read-only)
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-live-diagnose.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Install SSH support
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read R33 candidate container, status and last error without changing running services
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo "::error::Missing SSH secret"; exit 1; }
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo R33_DIAG_BEGIN
+          docker inspect -f 'CONTAINER={{.Name}} STATE={{.State.Status}} OOM={{.State.OOMKilled}} RESTARTS={{.RestartCount}} EXIT={{.State.ExitCode}}' kq247-vietlott-r33-candidate || true
+          docker stats --no-stream --format 'CPU={{.CPUPerc}} MEMORY={{.MemUsage}}' kq247-vietlott-r33-candidate || true
+          df -h /opt/kq247 | tail -1
+          for p in health status api/state; do
+            code=$(curl -sS --max-time 12 -o "/tmp/r33-diag-${p//\//_}.json" -w '%{http_code}' "http://127.0.0.1:18112/$p" || true)
+            echo "R33_ENDPOINT_${p//\//_}_HTTP=$code"
+          done
+          python3 - <<'PY'
+          import json, pathlib
+          def load(path):
+              try: return json.loads(pathlib.Path(path).read_text())
+              except Exception as e:return {'parse_error':type(e).__name__}
+          h=load('/tmp/r33-diag-health.json')
+          s=load('/tmp/r33-diag-status.json')
+          a=load('/tmp/r33-diag-api_state.json')
+          print('HEALTH',{k:h.get(k) for k in ('ok','runtime','data_ready','status','expected_analysis_date')})
+          print('JOB',{k:s.get(k) for k in ('type','status','started_at','finished_at','exit_code')})
+          print('JOB_ERROR',str(s.get('error') or '')[:220].replace('\n',' '))
+          print('API',{k:a.get(k) for k in ('ready','error','expected_analysis_date')})
+          p=pathlib.Path('/opt/kq247/vietlott-r33-stage/public/state.json')
+          if p.exists():
+              d=load(str(p))
+              for k in ('mega645','power655'):
+                  row=d.get('products',{}).get(k,{})
+                  sn=row.get('snapshot') or {}
+                  print('SNAPSHOT',k,{q:sn.get(q) for q in ('target_date','analysis_date','ruleset_version','locked','filtered_total','reduced_total')},'ERROR',str(row.get('update_error',''))[:160])
+              print('STATE_ERROR',str(d.get('last_update_error'))[:250])
+          else:print('R33_STATE_FILE_MISSING')
+          PY
+          echo R33_RECENT_CONTAINER_ERRORS
+          docker logs --tail 180 kq247-vietlott-r33-candidate 2>&1 | grep -Ei 'Error:|fail|missing|incomplete|out of memory|exited|Killed|snapshot' | tail -25 | sed -E 's/(token|password|secret|authorization|apikey|api_key)=([^ ]+)/\1=REDACTED/Ig' | cut -c 1-200 || true
+          echo R33_DIAG_END
+          VPS
