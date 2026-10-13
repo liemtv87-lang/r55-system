@@ -1,0 +1,33 @@
+name: KQ247 Telegram free directory submit protocol read-only
+on:
+  push:
+    paths: ['.github/workflows/kq247-directory-submit-protocol-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Inspect form fields and API shape read-only
+        run: |
+          python3 - <<'PY'
+          import re,urllib.request
+          from urllib.parse import urljoin
+          sites=['https://groupmandi.com','https://groupverse.co.in/submit-your-group.html','https://telegramgroup.arkservices.in/submit']
+          for site in sites:
+           try:
+            with urllib.request.urlopen(urllib.request.Request(site,headers={'user-agent':'Mozilla/5.0'}),timeout=14) as r:
+             txt=r.read(450000).decode('utf8','replace')
+            print('SUBMIT_PAGE',site,'bytes',len(txt))
+            for term in ['fetch(','XMLHttpRequest','/api/','method:','FormData(','submitGroup','addGroup','captcha','csrf','onsubmit=','form id=','type="submit"']:
+             positions=[m.start() for m in re.finditer(re.escape(term),txt,re.I)]
+             for i in positions[:3]:
+              block=re.sub(r'\s+',' ',txt[max(0,i-105):i+245])
+              print('SUBMIT_PROTOCOL',site,term,block[:360])
+            scripts=re.findall(r'<script[^>]+src=["\']([^"\']+)["\']',txt,re.I)
+            print('SUBMIT_SCRIPTS',site,[urljoin(site,s) for s in scripts[:15]])
+           except Exception as e:
+            print('SUBMIT_INSPECT_ERROR',site,type(e).__name__,str(e)[:150])
+          PY
