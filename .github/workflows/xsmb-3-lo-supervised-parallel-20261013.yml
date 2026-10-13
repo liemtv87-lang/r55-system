@@ -1,0 +1,22 @@
+name: XSMB 3 Lo Nonlinear 4 Parallel Models
+on:
+  push:
+    paths: ['.github/workflows/xsmb-3-lo-supervised-parallel-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiment:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        model: [hgb60, hgb120, extratrees, logistic]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install scientific packages
+        run: python3 -m pip install --quiet --disable-pip-version-check numpy scikit-learn
+      - name: Evaluate model with 500-500 chronological holdout
+        run: python3 research/xsmb_3_lo_supervised_20261013.py ${{ matrix.model }}
