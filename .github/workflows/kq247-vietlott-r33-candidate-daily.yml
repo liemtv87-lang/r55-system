@@ -1,0 +1,73 @@
+name: KQ247 Vietlott R33 candidate daily snapshot validation
+on:
+  push:
+    paths: [.github/workflows/kq247-vietlott-r33-candidate-daily.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r33-candidate-daily
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Generate isolated R33 pools on VinaHost without customer cutover
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          TOKEN_FILE=/opt/kq247/vietlott-r33-stage/.admin-token
+          test -s "$TOKEN_FILE"
+          ADMIN_TOKEN=$(cat "$TOKEN_FILE")
+          echo VIETLOTT_R33_DAILY_START
+          curl -fsS --max-time 12 -X POST -H "Authorization: Bearer $ADMIN_TOKEN" \
+            http://127.0.0.1:18112/run/daily > /tmp/kq247-r33-daily-accepted.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/kq247-r33-daily-accepted.json'))
+          assert j.get('accepted') is True,j
+          print('R33_DAILY_REQUEST=ACCEPTED')
+          PY
+          RESULT=timeout
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 8 http://127.0.0.1:18112/status > /tmp/kq247-r33-daily-status.json
+            STATUS=$(python3 -c "import json; print(json.load(open('/tmp/kq247-r33-daily-status.json')).get('status','unknown'))")
+            if [ "$STATUS" = completed ]; then RESULT=completed; break; fi
+            if [ "$STATUS" = failed ]; then RESULT=failed; break; fi
+            if [ $((i % 10)) = 0 ]; then echo "R33_DAILY_PROGRESS attempt=$i status=$STATUS"; fi
+            sleep 6
+          done
+          if [ "$RESULT" != completed ]; then
+            python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/kq247-r33-daily-status.json'))
+          print('R33_DAILY_INCOMPLETE',j.get('status'),str(j.get('error',''))[:400])
+          PY
+            exit 1
+          fi
+          curl -fsS --max-time 10 http://127.0.0.1:18112/health > /tmp/kq247-r33-health.json
+          curl -fsS --max-time 15 http://127.0.0.1:18112/api/state > /tmp/kq247-r33-state.json
+          python3 - <<'PY'
+          import json
+          h=json.load(open('/tmp/kq247-r33-health.json'))
+          s=json.load(open('/tmp/kq247-r33-state.json'))
+          version='USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'
+          if not h.get('data_ready') or not s.get('ready'): raise AssertionError(('NOT_READY',h,s.get('last_update_error')))
+          for product,cap in [('mega645',180000),('power655',450000)]:
+            p=s.get('products',{}).get(product,{})
+            snap=p.get('snapshot',{})
+            assert snap.get('locked') and snap.get('ruleset_version')==version,(product,snap)
+            count=int(snap.get('reduced_total',0))
+            assert 0<count<=cap,(product,'invalid reduced count',count)
+            assert int(snap.get('filtered_total',0))>=count,(product,'invalid full-filter count')
+            print('R33_LOCKED',product,'analysis_date',snap.get('analysis_date'),'target_date',snap.get('target_date'),'FULL33',snap.get('filtered_total'),'REDUCED',count,'CAP',cap)
+          print('R33_DAILY_COMPLETE=PASS')
+          PY
+          VPS
