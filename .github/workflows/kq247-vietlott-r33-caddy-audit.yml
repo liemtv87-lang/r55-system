@@ -1,0 +1,33 @@
+name: Vietlott R33 Caddy route audit read only
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-caddy-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect only Vietlott Caddy targets and Docker networks
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo CADDY_MOUNTS
+          docker inspect -f '{{range .Mounts}}{{.Source}} -> {{.Destination}};{{end}}' kq247-football-staging
+          echo CADDY_NET
+          docker inspect -f '{{range $n,$v:=.NetworkSettings.Networks}}{{$n}} {{end}}' kq247-football-staging
+          echo VIETLOTT_NET
+          docker inspect -f '{{range $n,$v:=.NetworkSettings.Networks}}{{$n}} {{end}}' kq247-vietlott-vps
+          echo CADDY_VIETLOTT_ROUTES
+          docker exec kq247-football-staging sh -c "grep -n -E 'vietlott|reverse_proxy.*(18088|18112|1808|host.docker.internal)' /etc/caddy/Caddyfile || true"
+          echo CADDY_CONFIG_PRESENT
+          docker exec kq247-football-staging sh -c 'test -s /etc/caddy/Caddyfile && echo YES'
+          echo CADDY_AUDIT_COMPLETE
+          VPS
