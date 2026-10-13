@@ -1,0 +1,20 @@
+name: XSMB 3-Lotto Robust Validation Selector Study
+on:
+  push:
+    paths: ['research/xsmb_3lo_robust_selector_20261013.py','.github/workflows/xsmb-3lo-robust-selector-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  experiments:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        selector: [balanced, minhalf, stability, flashes]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_3lo_robust_selector_20261013.py ${{ matrix.selector }}
