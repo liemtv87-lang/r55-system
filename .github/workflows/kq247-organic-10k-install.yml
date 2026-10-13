@@ -1,0 +1,88 @@
+name: KQ247 Standalone Organic 10K Reach Tracker
+on:
+  push:
+    branches: [main]
+    paths:
+      - organic-growth-10k/**
+      - .github/workflows/kq247-organic-10k-install.yml
+  workflow_dispatch:
+permissions: {contents: read}
+concurrency:
+  group: kq247-organic-growth-10k
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate independent reporter
+        run: |
+          python3 -m py_compile organic-growth-10k/hourly-report.py
+          test ! -e organic-growth-10k/seo-backlinks-status.json
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Deploy independent read-only metrics timer on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'mkdir -p /opt/kq247/organic-growth-10k/reports'
+          tar -czf - -C organic-growth-10k hourly-report.py | $REMOTE 'tar -xzf - -C /opt/kq247/organic-growth-10k'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          install -m 0644 /opt/kq247/organic-growth-10k/hourly-report.py /opt/kq247/organic-growth-10k/hourly-report.py
+          cat > /etc/systemd/system/kq247-organic-10k.service <<'SERVICE'
+          [Unit]
+          Description=KQ247 organic reach experiment only (separate from backlinks)
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/python3 /opt/kq247/organic-growth-10k/hourly-report.py
+          WorkingDirectory=/opt/kq247/organic-growth-10k
+          TimeoutStartSec=75
+          NoNewPrivileges=true
+          SERVICE
+          cat > /etc/systemd/system/kq247-organic-10k.timer <<'TIMER'
+          [Unit]
+          Description=KQ247 organic 10k daily goal metrics hourly (independent)
+          [Timer]
+          OnCalendar=hourly
+          Persistent=true
+          AccuracySec=1min
+          RandomizedDelaySec=0
+          Unit=kq247-organic-10k.service
+          [Install]
+          WantedBy=timers.target
+          TIMER
+          systemctl daemon-reload
+          systemctl enable --now kq247-organic-10k.timer
+          systemctl start kq247-organic-10k.service
+          systemctl is-active --quiet kq247-organic-10k.timer
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('/opt/kq247/deployment/football-original/public/organic-reach-10k-status.json')
+          d=json.loads(p.read_text())
+          assert d['daily_reach_target']==10000 and d['actual_daily_reach'] is None
+          assert d['scope']==['football','lottery']
+          assert d['backlink_timer_modified'] is False
+          print('ORGANIC_10K_STATUS='+
+                json.dumps({'day':d['date_vn'],'target':d['daily_reach_target'],
+                   'log_sources':len(d['log_sources']),
+                   'reach_measurement':'not_yet_available'},ensure_ascii=False))
+          PY
+          systemctl is-active --quiet kq247-telegram-playwright.timer
+          systemctl is-active --quiet kq247-seo-backlinks.timer
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$before" = "$after"
+          echo "EXISTING_BACKLINK_TIMERS_UNCHANGED=YES"
+          echo "PRODUCTION_CONTAINERS_UNCHANGED=YES"
+          echo "ORGANIC_10K_TIMER_ACTIVE=YES"
+          VPS
