@@ -61,9 +61,15 @@ def read_snapshot(day,region):
         if not isinstance(doubles,list) or len(doubles)!=2 or any(not re.fullmatch(r"\d\d",str(x)) for x in doubles):
             raise ValueError("invalid doubles for "+name)
         de=pick.get("de",{})
-        if not all(isinstance(de.get(k),list) and len(de[k])==n for k,n in
-                   [("dan50",50),("dan60",60),("dan75",75),("three_digit",500)]):
-            raise ValueError("missing de/3-cang for "+name)
+        for field,size,width in [("dan50",50,2),("dan60",60,2),
+                                 ("dan75",75,2),("three_digit",500,3)]:
+            values=de.get(field)
+            if (not isinstance(values,list) or len(values)!=size
+                    or len(set(values))!=size
+                    or any(not isinstance(n,str) or re.fullmatch(r"\d{"+str(width)+r"}",n) is None for n in values)):
+                raise ValueError("invalid "+field+" in locked snapshot for "+name)
+        if any(n[-2:] not in de["dan75"] for n in de["three_digit"]):
+            raise ValueError("3c_outside_dan75 for "+name)
     return stations,fp
 
 def station_name(s):
@@ -128,9 +134,20 @@ def message(day,region,station,pick,draw=None):
               +f"💎 3 CÀNG {end3}: {'✅' if end3 in de['three_digit'] else '❌'}\n"
               +"🔒 Chấm snapshot khóa trước giờ quay.")
     else:
-        tail=(f"🎲 3 LÔ: {' - '.join(nums)}\n🔵 LÔ KÉP: {' - '.join(doubles)}\n"
-              +f"🏅 D50/D60/D75: {len(de['dan50'])}/{len(de['dan60'])}/{len(de['dan75'])}\n"
-              +"🔒 Theo snapshot khóa trước giờ quay.")
+        # Send the actual locked prediction lists; counts alone leave the
+        # customer unable to see the 50/60/75 picks and 500 three-digit picks.
+        # Format all of them in one Telegram message (under 4096 chars).
+        rows=lambda values,per: "\n".join(" ".join(values[i:i+per])
+                                       for i in range(0,len(values),per))
+        tail=(
+            f"🎲 3 LÔ: {' - '.join(nums)}\n"
+            f"🔵 LÔ KÉP: {' - '.join(doubles)}\n"
+            f"🔴 DÀN ĐỀ 50 SỐ:\n{rows(de['dan50'],25)}\n"
+            f"🔴 DÀN ĐỀ 60 SỐ:\n{rows(de['dan60'],25)}\n"
+            f"🔴 DÀN ĐỀ 75 SỐ:\n{rows(de['dan75'],25)}\n"
+            f"💎 DÀN 3 CÀNG (500 SỐ):\n{rows(de['three_digit'],25)}\n"
+            "🔒 Theo snapshot khóa trước giờ quay."
+        )
     footer="\n📣 t.me/xsbm999 | t.me/muatool_du_doan_bot"
     return "<b>"+html_escape(head+tail+footer)+"</b>"
 
