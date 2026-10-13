@@ -1,0 +1,21 @@
+name: Verify public Telegram backlinks
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify listed backlinks without posting or editing
+        run: python3 seo-vps/verify_backlinks.py seo-vps/backlink-campaign.json | tee backlink-verification.json
+      - name: Upload verification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: telegram-backlink-verification
+          path: backlink-verification.json
+          retention-days: 30
