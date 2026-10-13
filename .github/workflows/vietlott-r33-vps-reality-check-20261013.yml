@@ -145,6 +145,27 @@ jobs:
           JS
           echo R33_FAST_FILTER_PARITY_MARKER
           docker exec kq247-vietlott-vps grep -n 'parityCap=' /app/scripts/engine.mjs || true
+          echo R33_POWER_REJECTION_DIAGNOSTIC
+          docker exec -i kq247-vietlott-vps node --input-type=module <<'JS'
+          import {prepareFastFilter,hardFilter,fastFilterReason,makeFastFilter6,exactSet} from './scripts/engine.mjs';
+          const maxn=55,nums=[2,4,10,38,48,49],history=[],xsmbRows=[];
+          const base=new Date('2025-12-01T00:00:00Z'),offs=[0,7,14,21,28,35];
+          for(let i=0;i<90;i++){
+            const numbers=offs.map(o=>1+((i*5+o)%maxn)).sort((a,b)=>a-b);
+            const d=new Date(base);d.setUTCDate(d.getUTCDate()+i*3);
+            history.push({draw_id:String(i+1).padStart(5,'0'),date:d.toISOString().slice(0,10),numbers,special:null});
+          }
+          const d0=new Date('2026-09-30T00:00:00Z');
+          for(let i=0;i<220;i++){
+            const d=new Date(d0);d.setUTCDate(d.getUTCDate()-i);
+            xsmbRows.push({date:d.toISOString().slice(0,10),full:[10000+i%56]});
+          }
+          const xset=new Set([1,7,13,19,25,31,37,43,49,55]);
+          const ctx=prepareFastFilter(history,maxn,'2026-10-05',xset,xsmbRows);
+          const jackpot=new Set();for(let n=1;n<=maxn;n++)if(ctx.jp[n])jackpot.add(n);
+          const extra={xsmbJackpotSet:jackpot,pairProducts:ctx.priorPairProducts};
+          console.log('R33_POWER_MISMATCH_REASON',JSON.stringify({ticket:nums,hard:hardFilter(nums,maxn,null,xset,exactSet(history),extra),diagnostic:fastFilterReason(nums,ctx),production:makeFastFilter6(ctx)(...nums),prior:ctx.priorPairProducts}));
+          JS
           echo R33_PRODUCTION_SOURCE_REGRESSION_BEGIN
           docker exec kq247-vietlott-vps sh -c 'cd /app && node --check scripts/engine.mjs && node test-snapshot.mjs && node test-export.mjs && node scripts/verify-fast-pool-filter.mjs'
           echo R33_PRODUCTION_SOURCE_REGRESSION_PASS
