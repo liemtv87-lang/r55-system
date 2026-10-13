@@ -77,12 +77,12 @@ jobs:
                 form.locator('select[name=category]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', selected)
                 form.locator('select[name=country]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', 'Vietnam')
                 form.locator('select[name=language]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("change",{bubbles:true}))}', 'Vietnamese')
-                form.locator('input[name=tags]').fill(tags)
+                form.locator('input[name=tags]').evaluate('(e,v)=>{e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}))}', tags)
                 desc=form.locator('textarea[name=description]')
                 if desc.count():desc.fill(description)
                 toggle=form.locator('input#use_default_description')
-                if toggle.count() and toggle.is_checked():toggle.uncheck()
-                form.locator('input[name=terms]').check()
+                if toggle.count():toggle.evaluate('(e)=>{if(e.checked){e.checked=false;e.dispatchEvent(new Event("change",{bubbles:true}))}}')
+                form.locator('input[name=terms]').evaluate('(e)=>{e.checked=true;e.dispatchEvent(new Event("change",{bubbles:true}))}')
                 response_log=[]
                 def response_hook(r):
                   if r.request.method=='POST' and 'telejoiner.com' in r.url:
@@ -104,7 +104,7 @@ jobs:
             b.close()
           PY
           chmod 0644 "$base/seo/telejoiner.py"
-          install -d -m 0700 -o 1000 -g 1000 "$base/seo/receipts"
+          install -d -m 01777 "$base/seo/receipts" && chmod 01777 "$base/seo/receipts"
           timeout 180s docker run --rm --init --name kq247-telejoiner-one-off \
              --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
              --user pwuser --pids-limit 160 --cpus 1.5 --memory 1536m --shm-size 256m \
