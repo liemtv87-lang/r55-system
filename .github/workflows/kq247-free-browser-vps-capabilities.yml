@@ -1,0 +1,37 @@
+name: KQ247 Free Browser Automation VPS Capabilities
+on:
+  push:
+    paths: ['.github/workflows/kq247-free-browser-vps-capabilities.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check VPS capacity for free on-host Chromium/Playwright (read only)
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo FREE_BROWSER_VPS_ARCH
+          uname -m
+          echo FREE_BROWSER_VPS_OS
+          cat /etc/os-release | grep -E '^(NAME|VERSION_ID)='
+          for c in chromium chromium-browser google-chrome node npm npx python3;do
+            echo "FREE_BROWSER_COMMAND $c $(command -v "$c" || echo absent)"
+          done
+          echo FREE_BROWSER_EXISTING_PLAYWRIGHT
+          if node -e 'require("playwright")' >/dev/null 2>&1;then echo 'FREE_BROWSER_NODE_PLAYWRIGHT=AVAILABLE';else echo 'FREE_BROWSER_NODE_PLAYWRIGHT=ABSENT';fi
+          if python3 -c 'import playwright' >/dev/null 2>&1;then echo 'FREE_BROWSER_PY_PLAYWRIGHT=AVAILABLE';else echo 'FREE_BROWSER_PY_PLAYWRIGHT=ABSENT';fi
+          echo FREE_BROWSER_CAPACITY
+          df -h / /opt/kq247 | tail -n +2
+          free -h | head -3
+          echo FREE_BROWSER_INSTALLED_CHROME_BINARY
+          find /usr/bin /opt/kq247 -maxdepth 3 -type f \( -name 'chromium' -o -name 'chrome' \) -print 2>/dev/null | head -5
+          echo FREE_BROWSER_VPS_DIAGNOSTIC_PASS
+          VPS
