@@ -143,6 +143,8 @@ jobs:
             console.log('R33_FULL_REDUCED_INTEGRITY_PASS',product,'full',full.keys.length,'reduced',reduced.keys.length,'cap',hardMax,'valid_33rule_source',true);
           }
           JS
+          echo R33_POWER_TAIL_LIMIT_MARKER
+          docker exec kq247-vietlott-vps grep -nE 'unitParity.values|up\[c.tail|dv_chan_le' /app/scripts/engine.mjs || true
           echo R33_FAST_FILTER_PARITY_MARKER
           docker exec kq247-vietlott-vps grep -n 'parityCap=' /app/scripts/engine.mjs || true
           echo R33_POWER_REJECTION_DIAGNOSTIC
