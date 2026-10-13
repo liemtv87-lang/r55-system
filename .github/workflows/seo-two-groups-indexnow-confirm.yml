@@ -1,0 +1,29 @@
+name: KQ247 Two Group IndexNow VPS Confirmation
+on:
+  push:
+    paths: ['.github/workflows/seo-two-groups-indexnow-confirm.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'python3 -' <<'PY'
+          import json, pathlib, subprocess
+          folder=pathlib.Path('/opt/kq247/seo-groups/reports')
+          data=json.loads((folder/'indexnow-accepted.json').read_text())
+          for filename in ('nhom-bong-da-telegram-mien-phi.html','nhom-xo-so-mb-mn-mt-telegram-mien-phi.html'):
+            row=data[filename]
+            assert row['http'] in (200,202)
+            print('INDEXNOW_VPS_RECEIVED',filename,row['http'])
+          for name in ('kq247-seo-groups.timer','kq247-seo-indexnow.timer'):
+            assert subprocess.run(['systemctl','is-active','--quiet',name]).returncode==0
+            print('SEO_VPS_TIMER_ACTIVE',name)
+          PY
