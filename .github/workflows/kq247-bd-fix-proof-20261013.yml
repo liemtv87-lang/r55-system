@@ -1,0 +1,29 @@
+name: KQ247 BD Bot Fix Proof 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-bd-fix-proof-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify live worker corrected 13h behavior without sending
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          docker exec kq247-r55-group-bot grep -Fq 'else result=await sendPick(); // Do not pause' /app/group-worker.mjs
+          echo 'BD_13H_PAUSE_FIXED_IN_LIVE_CONTAINER=PASS'
+          python3 - <<'PY'
+          import json,urllib.request
+          s=json.load(urllib.request.urlopen('http://127.0.0.1:18083/healthz',timeout=9))
+          print('BD_LIVE_WORKER', {k:s.get(k) for k in ('ok','active','primarySender','lastCheck','lastResult','lastError')})
+          assert s.get('ok') and s.get('active') and s.get('primarySender') and not s.get('lastError')
+          PY
+          VPS
