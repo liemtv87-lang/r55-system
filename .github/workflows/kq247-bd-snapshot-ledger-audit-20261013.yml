@@ -44,7 +44,7 @@ jobs:
            const reportSent=await pool.query("SELECT scope,payload,updated_at FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent' AND payload->>'messageId' IS NOT NULL AND updated_at >= $1::timestamptz AND updated_at < $2::timestamptz",['2026-10-12T12:05:00+07:00','2026-10-13T12:05:00+07:00']);
            const days=await pool.query("SELECT day::text,payload FROM football_snapshots WHERE day IN ('2026-10-12'::date,'2026-10-11'::date,'2026-10-13'::date)");
            const byMatch=new Map();for(const v of days.rows)for(const x of v.payload?.matches||[])byMatch.set(v.day+'|'+x.id,x);
-           const mids=reportSent.rows.map(v=>v.scope.match(/^r55_prematch_sent_(\\d{4}-\\d{2}-\\d{2})_(BDL_\\d+)$/)).filter(Boolean);
+           const mids=reportSent.rows.map(v=>v.scope.match(/^r55_prematch_sent_(\d{4}-\d{2}-\d{2})_(BDL_\d+)$/)).filter(Boolean);
            const ftById=await pool.query("SELECT fixture_id::text AS id FROM football_final_results WHERE fixture_id::text=ANY($1::text[]) AND source='bongdalu-ft-verified' AND fixture_status='FT'",[mids.map(m=>m[2].slice(4))]);
            const verified=new Set(ftById.rows.map(x=>x.id));
            const diag={posts:mids.length,found_snapshot:0,not_due:0,due:0,stored_ft:0,due_without_ft:0};
