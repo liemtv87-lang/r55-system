@@ -1,0 +1,35 @@
+name: KQ247 Legacy Links Customer Migration Audit 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-fullstack-legacy-links-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check old Wix and Render links map to their matching VPS page
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,re
+          routes=[
+           ('xs-main-wix','https://instant-ucmxdfgdjrlt-liemtv87-1408.wix-site-host.com/?region=xsmt','/xoso',False),
+           ('xs-client-wix','https://instant-xxvnqbpglxvz-liemtv87-1408.wix-site-host.com/?region=xsmn','/xoso-khach',True),
+           ('football-main-wix','https://instant-ilanhgsdsxyz-liemtv87-1408.wix-site-host.com/bd.html','64-120-92-172.sslip.io/',False),
+           ('football-client-wix','https://instant-hooyydiodwjk-liemtv87-1408.wix-site-host.com/','64-120-92-172.sslip.io/client.html',True),
+           ('xs-client-render','https://kq247-xoso-khach-v29.onrender.com/?client=1&region=xsmn','64-120-92-172.sslip.io/xoso-khach',True),
+           ('vietlott-client-old-render','https://vietlott-r32-runner-free.onrender.com/?client=1','vietlott.64-120-92-172.sslip.io/client.html',True),
+          ]
+          for name,url,target,customer in routes:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'KQ247-ReadOnly-LinkAudit/20261013','Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=18) as resp:
+                      html=resp.read(250000).decode('utf8','replace')
+                      final=resp.geturl();status=resp.status
+                  references=target in html or target in final
+                  codecopy=any(k in html for k in ('kq247_dev','kq247_lottery_code','kq247_vietlott_code','kq247='))
+                  print('LEGACY_LINK',name,'http',status,'vps_target',references,'code_handoff_marker',codecopy if customer else 'n/a','final',final[:100])
+              except Exception as e:print('LEGACY_LINK_FAILED',name,type(e).__name__,str(e)[:120])
+          PY
