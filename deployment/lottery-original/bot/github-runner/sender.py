@@ -148,7 +148,17 @@ def message(day,region,station,pick,draw=None):
             f"💎 DÀN 3 CÀNG (500 SỐ):\n{rows(de['three_digit'],25)}\n"
             "🔒 Theo snapshot khóa trước giờ quay."
         )
-    footer="\n📣 t.me/xsbm999 | t.me/muatool_du_doan_bot"
+    footer=(
+        "\n\n━━━━━━━━━━━━━━"
+        "\n📢 Bán tool Phân tích dự đoán XSMB, MT, MN"
+        "\n📢 Tool Phân tích, dự đoán kèo bóng đá, chọn xiên 6,8,10 trận."
+        "\n📢 Tool Vietlott 6x45 6x55"
+        "\n📱 Sử dụng link trên ĐT dễ dàng - nhanh chóng - hiệu quả"
+        "\n⚽ Vào nhóm kèo bóng: https://t.me/keochuyengia79"
+        "\n🎯 Hoặc nhóm Xổ số: https://t.me/xsbm999"
+        "\n🎁 Tool có mã sử dụng Free 10 ngày"
+        "\n🛒 Mua tool / Lấy lại mã: https://t.me/muatool_du_doan_bot"
+    )
     return "<b>"+html_escape(head+tail+footer)+"</b>"
 
 def committed_state(path,contents):
