@@ -97,6 +97,13 @@ jobs:
             const s=fs.readFileSync(f,'utf8');
             console.log('R33_LIVE_SOURCE',f,'sha256',crypto.createHash('sha256').update(s).digest('hex').slice(0,16),'bytes',s.length,
               'has_safe_reuse',s.includes('reusableLockedReducedPool'),'has_R33',s.includes('USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1'));
+            if(f.endsWith('engine.mjs')){
+              const src=s.split('\\n');
+              for(const [i,line] of src.entries()){
+                if(line.includes('parityCap=')||line.includes('tensCap=')||line.includes('const HARD_RULES ='))
+                  console.log('R33_LIVE_ENGINE_MARKER',i+1,line.slice(0,220));
+              }
+            }
           }
           JS
           echo VIETLOTT_VPS_CHECK_END
