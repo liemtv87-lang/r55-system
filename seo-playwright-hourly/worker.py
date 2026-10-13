@@ -42,6 +42,10 @@ DIRECTORIES = [
     ("TGCamp", "https://tgcamp.com/auth/register"),
     ("TelegramGroups", "https://telegramgroups.co/submit"),
     ("TelegramHub", "https://telegramhub.org/submit"),
+    ("TelXplorer", "https://telxplorer.com/en/create_group"),
+    ("TeleVerse", "https://televerse.click/submit"),
+    ("Togather", "https://www.togather.in/submit"),
+    ("World Telegram Directory", "https://sites.google.com/view/telegramdirectory/home"),
 ]
 # The entries below were already submitted earlier. Never repeat them.
 ALREADY_SENT = {
@@ -112,7 +116,7 @@ def discover(page, name, url):
             loginRequired: /sign in to submit|login required|register to submit/i.test(
                 document.body.innerText.slice(0,1200))
         })""")
-        if name in ("TGMania", "TGDirectory", "Groupsor"):
+        if name in ("TGMania", "TGDirectory", "Groupsor", "TelXplorer"):
             info["controls"] = page.evaluate("""() => [...document.querySelectorAll('input,select,textarea,button')].filter(e => e.getBoundingClientRect().width > 0).slice(0,35).map(e => ({
               tag:e.tagName.toLowerCase(),name:e.name || '',type:e.type || '',
               placeholder:e.placeholder || '',text:(e.innerText||'').trim().slice(0,70),
@@ -334,7 +338,7 @@ def main():
                         state["sent"]["TGMania"].append(group)
                 atomic_json(STATE,state)
         for item in discoveries:
-            if item["name"] in ("TGMania", "TGDirectory", "Groupsor"):
+            if item["name"] in ("TGMania", "TGDirectory", "Groupsor", "TelXplorer"):
                 print("FORM_AUDIT=" + json.dumps(item, ensure_ascii=False)[:5000], flush=True)
         context.close()
         browser.close()
@@ -387,7 +391,7 @@ def main():
         "new_this_hour": new_links, "goal": GOAL_PER_HOUR,
         "daily_growth": membership_growth,
         "reach_measurement": "unavailable",
-        "registration_attempts": {k:v.get("state") for k,v in state["submission_attempts"].items()},
+        "registration_attempts": {k:{"state":v.get("state"),"error":v.get("error"),"stage":v.get("stage")} for k,v in state["submission_attempts"].items()},
         "directories_inspected": len(discoveries),
         "submission_results": [{k:v for k,v in x.items() if k in ("directory","group","state","category")} for x in submissions],
     }, ensure_ascii=False), flush=True)
