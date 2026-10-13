@@ -100,7 +100,7 @@ def report(data,label):
    'nhay':int(np.sum(hit)),'days2plus':int(np.sum(hit>=2)),
    'first250':int(np.sum(yes[:250])),'last250':int(np.sum(yes[250:])),
    'last3':[f'{int(x):02d}' for x in np.sort(choose[-1])],
-   'logloss':round(float(log_loss(hits[v:test] if label=='validation' else hits[test:],p)),6)}
+   'logloss':round(float(log_loss((hits[v:test] if label=='validation' else hits[test:]).reshape(-1),p.reshape(-1))),6)}
 result={'model':modelname,'train_days':v-start,'train_start':rows[start]['date'],
  'train_end':rows[v-1]['date'],'validation_dates':[rows[v]['date'],rows[test-1]['date']],
  'test_dates':[rows[test]['date'],rows[-1]['date']],
