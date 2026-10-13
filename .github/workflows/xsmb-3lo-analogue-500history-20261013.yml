@@ -1,0 +1,20 @@
+name: XSMB 3-Lotto Max 500-History Compliant Ensembles
+on:
+  push:
+    paths: ['research/xsmb_3lo_analogue_500history_20261013.py','.github/workflows/xsmb-3lo-analogue-500history-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        mode: [blend, ranks, diverse, adaptive]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_3lo_analogue_500history_20261013.py ${{ matrix.mode }}
