@@ -1,0 +1,71 @@
+name: KQ247 Fullstack Public Audit 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-fullstack-public-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Read-only public main client bot links and lottery snapshots
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,re,time
+          ROOT='https://64-120-92-172.sslip.io'
+          V='https://vietlott.64-120-92-172.sslip.io'
+          errors=[]
+          def get(name,url,limit=120000,timeout=23):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'KQ247-FullAudit/20261013','Cache-Control':'no-cache'}),timeout=timeout) as r:
+                      v=r.read(limit)
+                      print('AUDIT_HTTP',name,r.status,r.url,'bytes_sample',len(v),'type',r.headers.get('content-type',''))
+                      if r.status!=200:errors.append(name+':http_'+str(r.status))
+                      return v.decode('utf-8','replace'),r.url
+              except Exception as e:
+                  print('AUDIT_FAIL',name,type(e).__name__,str(e)[:100]);errors.append(name+':'+type(e).__name__);return '',None
+          body,_=get('football_main',ROOT+'/')
+          if 'Soi kèo bóng đá' not in body:errors.append('football_main_mismatch')
+          body,_=get('football_client',ROOT+'/client.html')
+          if 'Bản khách' not in body and 'bản khách' not in body:errors.append('football_client_mismatch')
+          for region in ['xsmb','xsmt','xsmn']:
+              body,url=get('xs_main_'+region,ROOT+'/xoso?region='+region)
+              if 'BẢN CHÍNH xổ số ba miền' not in body:errors.append('xs_main_wrong_'+region)
+              for d in ['xsmb','xsmt','xsmn']:
+                  if 'href="/xoso?region='+d+'"' not in body:errors.append('xs_menu_wrong_'+region+'_'+d)
+              if 'href="/?region=' in body:errors.append('xs_old_root_link_'+region)
+              b,u=get('xs_customer_'+region,ROOT+'/xoso-khach?region='+region)
+              if 'kq247_lottery_code' not in b or 'data-region="xsmt"' not in b or 'data-region="xsmn"' not in b:errors.append('xs_client_wrong_'+region)
+              b,u=get('xs_root_redirect_'+region,ROOT+'/?region='+region)
+              if '/xoso?region='+region not in (u or ''):errors.append('xs_root_football_'+region)
+          for name,url in [('vietlott_main',V+'/'),('vietlott_client',V+'/client.html')]:
+              b,_=get(name,url)
+              if name=='vietlott_client' and 'kq247_vietlott_code' not in b:errors.append('vietlott_client_code_missing')
+          for name,url in [('vietlott_health',V+'/health'),('vietlott_state',V+'/api/state')]:
+              b,_=get(name,url)
+              try:
+                  j=json.loads(b)
+                  if name=='vietlott_health':
+                      print('VIETLOTT_HEALTH',{k:j.get(k) for k in ('ok','data_ready','runtime','status')})
+                      if not j.get('data_ready'):errors.append('vietlott_not_ready')
+                  else:
+                      print('VIETLOTT_READY',j.get('ready'))
+                      if not j.get('ready'):errors.append('vietlott_state_not_ready')
+                      for code,cap in [('mega645',180000),('power655',450000)]:
+                          s=j.get('products',{}).get(code,{}).get('snapshot') or {}
+                          print('VIETLOTT_SNAP',code,{k:s.get(k) for k in ('target_date','analysis_date','locked','filtered_total','reduced_total','ruleset_version')})
+                          if not s.get('locked') or int(s.get('reduced_total') or 0)>cap or int(s.get('filtered_total') or 0)<int(s.get('reduced_total') or 0): errors.append('vietlott_pool_'+code)
+              except Exception as e: errors.append(name+'_invalid_json_'+str(e)[:30])
+          for product in ['lottery','football','vietlott']:
+              url='https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/?action=latest-link&product='+product
+              b,_=get('canonical_'+product,url,10000)
+              try:
+                  j=json.loads(b); print('CANONICAL',product,'ok',j.get('ok'),'latest_url',j.get('latest_url'))
+                  if not j.get('ok'):errors.append('canonical_'+product)
+              except:errors.append('canonical_json_'+product)
+          print('KQ247_AUDIT_PUBLIC_ERRORS',json.dumps(errors,ensure_ascii=False))
+          if errors:raise SystemExit(1)
+          print('KQ247_AUDIT_PUBLIC_PASS')
+          PY
