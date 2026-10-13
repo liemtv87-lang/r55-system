@@ -50,6 +50,8 @@ jobs:
            const diag={posts:mids.length,found_snapshot:0,not_due:0,due:0,stored_ft:0,due_without_ft:0};
            for(const m of mids){const x=byMatch.get(m[1]+'|'+m[2]);if(!x)continue;diag.found_snapshot++;const kickoff=Date.parse(x.kickoff||'');if(!Number.isFinite(kickoff)||kickoff>Date.now()-150*60000){diag.not_due++;continue}diag.due++;if(verified.has(m[2].slice(4)))diag.stored_ft++;else diag.due_without_ft++;}
            console.log('NOON_17_POSTS_FT_DIAG',JSON.stringify(diag));
+           const worker=await fetch('http://127.0.0.1:3030/healthz').then(x=>x.json()).catch(e=>({error:String(e)}));
+           console.log('BD_SUMMARY_LIVE_STATUS',JSON.stringify({lastCheck:worker.lastCheck,lastError:worker.lastError,lastResult:worker.lastResult,active:worker.active}));
            const finals=await pool.query("SELECT source,fixture_status,count(*)::int AS total,max(fetched_at) AS last_updated FROM football_final_results GROUP BY source,fixture_status ORDER BY total DESC");
            console.log('FT_VERIFIED_SOURCE_TOTALS',JSON.stringify(finals.rows));
            const anchorDate='2026-10-13',from=Date.parse('2026-10-12T12:05:00+07:00'),to=Date.parse('2026-10-13T12:05:00+07:00');
@@ -70,7 +72,7 @@ jobs:
            console.log('TOOL_PREMATCH_SNAPSHOT_1205_WINDOW',JSON.stringify({days:diagDays,distinct_predictions:wanted.length,ft_verified:wanted.filter(x=>matched.has(x.id.slice(4))).length,pending:wanted.filter(x=>!matched.has(x.id.slice(4))).length}));
 
            const published=await pool.query("SELECT scope,payload FROM football_compact_stats WHERE scope IN ('r55_telegram_sent_2026-10-12','r55_group_grade_2026-10-13') ORDER BY scope");
-           for(const r of published.rows)console.log('FT_EXISTING_SUMMARY',JSON.stringify({scope:r.scope,state:r.payload?.state,settled:r.payload?.report?.settled,message_ack:!!r.payload?.messageId}));
+           for(const r of published.rows)console.log('FT_EXISTING_SUMMARY',JSON.stringify({scope:r.scope,state:r.payload?.state,total:r.payload?.report?.total,settled:r.payload?.report?.settled,pending:r.payload?.report?.pending,reportSource:r.payload?.report?.source,message_ack:!!r.payload?.messageId,editedAt:r.payload?.editedAt}));
            const sends=await pool.query("SELECT count(*) FILTER (WHERE payload->>'state'='sent')::int AS sent24h,count(*) FILTER (WHERE payload->>'state'='delivery_uncertain')::int AS uncertain24h,count(*)::int AS total24h FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND updated_at > now()-interval '24 hours'");
            console.log('FOOTBALL_24H_LEDGER_COUNTS',JSON.stringify(sends.rows[0]));
           }finally{await pool.end()}
