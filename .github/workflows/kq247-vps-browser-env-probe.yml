@@ -1,0 +1,36 @@
+name: KQ247 VPS Browser Install Env Probe
+on:
+  push:
+    paths: ['.github/workflows/kq247-vps-browser-env-probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check safe Chromium installation feasibility on production VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          printf 'OS='; . /etc/os-release; printf '%s %s\n' "$ID" "$VERSION_ID"
+          printf 'ARCH='; uname -m
+          for tool in node npm npx chromium chromium-browser google-chrome docker; do
+            printf 'TOOL_%s=' "$tool"
+            if command -v "$tool" >/dev/null 2>&1;then command -v "$tool";else echo MISSING;fi
+          done
+          printf 'NODE='; node --version 2>/dev/null || true
+          printf 'NPM='; npm --version 2>/dev/null || true
+          printf 'STORAGE='; df -h /opt | tail -1
+          printf 'MEMORY='; free -m | tail -2
+          printf 'EXISTING_BROWSER_DIR='; if test -d /opt/kq247/browser-playwright;then echo YES;else echo NO;fi
+          printf 'EXISTING_USER='; if id kq247browser >/dev/null 2>&1;then echo YES;else echo NO;fi
+          printf 'HEALTH='
+          curl -fsS -m 8 http://127.0.0.1:18084/healthz | head -c 250 || true
+          echo
+          VPS
