@@ -143,5 +143,7 @@ jobs:
             console.log('R33_FULL_REDUCED_INTEGRITY_PASS',product,'full',full.keys.length,'reduced',reduced.keys.length,'cap',hardMax,'valid_33rule_source',true);
           }
           JS
+          echo R33_FAST_FILTER_PARITY_MARKER
+          docker exec -i kq247-vietlott-vps grep -n 'parityCap=' /app/scripts/engine.mjs || true
           echo VIETLOTT_VPS_CHECK_END
           VPS
