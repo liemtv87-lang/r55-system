@@ -1,0 +1,59 @@
+name: KQ247 Submit Two Telegram Communities to Groupmandi
+on:
+  push:
+    paths: ['.github/workflows/kq247-telegram-groupmandi-two-listings-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Submit one authentic relevant listing for each Telegram community (once)
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=18 root@64.120.92.172 'python3 -' <<'PY'
+          import json,urllib.request,urllib.parse,datetime,pathlib,time
+          folder=pathlib.Path('/opt/kq247/seo-groups/reports')
+          folder.mkdir(exist_ok=True,parents=True)
+          target=folder/'groupmandi-submit-receipts.json'
+          old=json.loads(target.read_text()) if target.exists() else {}
+          with urllib.request.urlopen('https://groupmandi.com/',timeout=17) as r:
+              form=r.read(180000).decode('utf8','replace')
+          for token in ('submit.php','name="platform"','name="link"','name="description"'):
+              if token not in form:raise RuntimeError('groupmandi form changed '+token)
+          groups=[
+              ('football','KQ247 - Nhóm thông tin bóng đá Việt Nam','https://t.me/keochuyengia79',
+               'Sports','Nhóm Telegram miễn phí chia sẻ lịch bóng đá, kết quả và phân tích dữ liệu trước trận mang tính tham khảo. Không bảo đảm kết quả.'),
+              ('lottery','KQ247 - Nhóm kết quả xổ số ba miền','https://t.me/xsbm999',
+               'News','Nhóm Telegram miễn phí cập nhật kết quả xổ số MB, MT, MN theo đài và các phân tích thống kê tham khảo, không bảo đảm dự đoán chính xác.')
+          ]
+          for key,name,url,category,desc in groups:
+              if old.get(key,{}).get('status')=='submitted_pending_review':
+                  print('GROUPMANDI_PREVIOUS_SUBMISSION_KEPT',key);continue
+              data=urllib.parse.urlencode({'name':name,'platform':'telegram','category':category,
+                   'members':'','link':url,'description':desc,'website':''}).encode('utf8')
+              req=urllib.request.Request('https://groupmandi.com/submit.php',
+                   data=data,method='POST',headers={'Content-Type':'application/x-www-form-urlencoded',
+                     'User-Agent':'Mozilla/5.0 (compatible; KQ247CommunityDirectory/1.0)'})
+              with urllib.request.urlopen(req,timeout=20) as r:
+                  raw=r.read(10000).decode('utf8','replace')
+                  if r.status!=200:raise RuntimeError('unexpected_http_'+str(r.status))
+              response=json.loads(raw)
+              if response.get('ok') is not True:
+                  print('GROUPMANDI_REVIEW_SUBMISSION_NOT_ACCEPTED',key,str(response.get('error',''))[:150])
+                  raise RuntimeError('groupmandi_denied_'+key)
+              old[key]={'status':'submitted_pending_review','group':url,
+                 'at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                 'submit_page':'https://groupmandi.com/','public_listing_url':None}
+              tmp=target.with_suffix('.tmp')
+              tmp.write_text(json.dumps(old,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+              tmp.replace(target)
+              print('GROUPMANDI_SUBMITTED_PENDING_REVIEW',key,url)
+              time.sleep(2)
+          print('GROUPMANDI_TWO_GROUPS_REQUEST_RECEIVED=PASS')
+          PY
