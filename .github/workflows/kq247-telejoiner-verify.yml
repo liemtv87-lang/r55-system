@@ -1,0 +1,44 @@
+name: Verify KQ247 TeleJoiner Public Telegram Links
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-telejoiner-verify.yml']
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify distinct published HTML pages link to original Telegram groups
+        run: |
+          python3 - <<'PY'
+          from urllib.request import Request,urlopen
+          from urllib.parse import urljoin,urlsplit
+          from html.parser import HTMLParser
+          import json
+          cases={
+            'football':('https://telejoiner.com/invite/1002315121695','https://t.me/keochuyengia79'),
+            'lottery':('https://telejoiner.com/invite/1004320899120','https://t.me/xsbm999')
+          }
+          class A(HTMLParser):
+            def __init__(self):super().__init__();self.links=[]
+            def handle_starttag(self,tag,attrs):
+              if tag=='a':
+                self.links += [v for k,v in attrs if k=='href' and v]
+          for key,(listing,target) in cases.items():
+            try:
+              with urlopen(Request(listing,headers={'User-Agent':'Mozilla/5.0 (compatible; KQ247-LinkVerifier/1.0)'}),timeout=18) as r:
+                status=r.status;end=r.geturl();body=r.read(600000).decode('utf8','replace')
+              anchors=A();anchors.feed(body)
+              links=[urljoin(end,v) for v in anchors.links]
+              def normalized(url):
+                p=urlsplit(url)
+                return (p.hostname or '').lower().removeprefix('www.'),p.path.rstrip('/').lower()
+              found=[x for x in links if normalized(x)==normalized(target)]
+              valid=(status==200 and urlsplit(end).hostname=='telejoiner.com' and bool(found))
+              print('PUBLIC_BACKLINK_CHECK',json.dumps({'group':key,'listing':listing,'http':status,
+                'final_url':end,'verified':valid,'target_anchor':found[:3],'html_bytes':len(body)}))
+            except Exception as e:
+              print('PUBLIC_BACKLINK_CHECK',json.dumps({'group':key,'listing':listing,
+                'verified':False,'error':type(e).__name__+': '+str(e)[:150]}))
+          PY
