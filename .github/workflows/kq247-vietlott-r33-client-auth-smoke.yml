@@ -1,0 +1,37 @@
+name: Vietlott R33 client latest-link and CORS smoke
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-client-auth-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify latest-link points only to customer R33, not main
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/'
+          CLIENT='https://vietlott.64-120-92-172.sslip.io/client.html'
+          curl -fsSL --max-time 15 "$BASE?action=latest-link&product=vietlott" >/tmp/kq247-vietlott-latest.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/kq247-vietlott-latest.json'))
+          assert d.get('ok') is True,d
+          expected='https://vietlott.64-120-92-172.sslip.io/client.html'
+          assert d.get('latest_url')==expected,d
+          print('VIETLOTT_CUSTOMER_LATEST_LINK=PASS',d['latest_url'])
+          PY
+          curl -fsSL --max-time 15 "$CLIENT" >/tmp/kq247-vietlott-client.html
+          grep -q 'kq247_vietlott_code' /tmp/kq247-vietlott-client.html
+          grep -q 'ensureLatestLink' /tmp/kq247-vietlott-client.html
+          echo VIETLOTT_CUSTOMER_CLIENT_HTML=PASS
+          curl -sSL -D /tmp/kq247-vietlott-cors.txt -o /dev/null --max-time 15 -X OPTIONS \
+            -H "Origin: https://vietlott.64-120-92-172.sslip.io" \
+            -H 'Access-Control-Request-Method: POST' \
+            "$BASE?action=check" || true
+          grep -iE '^(HTTP/|access-control-allow-origin:|access-control-allow-methods:)' /tmp/kq247-vietlott-cors.txt | tail -10 || true
+          echo VIETLOTT_CUSTOMER_AUTH_SMOKE_DONE
