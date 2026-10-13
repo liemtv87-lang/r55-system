@@ -1,0 +1,52 @@
+name: Vietlott R33 VPS Reality Check
+on:
+  push:
+    paths: ['.github/workflows/vietlott-r33-vps-reality-check-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install SSH tooling
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify VinaHost R33 primary state without changing services
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}" || { echo 'VPS_SSH_MISSING'; exit 1; }
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo VIETLOTT_VPS_CHECK_START
+          date -u '+UTC=%F %T'
+          docker ps -a --format 'CONTAINER={{.Names}} STATUS={{.Status}} IMAGE={{.Image}}' | grep -i vietlott || true
+          for p in /opt/kq247/vietlott /opt/kq247/vietlott/source /opt/kq247/vietlott/persist /opt/kq247/vietlott-r33;do
+            if [ -d "$p" ];then echo "VPS_DIR_EXISTS=$p";else echo "VPS_DIR_MISSING=$p";fi
+          done
+          for port in 18088 18112;do
+            for route in /health /healthz /api/state;do
+              out="/tmp/kq247-r33-probe-${port}-${route//\//_}.json"
+              status=$(curl -sS -L --max-time 14 -o "$out" -w '%{http_code}' "http://127.0.0.1:${port}${route}" || true)
+              echo "VPS_PORT_ROUTE port=${port} route=${route} http=${status}"
+              if [ "$route" = /api/state ] && [ "$status" = 200 ];then
+                python3 - "$out" <<'PY'
+          import json,sys
+          try:
+            s=json.load(open(sys.argv[1]))
+            print('R33_STATE_TOP',json.dumps({k:s.get(k) for k in ['ready','generated_at','date','ruleset_version','error','status']},ensure_ascii=False)[:400])
+            p=s.get('products') or {}
+            for k in ['mega645','power655']:
+              v=p.get(k) or {};snap=v.get('snapshot') or {}
+              print('R33_PRODUCT',k,json.dumps({x:snap.get(x) for x in ['ruleset_version','reduction_target','full_total','filtered_total','reduced_total','date','generated_at','ready']},ensure_ascii=False)[:500])
+              print('R33_PRODUCT_KEYS',k,list(v.keys())[:20])
+          except Exception as e:print('R33_STATE_PARSE_ERROR',type(e).__name__,str(e)[:120])
+          PY
+              fi
+            done
+          done
+          echo VIETLOTT_VPS_CHECK_END
+          VPS
