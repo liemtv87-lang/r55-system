@@ -1,7 +1,7 @@
 name: XSMB 3 Lo Rolling 18225 Templates 500 Draws
 on:
   push:
-    paths: ['.github/workflows/xsmb-3-lo-rolling-complement-20261013.yml']
+    paths: ['.github/workflows/xsmb-3-lo-rolling-complement-20261013.yml', 'research/xsmb_3_lo_rolling_complement_20261013.py']
   workflow_dispatch:
 permissions:
   contents: read
