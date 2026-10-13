@@ -1,0 +1,266 @@
+{
+  "campaign": "KQ247 real external backlinks, not repeated links or traffic",
+  "created_utc": "2026-10-13T10:00:00Z",
+  "goals": {
+    "football": {
+      "group": "https://t.me/keochuyengia79",
+      "vps_landing": "https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html",
+      "verified_links": 1000
+    },
+    "lottery": {
+      "group": "https://t.me/xsbm999",
+      "vps_landing": "https://64-120-92-172.sslip.io/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html",
+      "verified_links": 1000
+    }
+  },
+  "definitions": {
+    "prospect": "Site potentially allows relevant free listing, not a backlink",
+    "submitted": "Submitted with evidence; must not be called published",
+    "published": "Only after a public individual listing URL has been retrieved and verified to contain the correct target link",
+    "rejected": "Submission rejected or does not permit listing"
+  },
+  "directories": [
+    {
+      "name": "Groupsgyani",
+      "submit_url": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+      "method": "manual_form",
+      "notes": "possible_account_or_moderation",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TGStat",
+      "submit_url": "https://tgstat.com/add/channel",
+      "method": "manual_form",
+      "notes": "editor_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelegramGroups.co",
+      "submit_url": "https://telegramgroups.co/",
+      "method": "manual_form",
+      "notes": "free_automated_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TeleGroups",
+      "submit_url": "https://telegramgroup.arkservices.in/submit",
+      "method": "manual_form",
+      "notes": "image_upload_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TG Links",
+      "submit_url": "https://tglinks.net/en/",
+      "method": "manual_form",
+      "notes": "moderation",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "Telegradia",
+      "submit_url": "https://telegradia.com/",
+      "method": "telegram_login",
+      "notes": "requires_account",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TeleVerse",
+      "submit_url": "https://televerse.click/",
+      "method": "manual_form",
+      "notes": "editor_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TGCamp",
+      "submit_url": "https://tgcamp.com/",
+      "method": "manual_form",
+      "notes": "directory_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TGMania",
+      "submit_url": "https://tgmania.com/",
+      "method": "manual_form",
+      "notes": "directory_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelegrmGroupLink",
+      "submit_url": "https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/",
+      "method": "manual_form",
+      "notes": "no_account_claim_review",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "World Telegram Directory",
+      "submit_url": "https://sites.google.com/view/telegramdirectory/home",
+      "method": "manual_form",
+      "notes": "google_form",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TGbox",
+      "submit_url": "https://tgbox.cc/",
+      "method": "telegram_bot",
+      "notes": "submission_via_bot",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelXplorer",
+      "submit_url": "https://telxplorer.com/en/blog/how-to-promote-a-telegram-group/",
+      "method": "manual_form",
+      "notes": "directory_submission",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "Groupverse",
+      "submit_url": "https://www.groupverse.co.in/",
+      "method": "manual_form",
+      "notes": "moderated",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelegramChannels.me",
+      "submit_url": "https://telegramchannels.me/",
+      "method": "manual_form",
+      "notes": "owner_submission",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TopTGLinks",
+      "submit_url": "https://toptglinks.com/",
+      "method": "manual_form",
+      "notes": "check_submission_route",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "Groupda",
+      "submit_url": "https://groupda.com/telegram",
+      "method": "manual_form",
+      "notes": "verify_active_submission",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    },
+    {
+      "name": "TelegramGroup Directory",
+      "submit_url": "https://www.telegram-groups.com/",
+      "method": "directory",
+      "notes": "check_eligibility",
+      "groups": [
+        "football",
+        "lottery"
+      ],
+      "status": "prospect",
+      "evidence_url": null,
+      "listing_url": null
+    }
+  ],
+  "published_listings": [],
+  "rules": [
+    "one relevant listing per group and independent site, never auto-create thousands of thin links",
+    "do not count on-site or repeated copies as new unique referring domains",
+    "do not claim submissions or approvals without a public verified URL",
+    "no login bypass, CAPTCHA circumvention, purchased link schemes or third party spam",
+    "do not modify existing lottery, football and customer systems"
+  ]
+}
