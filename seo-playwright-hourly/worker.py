@@ -8,6 +8,8 @@ import datetime
 import json
 import os
 import pathlib
+import re
+from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
 
 from playwright.sync_api import sync_playwright
@@ -205,6 +207,77 @@ def submit_tgmania(page, group):
         return record
 
 
+
+def read_public_telegram_members(page, group):
+    """Best-effort visible public group count; unavailable is not zero."""
+    url = GROUPS[group]
+    try:
+        r = page.goto(url, wait_until="domcontentloaded", timeout=BROWSER_TIMEOUT_MS)
+        if not r or r.status != 200 or urlsplit(page.url).hostname != "t.me":
+            return {"group":group,"count":None,"source":url,
+                    "reason":"unavailable_http"}
+        blocks=page.locator(".tgme_page_extra").all_text_contents()
+        source=" ".join(blocks).strip()
+        if not source:
+            return {"group":group,"count":None,"source":url,
+                    "reason":"member_count_not_public"}
+        m=re.search(r"(?i)([\\d][\\d\\s.,]*?)([kKmM]?)\\s+(members|subscribers|thành viên)",source)
+        if not m:
+            return {"group":group,"count":None,"source":url,
+                    "reason":"member_count_not_readable"}
+        value=m.group(1).strip()
+        suffix=m.group(2).lower()
+        if suffix:
+            parsed=float(value.replace(",",".")) * (1000 if suffix=="k" else 1000000)
+        else:
+            parsed=int(re.sub(r"\\D","",value))
+        count=int(round(parsed))
+        if count<=0:
+            return {"group":group,"count":None,"source":url,
+                    "reason":"invalid_member_count"}
+        return {"group":group,"count":count,"source":url,"public_text":source[:110],
+                "checked_at_utc":utcnow()}
+    except Exception as exc:
+        return {"group":group,"count":None,"source":url,
+                "reason":type(exc).__name__}
+
+
+def update_membership_growth(state, samples, now):
+    """Daily observed net change, not join events or new-member attribution."""
+    zone=ZoneInfo("Asia/Ho_Chi_Minh")
+    start=datetime.datetime.fromisoformat(now)
+    day=start.astimezone(zone).date().isoformat()
+    history=state.setdefault("member_samples",{})
+    today={}
+    for group, sample in samples.items():
+        rows=history.setdefault(group,[])
+        count=sample.get("count")
+        if count is not None:
+            rows.append({"at":now,"date_vn":day,"count":count})
+            rows[:]=rows[-240:]
+        current=[r for r in rows if r["date_vn"]==day]
+        if count is not None and current:
+            today[group]={
+                "current_public_members":count,
+                "baseline_public_members":current[0]["count"],
+                "baseline_utc":current[0]["at"],
+                "observed_net_member_change_today":count-current[0]["count"],
+                "daily_net_goal":25,
+                "notes":"Change since first available Vietnam-day sample, not verified new joins."
+            }
+        else:
+            today[group]={
+                "current_public_members":None,"baseline_public_members":None,
+                "observed_net_member_change_today":None,"daily_net_goal":25,
+                "notes":"No reliable public group membership count yet."
+            }
+    net=[x["observed_net_member_change_today"] for x in today.values()]
+    return {"date_vn":day, "goal_total_net_members_per_day":50,
+            "observed_net_member_change_today":sum(net) if len(net)==len(GROUPS) and
+              all(x is not None for x in net) else None,
+            "by_group":today}
+
+
 def main():
     DATA.mkdir(parents=True, exist_ok=True)
     try:
@@ -222,11 +295,14 @@ def main():
     discoveries = []
     checks = []
     submissions = []
+    member_samples = {}
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={"width": 1100, "height": 780},
                                       ignore_https_errors=False)
         page = context.new_page()
+        for group in GROUPS:
+            member_samples[group]=read_public_telegram_members(page,group)
         for group, url in SEED_LINKS:
             item = inspect(page, url, GROUPS[group])
             item["group"] = group
@@ -263,6 +339,7 @@ def main():
         context.close()
         browser.close()
 
+    membership_growth = update_membership_growth(state, member_samples, now)
     by_group = {}
     verified = list(state["verified"].values())
     for group in GROUPS:
@@ -285,6 +362,11 @@ def main():
         "group_metrics": by_group,
         "directory_checks": discoveries,
         "submission_attempts": state["submission_attempts"],
+        "telegram_public_member_samples": member_samples,
+        "membership_growth_today": membership_growth,
+        "reach_growth_today": {"target_daily_reach":1000,
+            "verified_daily_reach":None,
+            "measurement_status":"Not configured: no verified Search Console impressions or first-party reach dataset. Do not infer reach from backlinks."},
         "new_submissions": submissions,
         "published_checks": checks,
         "submitted_previously": state["sent"],
@@ -303,6 +385,9 @@ def main():
         "checked_at_utc": now, "verified_by_group": {
             key: val["verified_total"] for key, val in by_group.items()},
         "new_this_hour": new_links, "goal": GOAL_PER_HOUR,
+        "daily_growth": membership_growth,
+        "reach_measurement": "unavailable",
+        "registration_attempts": {k:v.get("state") for k,v in state["submission_attempts"].items()},
         "directories_inspected": len(discoveries),
         "submission_results": [{k:v for k,v in x.items() if k in ("directory","group","state","category")} for x in submissions],
     }, ensure_ascii=False), flush=True)
