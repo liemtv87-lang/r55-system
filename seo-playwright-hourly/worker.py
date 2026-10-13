@@ -110,6 +110,12 @@ def discover(page, name, url):
             loginRequired: /sign in to submit|login required|register to submit/i.test(
                 document.body.innerText.slice(0,1200))
         })""")
+        if name in ("TGMania", "TGDirectory", "Groupsor"):
+            info["controls"] = page.evaluate("""() => [...document.querySelectorAll('input,select,textarea,button')].filter(e => e.getBoundingClientRect().width > 0).slice(0,35).map(e => ({
+              tag:e.tagName.toLowerCase(),name:e.name || '',type:e.type || '',
+              placeholder:e.placeholder || '',text:(e.innerText||'').trim().slice(0,70),
+              options:e.tagName==='SELECT'?[...e.options].map(o=>({value:o.value,text:o.textContent.trim()})).slice(0,30):undefined
+            }))""")
         return {"name": name, "url": url, "http": result.status,
                 "final_url": page.url[:180], **info}
     except Exception as exc:
@@ -151,6 +157,9 @@ def main():
                 state["verified"].pop(group + "|" + url, None)
         for name, url in DIRECTORIES:
             discoveries.append(discover(page, name, url))
+        for item in discoveries:
+            if item["name"] in ("TGMania", "TGDirectory", "Groupsor"):
+                print("FORM_AUDIT=" + json.dumps(item, ensure_ascii=False)[:5000], flush=True)
         context.close()
         browser.close()
 
