@@ -1,0 +1,115 @@
+name: KQ247 Two Telegram Playwright Hourly VPS Installer
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-seo-playwright-hourly-install.yml
+      - seo-playwright-hourly/worker.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-two-groups-hourly-browser-install
+  cancel-in-progress: false
+jobs:
+  install-hourly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check worker syntax
+        run: python3 -m py_compile seo-playwright-hourly/worker.py
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install isolated hourly systemd task on VinaHost
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'mkdir -p /opt/pwremote/seo-playwright-hourly'
+          tar -czf - -C seo-playwright-hourly worker.py | $REMOTE 'tar -xzf - -C /opt/pwremote/seo-playwright-hourly'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          image=pwremote/playwright:1.56.0
+          base=/opt/pwremote/seo-playwright-hourly
+          docker image inspect "$image" >/dev/null
+          original="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          uid="$(docker run --rm --entrypoint id "$image" -u)"
+          gid="$(docker run --rm --entrypoint id "$image" -g)"
+          install -d -m 0750 "$base/state"
+          chown "$uid:$gid" "$base/state"
+          chmod 0644 "$base/worker.py"
+          cat > "$base/run.sh" <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          image=pwremote/playwright:1.56.0
+          base=/opt/pwremote/seo-playwright-hourly
+          /usr/bin/timeout 230s /usr/bin/docker run --rm --init \
+            --name kq247-telegram-browser-hourly \
+            --network bridge --read-only \
+            --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --shm-size 192m \
+            --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/worker.py,dst=/app/worker.py,readonly" \
+            --mount "type=bind,src=$base/state,dst=/state" \
+            "$image" python3 /app/worker.py
+          if test -s "$base/state/latest.json"; then
+            install -m 0644 "$base/state/latest.json" \
+              /opt/kq247/deployment/football-original/public/seo-hourly-playwright-status.json
+          fi
+          SCRIPT
+          chmod 0750 "$base/run.sh"
+          cat > /etc/systemd/system/kq247-telegram-playwright.service <<'SERVICE'
+          [Unit]
+          Description=KQ247 hourly two Telegram group Playwright verification
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/pwremote/seo-playwright-hourly/run.sh
+          TimeoutStartSec=270
+          NoNewPrivileges=true
+          SERVICE
+          cat > /etc/systemd/system/kq247-telegram-playwright.timer <<'TIMER'
+          [Unit]
+          Description=Run isolated browser SEO check for only KQ247 two Telegram groups each hour
+          [Timer]
+          OnCalendar=hourly
+          Persistent=true
+          RandomizedDelaySec=0
+          AccuracySec=1min
+          Unit=kq247-telegram-playwright.service
+          [Install]
+          WantedBy=timers.target
+          TIMER
+          systemctl daemon-reload
+          systemctl enable --now kq247-telegram-playwright.timer
+          systemctl start kq247-telegram-playwright.service
+          systemctl is-active --quiet kq247-telegram-playwright.timer
+          python3 - <<'PY'
+          import json,pathlib
+          report=json.loads(pathlib.Path('/opt/pwremote/seo-playwright-hourly/state/latest.json').read_text())
+          assert set(report['groups'])=={'football','lottery'}
+          assert report['target_new_backlinks_per_hour_total']==100
+          assert report['production_containers_touched'] is False
+          print('PLAYWRIGHT_HOURLY_REPORT='+json.dumps({
+              'checked_at_utc':report['checked_at_utc'],
+              'verified_new':report['verified_new_this_hour'],
+              'verified_total':{k:v['verified_total'] for k,v in report['group_metrics'].items()},
+              'directories_scanned':len(report['directory_checks'])
+          },ensure_ascii=False))
+          PY
+          final="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$original" = "$final"
+          echo 'KQ247_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          echo 'PLAYWRIGHT_HOURLY_TIMER_ACTIVE=YES'
+          systemctl list-timers kq247-telegram-playwright.timer --no-pager
+          VPS
