@@ -1,0 +1,22 @@
+name: XSMB 316 Per-day Replay Audit Oct13
+on:
+  push:
+    paths: ['research/xsmb_316_independent_replay_20261013.py','.github/workflows/xsmb-316-replay-audit-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_316_independent_replay_20261013.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb316-1000-day-replay
+          path: |
+            research/results/xsmb_316_500_replay_20261013.csv
+            research/results/xsmb_316_500_replay_manifest.json
+          retention-days: 30
