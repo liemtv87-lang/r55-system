@@ -28,9 +28,21 @@ const majorLeague=m=>{
  if(/(?:u[- ]?\d{2}|under[- ]?\d{2}|youth|reserve|women|feminine|premier league 2|primavera|junior|friendly|amateur|division [34]|league [34])/i.test(combined))return false;
  return /(?:premier league|ngoai hang anh|la liga|primera division|serie a|bundesliga|ligue 1|champions league|europa league|conference league|libertadores|copa sudamericana|j[ -]?league|j1 league|uefa nations league|world cup|afc champions league|v[ .-]?league 1)/i.test(league);
 };
-const SEND_BATCH_LIMIT=12; // 12 per minute, below Telegram's typical group message rate limit.
-const SEND_SPACING_MS=3300;
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// Global cooldown for football PICKS only: at most one in 50 minutes.
+const SEND_INTERVAL_MS=50*60000;
+async function lastPickSentAt(){
+ const q=await pool.query("SELECT updated_at FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND payload->>'state'='sent' AND payload->>'messageId' IS NOT NULL ORDER BY updated_at DESC LIMIT 1");
+ return q.rows[0]?.updated_at?new Date(q.rows[0].updated_at).getTime():0;
+}
+async function reserveGlobalSlot(id){
+ // DB-backed atomic gate survives restarts and prevents concurrent sends.
+ const q=await pool.query(`INSERT INTO football_compact_stats(scope,payload,updated_at)
+ VALUES('r55_prematch_global_50min',$1::jsonb,now())
+ ON CONFLICT(scope) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()
+ WHERE football_compact_stats.updated_at <= now()-interval '50 minutes'
+ RETURNING scope`,[JSON.stringify({fixture:id,owner:'vinahost-vps',kind:'prematch'})]);
+ return q.rowCount>0;
+}
 async function send(text){
  if(!active||!token)throw Error('group_bot_not_enabled_or_token_missing');
  const r=await fetch('https://api.telegram.org/bot'+token+'/sendMessage',{method:'POST',
@@ -43,60 +55,61 @@ async function send(text){
  return Number(j.result.message_id);
 }
 async function sendPick(){
- const now=Date.now(),day=vnDate();
+ const now=Date.now(), last=await lastPickSentAt();
+ if(last&&now-last<SEND_INTERVAL_MS)
+  return {reason:'cooldown_50_minutes',minutesRemaining:Math.ceil((SEND_INTERVAL_MS-(now-last))/60000)};
+ const day=vnDate();
  const q=await pool.query("SELECT day::text AS day,payload FROM football_snapshots WHERE day>=($1::date-interval '1 day') ORDER BY day DESC LIMIT 2",[day]);
  const byFixture=new Map();
  for(const x of q.rows){
   const matches=typeof x.payload==='string'?JSON.parse(x.payload).matches:x.payload?.matches;
   for(const m of matches||[]){
    if(!fixture(m)||!cleanMarket(m))continue;
-   const t=Date.parse(m.kickoff||''),until=t-now;
-   // User-requested window: 0 through 30 minutes BEFORE kickoff, inclusive.
-   if(!Number.isFinite(t)||until<0||until>30*60000)continue;
+   const until=Date.parse(m.kickoff||'')-now;
+   if(!Number.isFinite(until)||until<0||until>30*60000)continue;
    const id=String(m.id);
    if(!byFixture.has(id))byFixture.set(id,{
-    m,day:x.day,major:majorLeague(m),until,
+    m,day:x.day,major:majorLeague(m),
     weight:(Number(m.priority)||0)*100+(Number(m.market?.bookmakers)||0)*5+
      (Number(m.market?.worstEV)||0)*8-Math.abs(until-20*60000)/60000
    });
   }
  }
+ // One best fixture per interval. Major first, then quality within window.
  const choices=[...byFixture.values()].sort((a,b)=>
   Number(b.major)-Number(a.major)||b.weight-a.weight||
   Date.parse(a.m.kickoff)-Date.parse(b.m.kickoff));
- let sent=0,lastAck=null,alreadyClaimed=0,expired=0;
+ let alreadyClaimed=0,expired=0;
  for(const x of choices){
-  if(sent>=SEND_BATCH_LIMIT)break;
-  // The match may have started while earlier messages were delivered.
-  if(Date.parse(x.m.kickoff)-Date.now()<0){expired++;continue}
-  // Check legacy day-scoped claims too, so a match is never posted twice.
+  if(Date.parse(x.m.kickoff)<Date.now()){expired++;continue;}
   const prior=await pool.query(
-   "SELECT 1 FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND right(scope,length($1::text))=$1 LIMIT 1",
-   [String(x.m.id)]);
-  if(prior.rowCount){alreadyClaimed++;continue}
+   "SELECT 1 FROM football_compact_stats WHERE scope LIKE 'r55_prematch_sent_%' AND right(scope,length($1::text))=$1 LIMIT 1",[String(x.m.id)]);
+  if(prior.rowCount){alreadyClaimed++;continue;}
+  // Do all format validation before consuming a global slot.
+  const msg=matchMessage(x.m);
+  if(!validFootballMessage(msg)){log('R55_VPS_GROUP_INVALID_FORMAT',{fixture:x.m.id});continue;}
+  if(!await reserveGlobalSlot(x.m.id))
+   return {reason:'cooldown_50_minutes_global_gate',eligible:choices.length};
   const key='r55_prematch_sent_'+x.day+'_'+x.m.id;
   const v=await pool.query("INSERT INTO football_compact_stats(scope,payload,updated_at) VALUES($1,$2::jsonb,now()) ON CONFLICT(scope) DO NOTHING RETURNING scope",
    [key,JSON.stringify({state:'sending',source:'bongdalu-r55',day:x.day,id:x.m.id,owner:'vinahost-vps'})]);
-  if(!v.rowCount){alreadyClaimed++;continue}
+  if(!v.rowCount)return {reason:'fixture_claimed_concurrently'};
   try{
-   const msg=matchMessage(x.m);
-   if(!validFootballMessage(msg))throw Error('football_message_not_exact_or_incomplete');
+   if(Date.parse(x.m.kickoff)<Date.now())throw Error('fixture_started_before_send');
    const messageId=await send(msg);
    await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
     [key,JSON.stringify({state:'sent',source:'bongdalu-r55',day:x.day,id:x.m.id,
-      messageId,group:CHANNEL,owner:'vinahost-vps',certified:false,majorLeague:x.major})]);
-   sent++;lastAck={id:x.m.id,day:x.day,messageId,majorLeague:x.major};
-   log('R55_VPS_GROUP_SEND_ACK',{...lastAck,kickoff:x.m.kickoff,minutesBefore:Number(((Date.parse(x.m.kickoff)-Date.now())/60000).toFixed(1))});
-   if(sent<SEND_BATCH_LIMIT)await sleep(SEND_SPACING_MS);
+     messageId,group:CHANNEL,owner:'vinahost-vps',certified:false,majorLeague:x.major})]);
+   log('R55_VPS_GROUP_SEND_ACK',{id:x.m.id,day:x.day,messageId,majorLeague:x.major,minutesBefore:Number(((Date.parse(x.m.kickoff)-Date.now())/60000).toFixed(1))});
+   return {sent:true,count:1,id:x.m.id,day:x.day,messageId,majorLeague:x.major};
   }catch(e){
-   // A Telegram timeout is ambiguous. Never retry an uncertain delivery blindly.
+   // An ambiguous Telegram failure must not create repeated posts.
    await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
     [key,JSON.stringify({state:'delivery_uncertain',requiresReview:true,error:String(e.message||e).slice(0,130),day:x.day,id:x.m.id})]);
    throw e;
   }
  }
- return {sent:sent>0,count:sent,...lastAck,eligible:choices.length,alreadyClaimed,expired,
-  reason:sent?'sent_prematch_batch':choices.length?'already_claimed_or_expired':'no_fixture_0_to_30_min'};
+ return {reason:choices.length?'already_claimed_or_expired':'no_fixture_0_to_30_min',eligible:choices.length,alreadyClaimed,expired};
 }
 const utcWindow=day=>new Date(day+'T05:05:00Z');
 const noonGradeDeadline=()=>Date.parse(vnDate()+'T13:30:00+07:00');
