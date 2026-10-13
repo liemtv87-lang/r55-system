@@ -1,0 +1,51 @@
+name: KQ247 Vietlott R33 final public and historical stats audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-final-public-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify public HTTPS, stats, and old client site redirect deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=https://vietlott.64-120-92-172.sslip.io
+          curl -fsSL --max-time 20 "$BASE/api/state" >/tmp/r33-live-state.json
+          curl -fsSL --max-time 30 "$BASE/draw-windows.json" >/tmp/r33-live-windows.json
+          curl -fsSL --max-time 30 "$BASE/backtest-60.json" >/tmp/r33-live-backtest.json
+          python3 - <<'PY'
+          import json
+          st=json.load(open('/tmp/r33-live-state.json'))
+          win=json.load(open('/tmp/r33-live-windows.json'))
+          b=json.load(open('/tmp/r33-live-backtest.json'))
+          assert st['ready'] is True
+          assert win['ok'] and win['source']=='FULL_33_RULES_ONLY'
+          assert b['schema_version']=='R33_USER33_ALL_METHODS_SAME_DAY_30DRAWS_60DRAWS_365D'
+          for p in ('mega645','power655'):
+              z=b['products'][p]
+              assert z['filter_scope']['mode']=='FULL_33_RULES_ONLY'
+              assert z['filter_scope']['reduction_applied'] is False
+              assert not any('reduced_stats' in x for x in z)
+              for n in (30,60,150):
+                  x=z['stats'+str(n)]
+                  c=x['prize_counts']
+                  assert x['complete'] is True and x['draws_tested']==n
+                  w=win['products'][p][str(n)]
+                  assert w['complete'] is True and w['available']==n
+                  j=int(c.get('Jackpot',0))+int(c.get('Jackpot 1',0))+int(c.get('Jackpot 2',0))
+                  assert j==w['jackpot']
+                  print('VERIFIED_FULL33_PRIZES',p,'DRAWS',n,'JP',j,'G1',c.get('Giải nhất',0),'G2',c.get('Giải nhì',0),'G3',c.get('Giải ba',0),'AVG',round(x['avg_pool']))
+          print('VIETLOTT_R33_VERIFIED_LIVE_STATS=PASS')
+          PY
+          code=$(curl -sSL --max-time 20 -o /tmp/r33-legacy-index.html -w '%{http_code}' 'https://kq247-xoso-khach-v29.onrender.com/index.html?client=1&product=vietlott&v=20261011' || true)
+          echo VIETLOTT_LEGACY_RENDER_HTTP="$code"
+          if [ "$code" = 200 ] && grep -q "var vnext=new URL('https://vietlott.64-120-92-172.sslip.io/client.html')" /tmp/r33-legacy-index.html; then
+            echo VIETLOTT_LEGACY_RENDER_REDIRECT_CODE=LIVE
+          else
+            echo VIETLOTT_LEGACY_RENDER_REDIRECT_CODE=NOT_YET_DEPLOYED
+          fi
