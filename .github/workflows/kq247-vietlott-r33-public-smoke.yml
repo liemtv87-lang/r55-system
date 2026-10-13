@@ -1,0 +1,31 @@
+name: KQ247 Vietlott R33 public HTTPS smoke
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-public-smoke.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Public Vietlott R33 HTTPS endpoints, no customer credentials
+        run: |
+          set -euo pipefail
+          for host in https://vietlott.64-120-92-172.sslip.io https://64-120-92-172.sslip.io; do
+            for path in /health /api/state /client.html; do
+              url="$host$path"
+              code=$(curl -sSL --max-time 12 -o /tmp/kq247-smoke.json -w '%{http_code}' "$url" || true)
+              echo "PUBLIC_CHECK url=$url http=$code bytes=$(wc -c </tmp/kq247-smoke.json 2>/dev/null || echo 0)"
+              if [ "$host" = https://vietlott.64-120-92-172.sslip.io ] && [ "$path" = /api/state ] && [ "$code" = 200 ]; then
+                python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/kq247-smoke.json'))
+          for p in ['mega645','power655']:
+            snap=data['products'][p]['snapshot']
+            print('PUBLIC_R33',p,snap['filtered_total'],snap['reduced_total'],snap['ruleset_version'])
+          PY
+              fi
+            done
+          done
