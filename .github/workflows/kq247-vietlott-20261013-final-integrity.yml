@@ -1,0 +1,116 @@
+name: KQ247 Vietlott 33 rules primary integrity 20261013
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-20261013-final-integrity.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify public R33 full-only stats, snapshot, client links and four TXT streams
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const root='https://vietlott.64-120-92-172.sslip.io';
+          const fetchJson=async path=>{
+            const r=await fetch(root+path,{signal:AbortSignal.timeout(35000)});
+            assert.equal(r.status,200,path+' HTTP '+r.status);
+            return r.json();
+          };
+          const [health,state,windows,backtest]=await Promise.all([
+            fetchJson('/health'),fetchJson('/api/state'),fetchJson('/draw-windows.json'),fetchJson('/backtest-60.json')]);
+          assert.equal(health.ok,true);assert.equal(health.data_ready,true);
+          assert.equal(state.ready,true);assert.equal(windows.source,'FULL_33_RULES_ONLY');
+          assert.equal(backtest.schema_version,'R33_USER33_ALL_METHODS_SAME_DAY_30DRAWS_60DRAWS_365D');
+          console.log('R33_LIVE_HEALTH',JSON.stringify({runtime:health.runtime,ready:health.data_ready,status:health.status}));
+          for(const [p,cap] of [['mega645',180000],['power655',450000]]){
+            const snap=state.products[p].snapshot;
+            assert.equal(snap.locked,true);
+            assert.equal(snap.ruleset_version,'USER_33_HARD_RULES_PAIR_TOUCH_2026_10_13_R1');
+            assert.ok(snap.reduced_total>0&&snap.reduced_total<=cap);
+            assert.ok(snap.filtered_total>=snap.reduced_total);
+            console.log('R33_SNAPSHOT',p,JSON.stringify({analysis_date:snap.analysis_date,target_date:snap.target_date,filtered_total:snap.filtered_total,reduced_total:snap.reduced_total,locked:snap.locked}));
+            const pr=backtest.products[p];
+            assert.equal(pr.filter_scope?.mode,'FULL_33_RULES_ONLY');
+            assert.equal(pr.filter_scope?.reduction_applied,false);
+            assert.ok(!Object.keys(pr).some(k=>k.startsWith('reduced_stats')));
+            for(const n of [30,60,150]){
+              const q=pr['stats'+n],z=windows.products[p][String(n)];
+              assert.equal(q.complete,true);
+              assert.equal(q.draws_tested,n);
+              assert.equal(z.available,n);
+              assert.equal(z.complete,true);
+              const pc=q.prize_counts||{};
+              const jp=Number(pc.Jackpot||0)+Number(pc['Jackpot 1']||0)+Number(pc['Jackpot 2']||0);
+              assert.equal(Number(z.jackpot),jp);
+              console.log('R33_FULL_ONLY_STATS',p,n,JSON.stringify({draws:q.draws_tested,jackpot:jp,prize1:pc['Giải nhất']||0,avg_full_pool:q.avg_pool}));
+            }
+            for(const scope of ['full33','reduced']){
+              const count=scope==='full33'?snap.filtered_total:snap.reduced_total;
+              const ac=new AbortController();
+              const r=await fetch(root+'/api/export-txt?product='+p+'&scope='+scope,{signal:ac.signal,headers:{accept:'text/plain'}});
+              assert.equal(r.status,200,p+'/'+scope);
+              assert.equal(Number(r.headers.get('x-ticket-count')),count);
+              assert.match(r.headers.get('content-disposition')||'',/\.txt/i);
+              const reader=r.body.getReader(),dec=new TextDecoder();let sample='';
+              for(let i=0;i<10&&sample.split('\n').length<9;i++){
+                const a=await reader.read();if(a.done)break;
+                sample+=dec.decode(a.value,{stream:true});
+              }
+              await reader.cancel().catch(()=>{});ac.abort();
+              assert.ok(sample.includes('SO BO:'));
+              assert.ok(sample.includes('DINH DANG: 5 BO/DONG'));
+              const line=sample.split('\n').find(x=>x.includes(' ; ')&&/[𝟎-𝟗]/u.test(x));
+              assert.ok(line,p+' '+scope+' missing bold ticket sample');
+              assert.equal(line.split(' ; ').length,5);
+              console.log('R33_TXT_STREAM',p,scope,'PASS tickets='+count);
+            }
+          }
+          const c=await fetch(root+'/client.html',{signal:AbortSignal.timeout(20000)});
+          const html=await c.text();
+          assert.equal(c.status,200);
+          assert.ok(html.includes('kq247_vietlott_code'));
+          assert.ok(html.includes('ensureLatestLink'));
+          assert.ok(html.includes('kq247-client-v2|'));
+          console.log('R33_CUSTOMER_CODE_DEVICE_LINK=PASS');
+          console.log('R33_PUBLIC_INTEGRITY_PASS');
+          JS
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only VPS scheduler snapshot-files capacity and runtime
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          date -u '+VPS_UTC=%F %T'
+          docker inspect --format 'VIETLOTT_PRIMARY status={{.State.Status}} oom={{.State.OOMKilled}} restarts={{.RestartCount}} image={{.Config.Image}}' kq247-vietlott-vps
+          docker stats --no-stream --format 'VIETLOTT_STATS cpu={{.CPUPerc}} memory={{.MemUsage}}' kq247-vietlott-vps
+          df -h /opt/kq247 | tail -1
+          for p in health status;do curl -fsS --max-time 12 "http://127.0.0.1:18088/$p" > "/tmp/vietlott-integrity-$p.json";done
+          python3 - <<'PY'
+          import json
+          for typ in ['health','status']:
+           d=json.load(open('/tmp/vietlott-integrity-'+typ+'.json'))
+           print('LIVE_'+typ.upper(),{k:d.get(k) for k in ('ok','runtime','data_ready','status','type','started_at','finished_at','exit_code','expected_analysis_date','error')})
+          PY
+          echo VIETLOTT_SCHEDULER_READ_ONLY
+          crontab -l 2>/dev/null | grep -iE 'vietlott|kq247' | cut -c1-240 || true
+          systemctl list-timers --all --no-pager 2>/dev/null | grep -iE 'vietlott|kq247' | cut -c1-240 || true
+          echo PRIMARY_PERSISTENT_STATE
+          for p in /opt/kq247/vietlott-r33-primary/public /opt/kq247/vietlott/public; do
+            if test -d "$p";then
+              echo "POOL_ROOT=$p"
+              for f in state.json draw-windows.json backtest-60.json;do
+                test ! -f "$p/$f" || stat -c '%n size=%s modified=%y' "$p/$f" | cut -c1-205
+              done
+            fi
+          done
+          VPS
