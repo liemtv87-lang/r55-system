@@ -1,0 +1,119 @@
+name: KQ247 TeleJoiner Two Groups One-Time Submission
+on:
+  push:
+    branches: [vps-playwright-isolated-20261014]
+    paths: ['.github/workflows/kq247-telejoiner-two-groups.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-telejoiner-two-groups-once
+  cancel-in-progress: false
+jobs:
+  submit-two-groups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Submit only one listing per Telegram community using isolated VPS browser
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          umask 027
+          base=/opt/pwremote
+          install -d -m 0750 "$base/seo"
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          cat > "$base/seo/telejoiner.py" <<'PY'
+          import json,datetime,pathlib,os
+          from playwright.sync_api import sync_playwright,TimeoutError as PWTimeout
+          root=pathlib.Path('/results')
+          receipt=root/'telejoiner.json'
+          try: data=json.loads(receipt.read_text())
+          except (OSError,ValueError): data={}
+          groups=[
+            ('football','https://t.me/keochuyengia79','Sports',
+             'Nhóm KQ247 chia sẻ lịch thi đấu, kết quả và phân tích dữ liệu bóng đá trước trận, hoàn toàn miễn phí. Thông tin chỉ để tham khảo, không bảo đảm kết quả.',
+             'football,lich thi dau,bong da,ket qua bong da'),
+            ('lottery','https://t.me/xsbm999','News',
+             'Nhóm KQ247 cập nhật kết quả xổ số ba miền XSMB, XSMT, XSMN theo đài và phân tích thống kê miễn phí. Dự đoán chỉ mang tính tham khảo, không bảo đảm chính xác.',
+             'ket qua xo so,xsmb,xsmt,xsmn')]
+          def save():
+            temp=receipt.with_suffix('.tmp')
+            temp.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+            temp.replace(receipt)
+          with sync_playwright() as p:
+            b=p.chromium.launch(headless=True)
+            context=b.new_context(viewport={'width':1280,'height':900})
+            for key,link,preferred,description,tags in groups:
+              if data.get(key,{}).get('status') in ('submitted','listed','pending_moderation','already_exists'):
+                print('TELEJOINER_SKIP_PREVIOUS',key,data[key]['status'])
+                continue
+              page=context.new_page()
+              now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+              record={'group':link,'checked_at_utc':now,'directory':'telejoiner.com',
+                      'published_link':None}
+              try:
+                resp=page.goto('https://telejoiner.com/submit',wait_until='domcontentloaded',timeout=35000)
+                if not resp or resp.status!=200:raise RuntimeError('submission page not 200')
+                form=page.locator('#groupSubmitForm')
+                if form.count()!=1:raise RuntimeError('form mismatch')
+                if page.locator('[class*=captcha],iframe[src*=captcha],[data-sitekey]').count():
+                  raise RuntimeError('CAPTCHA requires human; not submitted')
+                cats=form.locator('select[name=category] option').evaluate_all('(els) => els.map(e => e.value)')
+                countries=form.locator('select[name=country] option').evaluate_all('(els) => els.map(e => e.value)')
+                languages=form.locator('select[name=language] option').evaluate_all('(els) => els.map(e => e.value)')
+                selected=next((x for x in ([preferred,'Football','Sports','Lottery','News','Community']) if x in cats),None)
+                if not selected or 'Vietnam' not in countries or 'Vietnamese' not in languages:
+                  raise RuntimeError('relevant classification unavailable')
+                form.locator('input[name=link]').fill(link)
+                form.locator('select[name=category]').select_option(value=selected)
+                form.locator('select[name=country]').select_option(value='Vietnam')
+                form.locator('select[name=language]').select_option(value='Vietnamese')
+                form.locator('input[name=tags]').fill(tags)
+                desc=form.locator('textarea[name=description]')
+                if desc.count():desc.fill(description)
+                toggle=form.locator('input#use_default_description')
+                if toggle.count() and toggle.is_checked():toggle.uncheck()
+                form.locator('input[name=terms]').check()
+                response_log=[]
+                def response_hook(r):
+                  if r.request.method=='POST' and 'telejoiner.com' in r.url:
+                    response_log.append({'url':r.url[:220],'code':r.status})
+                page.on('response',response_hook)
+                form.locator('button[type=submit]').click(timeout=12000)
+                page.wait_for_timeout(5000)
+                record.update({'status':'submitted','category':selected,
+                               'final_url':page.url[:400],
+                               'response_log':response_log[:3],
+                               'page_excerpt':page.locator('body').inner_text(timeout=9000)[-1200:]})
+                if page.url.startswith('https://telejoiner.com/') and page.url.rstrip('/')!='https://telejoiner.com/submit':
+                  record['candidate_listing']=page.url
+                print('TELEJOINER_SUBMISSION',key,json.dumps({k:v for k,v in record.items() if k!='page_excerpt'},ensure_ascii=False))
+              except Exception as e:
+                record.update({'status':'error','error':type(e).__name__+': '+str(e)[:240]})
+                print('TELEJOINER_ERROR',key,record['error'])
+              data[key]=record;save();page.close()
+            b.close()
+          PY
+          chmod 0644 "$base/seo/telejoiner.py"
+          mkdir -p /opt/kq247/seo-groups/reports
+          timeout 180s docker run --rm --init --name kq247-telejoiner-one-off \
+             --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+             --user pwuser --pids-limit 160 --cpus 1.5 --memory 1536m --shm-size 256m \
+             --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
+             --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+             --mount "type=bind,src=$base/seo/telejoiner.py,dst=/app/task.py,readonly" \
+             --mount "type=bind,src=/opt/kq247/seo-groups/reports,dst=/results" \
+             pwremote/playwright:1.56.0 python3 /app/task.py
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort)"
+          test "$before" = "$after"
+          echo KQ247_CONTAINERS_UNCHANGED=YES
+          REMOTE
