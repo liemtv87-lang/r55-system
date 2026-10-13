@@ -43,8 +43,14 @@ const server=http.createServer(async(req,res)=>{
   const html=await r.text();
   if(html.length<3000||html.length>750000||!html.includes('<html'))
    throw Error('original UI incomplete');
+  // The upstream Neon HTML uses href="/?region=xsmt" because its own
+  // legacy homepage was the lottery app. On the shared VPS, "/" serves
+  // football. Rebase ONLY the three lottery tab/station href links here,
+  // rather than relying on redirects or changing the upstream snapshot.
+  const routed=html.replace(/href=(["'])\/\?region=(xsmb|xsmt|xsmn)(?=[&"'#])/gi,
+    (_match,quote,region)=>'href='+quote+'/xoso?region='+region.toLowerCase());
   upstreamSnapshotBytes=html.length;lastCheck=new Date().toISOString();lastError=null;
-  return send(res,200,req.method==='HEAD'?'':html,'text/html; charset=utf-8');
+  return send(res,200,req.method==='HEAD'?'':routed,'text/html; charset=utf-8');
  }catch(e){
   errorCount++;lastError=String(e?.message||e).slice(0,160);
   console.error('KQ247_XS_ORIGINAL_UPSTREAM_FAILED',lastError);
