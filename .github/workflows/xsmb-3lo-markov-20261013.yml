@@ -1,0 +1,20 @@
+name: XSMB 3-Lotto Markov 27 Positions
+on:
+  push:
+    paths: ['research/xsmb_3lo_markov_20261013.py','.github/workflows/xsmb-3lo-markov-20261013.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        mode: [markov, special, hybrid, antihot]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - run: python3 research/xsmb_3lo_markov_20261013.py ${{ matrix.mode }}
