@@ -1,0 +1,36 @@
+name: Vietlott R33 full-pool backtest progress
+on:
+  push:
+    paths: ['.github/workflows/kq247-vietlott-r33-backtest-progress.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read production backtest shard progress without changing jobs
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          curl -fsS --max-time 12 http://127.0.0.1:18088/status >/tmp/vietlott-r33-progress.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/vietlott-r33-progress.json'))
+          print('R33_STATUS',j.get('status'),'TYPE',j.get('type'),'ERROR',str(j.get('error') or '')[:160])
+          print('R33_COMPLETED_SHARDS_IN_LOG',sum('DONE ' in str(x) for x in j.get('logs',[])))
+          for line in j.get('logs',[])[-24:]:
+            s=str(line)
+            if any(k in s for k in ('WORKER','START ','DONE ','FAIL ','SKIP ','Error','exit','Backtest')):
+              print('R33_PROGRESS_LOG',s[:180])
+          PY
+          docker exec kq247-vietlott-vps sh -c 'printf "R33_SHARD_FILES="; find /app/backtest-out -maxdepth 1 -name "*.json" 2>/dev/null | wc -l'
+          docker stats --no-stream --format 'R33_CPU={{.CPUPerc}} R33_MEM={{.MemUsage}}' kq247-vietlott-vps
+          echo R33_PROGRESS_AUDIT_COMPLETE
+          VPS
