@@ -37,7 +37,7 @@ jobs:
           const withConsensus=priced.filter(x=>x.market.bookmakerConsensus?.AH?.availableBookmakers>0&&x.market.bookmakerConsensus?.OU?.availableBookmakers>0);
           const audited=await Promise.all(priced.slice(0,8).map(async x=>{
             try {const h=await V.history(rr.base,x.bongdaluId);return {id:x.id,home:h?.home?.n||0,away:h?.away?.n||0,h2h:h?.h2h?.n||0,
-              historicQuotes:h?.sourceCoverage?.historicalPriceRows||0,oddsPageCompanies:h?.oddscompCompanies?.length||0};}
+              historicQuotes:h?.sourceCoverage?.historicalPriceRows||0,oddsPageFetched:!!h?.oddsComparisonFetched,oddsPageCompanies:h?.oddscompCompanies?.length||0};}
             catch(e){return {id:x.id,error:String(e.message||e).slice(0,100)};}
           }));
           const sizes=priced.map(x=>x.market.bookmakerQuotes.length).sort((a,b)=>a-b);
