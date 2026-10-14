@@ -65,3 +65,43 @@ finally:
  if temp.exists():temp.unlink()
 print('STATION_LOCKED_READONLY_EXPORT_PASS',len(records),len({x['region']+'|'+x['station'] for x in records}),
 'fingerprint='+hashlib.sha256(payload.encode()).hexdigest())
+
+# Result reports must use the SAME pre-draw immutable snapshot even after the
+# next-day index replaces today's public prediction at 19:30.
+# Export a separate bounded, read-only timeline; never put past draws in public UI.
+hq="""SELECT json_build_object(
+'region',region,'station',station,'sourceDate',source_date,
+'predictionDate',predicted_for,'lockedAt',locked_at,'payload',payload)::text
+FROM kq247_xs_vps.previous_station_locked
+WHERE predicted_for >= DATE '"""+str(today-datetime.timedelta(days=1))+"""'
+  AND predicted_for <= DATE '"""+str(today+datetime.timedelta(days=8))+"""'
+ORDER BY predicted_for,region,station,source_date;"""
+hp=subprocess.run(['docker','exec','-i','kq247-r55-postgres','sh','-c',
+ 'psql -X -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'],
+ input=hq,text=True,capture_output=True,timeout=45)
+if hp.returncode:raise SystemExit('BOT_HISTORY_EXPORT_QUERY_FAILED '+hp.stderr[-250:])
+history=[json.loads(line) for line in hp.stdout.splitlines() if line.strip()]
+identities=set()
+for r in history:
+ key=(r.get('region'),r.get('station'),r.get('predictionDate'))
+ if key in identities:raise SystemExit('DUPLICATE_BOT_DAY_STATION_'+str(key))
+ identities.add(key)
+ x=r['payload']
+ if (x.get('region')!=r['region'] or x.get('station')!=r['station'] or
+     x.get('predictionDate')!=r['predictionDate'] or
+     x.get('sourceDate')!=r['sourceDate'] or
+     x.get('audit',{}).get('bridgeSourceDrawCount')!=1 or
+     x.get('audit',{}).get('bridgeSourceStation')!=r['station'] or
+     x.get('exclusionsValidated') is not True or
+     x.get('previousForecastsUsed') is not False or
+     len(x.get('dan75',[]))!=75 or len(x.get('three_digit',[]))!=500 or
+     any(n[-2:] not in x['dan75'] for n in x['three_digit'])):
+  raise SystemExit('INVALID_BOT_HISTORICAL_SNAPSHOT_'+str(key))
+history_target=target.with_name('station-locked-history.json')
+history_payload=json.dumps({'type':'READ_ONLY_LOCKED_STATION_HISTORY','generatedAt':now.isoformat(),
+ 'records':history},ensure_ascii=False,sort_keys=True,separators=(',',':'))+'\n'
+history_tmp=history_target.with_name('.station-locked-history.'+str(os.getpid())+'.tmp')
+with open(history_tmp,'x',encoding='utf8') as f:
+ f.write(history_payload);f.flush();os.fsync(f.fileno())
+os.replace(history_tmp,history_target)
+print('STATION_LOCKED_BOT_HISTORY_EXPORT_PASS',len(history),len(identities))
