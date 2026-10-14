@@ -68,6 +68,16 @@ export async function applyLockedOverlay(html,region,requestedStation){
  '<details open><summary>DÀN 3 CÀNG (500 số)</summary>'+
  group('3 CÀNG','three_digit',p.three_digit,'tiny')+'</details></article>';
  const data=Object.fromEntries(['lotto3','doubles','dan50','dan60','dan75','three_digit'].map(k=>[k,p[k].join(' ')]));
+ // Preserve the original allcopy button's payload without changing its DOM or handlers.
+ data.all=[
+  rec.station+' - '+dl(day),
+  '3 LÔ BẠCH THỦ: '+p.lotto3.join(' '),
+  '2 LÔ KÉP: '+p.doubles.join(' '),
+  'DÀN 50: '+p.dan50.join(' '),
+  'DÀN 60: '+p.dan60.join(' '),
+  'DÀN 75: '+p.dan75.join(' '),
+  '3 CÀNG: '+p.three_digit.join(' ')
+ ].join('\n');
  function replace(rx,to,label){let hits=0;html=html.replace(rx,()=>{hits++;return to;});if(hits!==1)throw Error('NEON_LAYOUT_CHANGED_'+label);}
  replace(/<div class="headline">[\s\S]*?<\/div>/,headline,'HEADLINE');
  replace(/<div class="stations">[\s\S]*?<\/div>/,nav,'STATION_NAV');
