@@ -40,6 +40,11 @@ WATCH = "--watch" in sys.argv
 POLL_SECONDS = max(60,min(3600,int(os.environ.get("KQ247_POST_POLL_S","600"))))
 # Explicitly opt-in directories: never post merely because a URL looks like a form.
 OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org"}
+# Explicit no-account, free Telegram listing page confirmed by the publisher.
+# An attempt still requires all on-page checks; one submission per group/domain.
+DIRECT_OPT_IN_ROUTES = {
+ "telegrmgrouplink.com": "https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/"
+}
 PAT_SUBMIT=re.compile(r"(submit|add[-_/]?(?:group|channel|link|listing)|publish|suggest|dang[-_/]?(?:tin|bai)|them[-_/]?nhom)", re.I)
 PAT_LINK=re.compile(r"(telegram|group.?link|channel.?link|invite.?link|telegram.?url|(?:^|[_-])url(?:$|[_-])|(?:^|[_-])link(?:$|[_-]))",re.I)
 PAT_TITLE=re.compile(r"(title|group.?name|channel.?name|name.?group)",re.I)
@@ -72,9 +77,12 @@ def read_queue(con):
             AND host NOT IN (SELECT host FROM submissions GROUP BY host HAVING COUNT(*)>=2)
             ORDER BY host""").fetchall()
     except sqlite3.OperationalError:
-        return []
-    return [(h,u) for h,u in rows if h in OPT_IN_HOSTS and h not in ALREADY_SENT_HOSTS
-            and h not in EXTERNAL_WORKFLOW_HOSTS and PAT_SUBMIT.search(urlsplit(u).path)]
+        rows = []
+    rows = list(rows) + list(DIRECT_OPT_IN_ROUTES.items())
+    return list(dict.fromkeys(
+        (h,u) for h,u in rows if h in OPT_IN_HOSTS and h not in ALREADY_SENT_HOSTS
+            and h not in EXTERNAL_WORKFLOW_HOSTS and PAT_SUBMIT.search(urlsplit(u).path)
+    ))
 
 def is_public_listing(page, expected):
     try:
