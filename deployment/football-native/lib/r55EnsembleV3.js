@@ -53,7 +53,7 @@ function estimates(row,h,native){
  const anchorH=bounded((total+diff)/2,.2,4.3),anchorA=bounded((total-diff)/2,.2,4.3);
  return [[mh,ma],[formH,formA],[anchorH,anchorA]];
 }
-import {bookmakerSideAgreement} from "lib/r55BookmakerConsensus.js";
+import {bookmakerSideAgreement} from "./r55BookmakerConsensus.js";
 // Historical AH/OU evidence is measured from the individual matches and every
 // bookmaker's published line, with each past match weighted only once.
 function historicalEvidence(history,option){
