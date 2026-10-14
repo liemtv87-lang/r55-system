@@ -133,8 +133,10 @@ const scoreLeague=l=>{
  return 40;
 };
 // Exclude recognisable third/fourth tiers and reserve/youth fixtures; keep first/second divisions.
-const excluded=l=>/(?:\b(?:league|liga|division|div|lig)\s*[-.]?\s*[34]\b|\b(?:iii|iv)\s+(?:liga|league|division)\b|\b(?:third|fourth|3rd|4th)\s+(?:division|league|tier)\b|\b(?:league|division)\s+(?:three|four|iii|iv)\b|(?:primera|segunda)\s+division\s+rfef|\bhungary\s+nb\s+iii\b|\bchinese\s+football\s+association\s+yi\s+league\b|\bj3\s+league\b|\bnorway\s+2[.]liga\b|\bgreece\s+(?:divison|division)\s+c\b|\bserie\s+[cd]\b|\btercera\b|\b(?:youth|reserves?|amateur|friendly|u(?:1[5-9]|2[0-3]))\b)/i.test(String(l||""));
-
+// All Bongdalu priced fixtures are in the analysis universe, including
+// lower divisions, youth, reserve and friendly matches. Competition priority
+// controls ordering only. Evidence/release gates decide publication separately.
+const excluded=()=>false;
 function strictMajorPriority(country,league,home,away){
  const c=String(country||"").toLowerCase(),l=String(league||"").toLowerCase();
  if(/(?:rfef|primera federaci[oó]n|primera division rfef|division 3|division 4|u19|u20|u21|u23|reserve|youth|women|ladies|tercera|regional|amateur|serie c|serie d|league two|2[.] bundesliga|bundesliga 2|la liga 2)/i.test(l))return 0;
