@@ -40,7 +40,64 @@ def get_html(url):
         if r.status!=200: raise ValueError("lottery source HTTP "+str(r.status))
         return r.read(260000).decode("utf-8",errors="replace")
 
+def read_vps_locked_snapshot(day,region,index_path):
+    """Read immutable station forecasts locally on VPS; no Neon and no guessed numbers."""
+    data=json.loads(Path(index_path).read_text(encoding="utf-8"))
+    if data.get("type")!="READ_ONLY_LOCKED_STATION_PREDICTIONS":
+        raise ValueError("invalid VPS locked index")
+    records=data.get("records")
+    if not isinstance(records,list) or len(records)!=36:
+        raise ValueError("missing locked 36 station index")
+    found={}
+    digests=[]
+    seen=set()
+    for item in records:
+        station=item.get("station")
+        key=(item.get("region"),station)
+        if key in seen: raise ValueError("duplicate locked station")
+        seen.add(key)
+        if item.get("region")!=region or item.get("predictionDate")!=day:
+            continue
+        p=item.get("payload") or {}
+        expected_prizes=27 if region=="mb" else 18
+        expected_positions=107 if region=="mb" else 82
+        audit=p.get("audit") or {}
+        if (p.get("station")!=station or p.get("region")!=region or
+            p.get("sourceDate")!=item.get("sourceDate") or
+            p.get("predictionDate")!=day or p.get("sourceDate","")>=day or
+            p.get("sourcePrizes")!=expected_prizes or p.get("digitPositions")!=expected_positions or
+            audit.get("coveredPositions")!=expected_positions or
+            audit.get("bridgeSourceDrawCount")!=1 or
+            audit.get("bridgeSourceStation")!=station or
+            p.get("previousForecastsUsed") is not False or
+            p.get("allPrizesUsed") is not True or
+            p.get("allPositionsUsed") is not True or
+            p.get("exclusionsValidated") is not True):
+            raise ValueError("invalid locked VPS provenance: "+str(station))
+        required=[("lotto3",3,2),("doubles",2,2),
+                  ("dan50",50,2),("dan60",60,2),("dan75",75,2),("three_digit",500,3)]
+        for name,n,width in required:
+            vals=p.get(name)
+            if (not isinstance(vals,list) or len(vals)!=n or len(set(vals))!=n or
+                any(not isinstance(v,str) or re.fullmatch(r"[0-9]{"+str(width)+r"}",v) is None for v in vals)):
+                raise ValueError("invalid VPS locked pool: "+str(station)+"/"+name)
+        if (not set(p["dan50"]).issubset(p["dan60"]) or
+            not set(p["dan60"]).issubset(p["dan75"]) or
+            any(n[-2:] not in p["dan75"] for n in p["three_digit"]) or
+            any(n in set(audit.get("excludedNumbers",[])) for n in p["lotto3"]+p["doubles"])):
+            raise ValueError("VPS station hard filter violated: "+str(station))
+        if station in found:raise ValueError("duplicate VPS station")
+        found[station]={"three_lotto":p["lotto3"],"doubles":p["doubles"],
+                        "de":{n:p[n] for n in ("dan50","dan60","dan75","three_digit")}}
+        digests.append([region,station,day,p.get("sourceSHA256")])
+    if not (1 if region=="mb" else 2)<=len(found)<=(1 if region=="mb" else 4):
+        raise ValueError("no complete local VPS forecast for this draw day: "+region+"/"+day)
+    fp=hashlib.sha256(json.dumps(sorted(digests),ensure_ascii=False,sort_keys=True).encode("utf-8")).hexdigest()
+    return found,fp
+
 def read_snapshot(day,region):
+    if os.environ.get('KQ247_LOCKED_INDEX_PATH'):
+        return read_vps_locked_snapshot(day,region,os.environ['KQ247_LOCKED_INDEX_PATH'])
     source=http_json(NEON_READONLY_SNAPSHOT+"?date="+day)
     if not (source.get("ok") is True and source.get("found") is True and source.get("locked") is True
             and source.get("date")==day and source.get("lock",{}).get("locked") is True):
