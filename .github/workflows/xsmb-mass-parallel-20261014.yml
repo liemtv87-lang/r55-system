@@ -1,0 +1,60 @@
+name: KQ247 XSMB Three-Lotto 40K Parallel Holdout Research
+on:
+  push:
+    branches: [main]
+    paths:
+      - research/xsmb_mass_parallel_20261014.py
+      - .github/workflows/xsmb-mass-parallel-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  shards:
+    name: Research shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numpy
+        run: python3 -m pip install --quiet numpy
+      - name: Train 5000 fresh candidate rules without looking at last 500 draws
+        run: |
+          python3 research/xsmb_mass_parallel_20261014.py --shard ${{ matrix.shard }} --candidates 5000 --output research/results/mass/shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-3lo-shard-${{ matrix.shard }}
+          path: research/results/mass/shard-${{ matrix.shard }}.json
+          retention-days: 14
+  independent-holdout:
+    name: Select global validation winner then open holdout
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: shards
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: xsmb-3lo-shard-*
+          merge-multiple: true
+          path: research/results/mass
+      - name: Install numpy
+        run: python3 -m pip install --quiet numpy
+      - name: Freeze single champion before holdout and audit 500 days
+        run: |
+          python3 research/xsmb_mass_parallel_20261014.py --aggregate --input-dir research/results/mass --candidates 5000 --shards 8 --output research/results/xsmb_mass_holdout_20261014.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-3lo-independent-holdout
+          path: research/results/xsmb_mass_holdout_20261014.json
+          retention-days: 30
