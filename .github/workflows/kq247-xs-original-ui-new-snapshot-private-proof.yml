@@ -43,6 +43,7 @@ jobs:
            if(!target.includes("Dự đoán "+local.split("-").reverse().join("/")))throw Error("WRONG_PREDICTION_DAY_"+reg);
            if(target.includes("Nguồn 500 kỳ"))throw Error("OLD_METHOD_LEAK_"+reg);
            if(!target.includes("const d={"))throw Error("COPY_HANDLER_DATA_MISSING_"+reg);
+           if(!target.includes("3 LÔ BẠCH THỦ: "))throw Error("COPY_ALL_DATA_MISSING_"+reg);
            if(!target.includes("DÀN 3 CÀNG (500 số)"))throw Error("THREE_DIGITS_MISSING_"+reg);
            if(!target.includes("id=\"kq247-xs-qc\""))throw Error("QC_MISSING_"+reg);
            const matched=target.split("<div class=\"stations\">")[1]?.split("</div>")[0];
