@@ -3,6 +3,7 @@ import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
 import {primaryFormEvidence} from "lib/r55FormFirst.js";
 import {recoverOfficialBongdaluTeamForm,formSummary} from "lib/r55TeamScheduleFallback.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
+import {parseBongdaluTeamSchedule,formSummary} from "lib/r55TeamSchedule.js";
 import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus} from "lib/r55BookmakerConsensus.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "lib/r55BookmakerPage.js";
 import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseFormTable as nativeParseFormTable,parseH2HTable as nativeParseH2HTable,parseAsianHistory as nativeParseAsianHistory,parseBongOdds as nativeParseBongOdds,parseBongFeed as nativeParseBongFeed,parseBongLeagueMeta as nativeParseBongLeagueMeta,discoverBongdaluRoots as nativeDiscoverBongdaluRoots,bongNeighborRoots as nativeBongNeighborRoots} from "lib/original-bongdalu/r55-core-verbatim-transpiled.js";
@@ -11,7 +12,7 @@ import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseF
 // Validated Bongdalu entrypoints. Legacy domains are discovery pointers only,
 // never alternative data providers. All newly found hosts must pass feed verification.
 const BASES=["https://www.bongdalu812.com/","https://www.bongdalu.com/","https://www.bongdalu802.com/","https://www.bongdalu811.com/","https://www.bongdalu628.com/","https://www.bongdalu800.com/","https://www.bongdalu128.com/","https://www.bongdalu618.com/"];
-const VALID_BONG_HOST=/^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$|^(?:www\.)?bongdalu\.com\.vn$/i;
+const VALID_BONG_HOST=/^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$|^(?:www\.)?bongdalu\.com\.vn$|^football\\.bongdalu812\\.com$/i;
 const BOOKS=BONGDALU_BOOKMAKERS;
 const MAX_SOURCE_BYTES=1800000,DAY_MS=86400000;
 const qn=(x)=>Number.isFinite(Number(x))?Number(x):NaN;
@@ -207,7 +208,32 @@ function parseHistoryHtml(html){
     history_home_games:home.n,history_away_games:away.n,
     partial_history:!home.n||!away.n};
 }
-async function history(base,id){
+
+async function recoverOfficialBongdaluTeamForm(base,teamId,before){
+ if(!Number.isInteger(teamId)||teamId<=0||!Number.isFinite(Number(before)))return [];
+ const sources=[...new Set([base,"https://football.bongdalu812.com/"])];
+ for(const origin of sources){
+  const found=new Map();
+  for(let pageNo=1;pageNo<=3;pageNo++){
+   const path="ajax/getteamschedulebypageno?id="+encodeURIComponent(teamId)+
+     "&pageNo="+pageNo+"&sclassId=0&init="+(pageNo===1?1:0);
+   let payload;
+   try{
+    const raw=await get(origin,path,"application/json",11000);
+    payload=JSON.parse(raw);
+   }catch{break;}
+   if(!Array.isArray(payload?.MatchList))break;
+   for(const item of parseBongdaluTeamSchedule(payload,teamId,before)){
+    if(!found.has(item.matchId))found.set(item.matchId,item);
+   }
+   if(found.size>=20||payload.MatchList.length<10)break;
+  }
+  if(found.size)return [...found.values()].sort((a,b)=>b.timestamp-a.timestamp).slice(0,20);
+ }
+ return [];
+}
+
+async function history(base,id,before=null){
  let result=null;
  for(let attempt=1;attempt<=3;attempt++){
   try{
@@ -217,15 +243,19 @@ async function history(base,id){
     // Every 20-match shortfall triggers a verified independent Bongdalu team
     // history check. Empty H2H-page arrays are not proof of absent team form.
     const ids={
-      home:Number((html.match(/var\\s+h2h_home\\s*=\\s*(\\d+)/i)||[])[1]),
-      away:Number((html.match(/var\\s+h2h_away\\s*=\\s*(\\d+)/i)||[])[1])};
+      home:Number((html.match(/var\s+h2h_home\s*=\s*(\d+)/i)||[])[1]),
+      away:Number((html.match(/var\s+h2h_away\s*=\s*(\d+)/i)||[])[1])};
     const recovered={};
     for(const side of ["home","away"]){
       if(Number(parsed[side]?.n)>=20||!Number.isInteger(ids[side])||ids[side]<=0)continue;
-      const list=await recoverOfficialBongdaluTeamForm(base,ids[side]);
+      const list=await recoverOfficialBongdaluTeamForm(base,ids[side],before);
       if(list.length>Number(parsed[side]?.n||0)){
         parsed[side]=formSummary(list);
-        parsed.individualHistory[side]=list;
+        const known=new Map((parsed.individualHistory[side]||[])
+          .filter(x=>x?.matchId).map(x=>[String(x.matchId),x]));
+        parsed.individualHistory[side]=list.map(x=>({
+          ...x,quotes:known.get(String(x.matchId))?.quotes||[]
+        }));
         parsed.sourceCoverage[side==="home"?"homeMatches":"awayMatches"]=list.length;
         recovered[side]={via:"bongdalu_team_schedule",matches:list.length};
       }
@@ -338,7 +368,7 @@ export async function inspectBongdaluHistoryProbe(futureWindowOnly=false){
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000;
  const eligible=futureWindowOnly?records.filter(x=>x.ts>=start&&x.ts<=end&&!excluded(x.league+" "+x.home+" "+x.away)):records;
  const sorted=eligible.sort((a,b)=>b.priority-a.priority||a.ts-b.ts).slice(0,10);
- const rows=await Promise.all(sorted.map(async x=>({x,h:await history(rr.base,x.bongdaluId)})));
+ const rows=await Promise.all(sorted.map(async x=>({x,h:await history(rr.base,x.bongdaluId,x.ts)})));
  return {ok:true,source:"Bongdalu",tested:rows.length,ready:rows.filter(z=>z.h&&z.h.home.n>0&&z.h.away.n>0).length,
  results:rows.map(({x,h})=>({id:x.id,home:x.home,away:x.away,league:x.league,ahLine:x.market.homeLine,ouLine:x.market.ouLine,
  homeHistory:h?.home?.n||0,awayHistory:h?.away?.n||0,h2h:h?.h2h?.n||0,
@@ -386,7 +416,7 @@ async function buildBongdaluR55(publish,stage=false){
  let picked=[],visited=0,withHistory=0;
  // Fetch H2H/form ONLY from Bongdalu and cap work to control quota.
  for(let i=0;i<pool.length;i+=12){
-  const slice=pool.slice(i,i+12),results=await Promise.all(slice.map(async x=>({x,h:await history(r.base,x.bongdaluId)})));
+  const slice=pool.slice(i,i+12),results=await Promise.all(slice.map(async x=>({x,h:await history(r.base,x.bongdaluId,x.ts)})));
   for(const {x,h} of results){visited++;if(h){withHistory++;const m=makeMarket(x,h,learned);if(m)picked.push(m)}}
   // Do not short-circuit after the first 35: process all time-window candidates.
  }
