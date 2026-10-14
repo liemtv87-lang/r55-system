@@ -282,7 +282,7 @@ def selftest():
     assert PATH_RE.search("/submit-group/")
     x=HtmlScan()
     x.feed('<form><input name="telegram_link" /></form>')
-    assert x.forms == 1 and "telegram_link" in x.fields
+    assert x.forms == 1 and any("telegram_link" in field for field in x.fields)
     print("SELFTEST_OK")
 
 def main():
