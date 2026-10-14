@@ -1,4 +1,4 @@
-name: VPS XS Sole Sender Health
+name: VPS XS Sole Sender Health after same-link deployment
 on:
   push:
     paths:
