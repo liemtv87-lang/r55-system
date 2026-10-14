@@ -18,7 +18,24 @@ function check(r,region,day){
  const gap=(Date.parse(day+'T12:00:00Z')-Date.parse(r?.sourceDate+'T12:00:00Z'))/86400000;
  if(!Number.isInteger(gap)||(region==='mb'?gap!==1:gap<1||gap>7))
   throw Error('SOURCE_DRAW_DATE_MISMATCH_'+r?.station);
- if(!p||r.region!==region||r.station!==p.station||p.region!==region||r.predictionDate!==day||
+ if(r?.sourceKind==='XSMB_FULL27_IMMUTABLE_DB'){
+  const q=r?.original;
+  if(region!=='mb'||r.station!=='XSMB'||r.predictionDate!==day||
+   r.sourceDate>=day||!q||q.predictionDate!==day||q.sourceDate!==r.sourceDate||
+   q.region!=='mb'||q.station!=='XSMB'||q.sourceDraws!==500||
+   q.previousForecastsUsed!==false||q.publication!=='STAGING_UNPUBLISHED'||
+   q.lottoAudit?.coveredPositions!==107||q.lottoAudit?.supportedRules<1000||
+   !/^[a-f0-9]{64}$/.test(q.lottoAudit?.inputHash||'')||
+   q.de?.method_counts?.de_single_pick!==1000||
+   q.de?.method_counts?.remove_head!==1000||
+   q.de?.method_counts?.remove_hundred!==1000)
+   throw Error('INVALID_MB_FULL27_IMMUTABLE_SOURCE');
+  // Do not replace the exact 15/10 picks confirmed in the original pre-draw lock.
+  if(day==='2026-10-15'&&p.lotto3?.join(',')!=='51,52,91')
+   throw Error('MB_20261015_CONFIRMED_LOCK_DISAGREES');
+  if(!p||p.sourcePrizes!==27||p.digitPositions!==107)
+   throw Error('MB_FULL27_POSITION_COVERAGE_MISSING');
+ }else if(!p||r.region!==region||r.station!==p.station||p.region!==region||r.predictionDate!==day||
  p.predictionDate!==day||p.sourceDate!==r.sourceDate||r.sourceDate>=day||
  p.sourcePrizes!==num||p.digitPositions!==pos||p.allPrizesUsed!==true||p.allPositionsUsed!==true||
  p.exclusionsValidated!==true||p.previousForecastsUsed!==false||p.audit?.bridgeSourceDrawCount!==1||
@@ -48,8 +65,27 @@ export async function applyLockedOverlay(html,region,requestedStation){
   throw Error('LOCKED_SOURCE_NOT_READY');
  const reg={xsmb:'mb',xsmt:'mt',xsmn:'mn'}[region];
  if(!reg)throw Error('INVALID_REGION');
- const records=src.records.filter(r=>r.region===reg&&r.predictionDate===day)
- .sort((a,b)=>a.station.localeCompare(b.station,'vi'));
+ // For MB, use the ORIGINAL independently locked 27-prize PostgreSQL snapshot.
+ // The newer 36-station index has different MB picks and must never overwrite it.
+ // MT and MN continue using their own station-specific locked index records.
+ let records;
+ if(reg==='mb'){
+  const file=JSON.parse(await readFile('/app/locked/xsmb-'+day+'.json','utf8'));
+  const q=file?.prediction,d=q?.de;
+  if(!q||!d||file.sourceDate!==q.sourceDate)throw Error('MB_DATABASE_LOCK_MISSING');
+  const p={region:'mb',station:q.station,sourceDate:q.sourceDate,sourcePrizes:27,
+   digitPositions:q.lottoAudit?.coveredPositions,
+   lotto3:q.lotto3,doubles:q.doubles,dan50:d.dan50,dan60:d.dan60,
+   dan75:d.dan75,three_digit:d.three_digit,
+   hardExcludedHead:d.hard_excluded_head,
+   hardExcludedHundred:d.three_digit_hard_excluded_hundred};
+  records=[{region:'mb',station:'XSMB',predictionDate:q.predictionDate,
+   sourceDate:q.sourceDate,lockedAt:file.lockedAt,
+   sourceKind:'XSMB_FULL27_IMMUTABLE_DB',original:q,payload:p}];
+ }else{
+  records=src.records.filter(r=>r.region===reg&&r.predictionDate===day)
+   .sort((a,b)=>a.station.localeCompare(b.station,'vi'));
+ }
  if(!records.length||records.length>(reg==='mb'?1:4))throw Error('MISSING_TODAY_STATIONS_'+region+'_'+day);
  const seen=new Set();
  for(const rec of records){check(rec,reg,day);if(seen.has(rec.station))throw Error('DUPLICATE_STATION');seen.add(rec.station);}
@@ -64,7 +100,8 @@ export async function applyLockedOverlay(html,region,requestedStation){
  '&amp;station='+encodeURIComponent(rec.station)+'">↻ TẢI LẠI</a></div>';
  const locked=new Date(rec.lockedAt);
  const stamp=Number.isNaN(locked.valueOf())?'đã xác nhận':locked.toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh',hour12:false});
- const meta='Nguồn 1 kỳ quay trước của chính đài • đủ '+p.sourcePrizes+' giải / '+p.digitPositions+
+ const sourceLabel=reg==='mb'?'Nguồn kết quả mới nhất của XSMB':'Nguồn 1 kỳ quay trước của chính đài';
+ const meta=sourceLabel+' • đủ '+p.sourcePrizes+' giải / '+p.digitPositions+
  ' vị trí • Dữ liệu tới '+dl(p.sourceDate)+' • Đã khóa '+stamp;
  const article='<article><h2>'+esc(rec.station)+'</h2><div class="meta">'+esc(meta)+'</div>'+
  group('3 LÔ BẠCH THỦ','lotto3',p.lotto3)+group('2 LÔ KÉP','doubles',p.doubles)+
