@@ -30,6 +30,7 @@ DOMAINS = [
     "tgcamp.com", "telegramradar.com", "tgfinder.net",
     "telekit.link", "telegram-groups.net", "telegramgroup.link",
     "telegram-group-links.com",
+    "telegroups.org", "telegram-groups.com", "tdirectory.me", "telegram-group.com", "telxplorer.com", "tgramlink.com", "tgbox.cc", "togather.in", "tgstat.com", "telegradia.com",
 ]
 TARGETS = {
     "football": "https://t.me/keochuyengia79",
