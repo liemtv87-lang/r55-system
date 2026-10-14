@@ -207,7 +207,7 @@ def attempt(page, con, host, url, group_key, group):
             write_result(con,host,group_key,url,status);return
         # Avoid duplicate submissions when the target already has a live public listing.
         if is_public_listing(page,group["url"]):
-            write_result(con,host,group_key,url,"published_verified",page.url)
+            write_result(con,host,group_key,url,"already_listed_verified",page.url)
             return
         form=page.locator("form").nth(forminfo["formIndex"])
         fields=forminfo["fields"]
