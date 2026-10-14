@@ -28,6 +28,11 @@ SEED_LINKS = [
     ("lottery", "https://tgfind.net/en/resource/xsbm999"),
     ("football", "https://telejoiner.com/invite/1002315121695"),
     ("lottery", "https://telejoiner.com/invite/1004320899120"),
+    # TgDio profile routes are candidates, not counted until public page href verified.
+    # Football profile is APPROVED in owner's account as of 2026-10-14 VN;
+    # lottery remains pending owner submission.
+    ("football", "https://vi.tgdio.com/group/%40keochuyengia79"),
+    ("lottery", "https://vi.tgdio.com/group/%40xsbm999"),
 ]
 DIRECTORIES = [
     # Prioritize Vietnam-facing sources before the generic international pool.
