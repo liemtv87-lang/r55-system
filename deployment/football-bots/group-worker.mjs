@@ -65,6 +65,11 @@ async function sendPick(){
   const matches=typeof x.payload==='string'?JSON.parse(x.payload).matches:x.payload?.matches;
   for(const m of matches||[]){
    if(!fixture(m)||!cleanMarket(m))continue;
+   // Never auto-advertise shadow or insufficiently researched markets as "best".
+   // This is independent of the 80% research/forecast coverage goal.
+   if(m.market?.researchOnly!==false||Number(m.market?.modelAgreement)!==3||
+      Number(m.market?.bookmakers)<3||Number(m.history?.homeGames)<10||
+      Number(m.history?.awayGames)<10)continue;
    const until=Date.parse(m.kickoff||'')-now;
    if(!Number.isFinite(until)||until<0||until>30*60000)continue;
    const id=String(m.id);
