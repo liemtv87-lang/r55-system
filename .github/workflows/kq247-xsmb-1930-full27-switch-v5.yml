@@ -1,0 +1,60 @@
+name: KQ247 XSMB switch private 19h30 worker to full27
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-xsmb-1930-full27-switch-v5.yml
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify and enable full27 19h30 snapshot worker on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes \
+            deployment/lottery-vps-daily-staging/run-full27-1930.sh \
+            deployment/lottery-vps-daily-staging/persist-full27-locked.py \
+            deployment/lottery-vps-daily-staging/patch-draw-parser-full27.py \
+            deployment/lottery-vps-daily-staging/full27-daily-worker.mjs \
+            deployment/lottery-vps-daily-staging/lotto-full27-independent-v1.mjs \
+            deployment/lottery-vps-daily-staging/de-all27-pos-v2.mjs \
+            root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          ROOT=/opt/kq247/lottery-daily-staging
+          bash -n "$ROOT/run-full27-1930.sh"
+          python3 -m py_compile "$ROOT/persist-full27-locked.py"
+          python3 "$ROOT/patch-draw-parser-full27.py"
+          grep -F 'full_results:nums' "$ROOT/minhngoc-draw.mjs"
+          docker run --rm --network none -v "$ROOT":/stage:ro node:22-alpine node --check /stage/full27-daily-worker.mjs
+          echo CHECK_AND_RUN_FULL27
+          "$ROOT/run-full27-1930.sh"
+          echo VERIFY_CUSTOMER_VIEW
+          docker exec kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT prediction_date,station,lotto3,doubles,source_last_date,jsonb_array_length(de->chr(100)||chr(97)||chr(110)||chr(53)||chr(48)) AS n50 FROM kq247_xs_vps.customer_locked_full_snapshots ORDER BY prediction_date DESC LIMIT 2;"'
+          echo INSTALL_SAFE_SYSTEMD_OVERRIDE
+          mkdir -p /etc/systemd/system/kq247-xsmb-1930-staging.service.d
+          cat > /etc/systemd/system/kq247-xsmb-1930-staging.service.d/override.conf <<'OVERRIDE'
+          [Service]
+          ExecStart=
+          ExecStart=/opt/kq247/lottery-daily-staging/run-full27-1930.sh
+          OVERRIDE
+          systemctl daemon-reload
+          systemd-analyze verify kq247-xsmb-1930-staging.service kq247-xsmb-1930-staging.timer
+          systemctl enable --now kq247-xsmb-1930-staging.timer
+          echo CONFIRMED_SERVICE_EXECSTART
+          systemctl show kq247-xsmb-1930-staging.service -p ExecStart
+          echo NEXT_TIMER
+          systemctl list-timers kq247-xsmb-1930-staging.timer --no-pager
+          echo XSMB_FULL27_PRIVATE_1930_SWITCH_PASS
+          VPS
