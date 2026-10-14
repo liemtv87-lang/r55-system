@@ -10,14 +10,15 @@ export function releaseDecision(match, methods, freshness=true){
   return {ok:false,reason:"method_failed_walk_forward",record:{n:row.n,days:row.days,units:row.units,winRate:row.winRate}};
  // New ensemble signals are expected-return estimates, NOT the old native
  // synthetic confidence score. Never release a shadow/research-only outcome.
- if(k.modelVersion==="ensemble_poisson_three_scenarios_v3"){
+ if(["ensemble_poisson_three_scenarios_v3","ensemble_poisson_three_scenarios_v4_native_agreement"].includes(k.modelVersion)){
   if(k.researchOnly!==false||!(Number(k.expectedEV)>.085)||
      !(Number(k.expectedEV)<.24)||!(Number(k.worstEV)>.025)||
      !(Number(k.modelSpread)<.25)||Number(k.modelAgreement)!==3||
-     Number(k.bookmakers)<3)
+     Number(k.bookmakers)<3||Number(k.modelAgreement)!==3)
    return {ok:false,reason:"ensemble_ev_or_agreement_failed"};
  }else if(!["AH","OU"].includes(k.type)||Number(k.evidence)<70)
   return {ok:false,reason:"weak_or_invalid_signal"};
+ if(k.researchOnly===true)return {ok:false,reason:"research_only_not_certified"};
  if(!Number.isFinite(Number(k.odds))||Number(k.odds)<1.5||Number(k.odds)>3.5)
   return {ok:false,reason:"odds_out_of_range"};
  if(!Number.isFinite(Date.parse(String(match.kickoff||""))))
