@@ -75,9 +75,15 @@ def one(page, key, group, data):
     if not inp.count():
         return dict(receipt,state="form_changed_link_field",excerpt=brief(page))
     inp.fill(group["url"])
+    page.wait_for_timeout(3200)
     button=next_button(page)
     if not button:
-        return dict(receipt,state="next_button_unavailable",excerpt=brief(page))
+        found=page.evaluate("""()=>[...document.querySelectorAll('button,input[type=submit],a,[role=button]')]
+          .filter(x=>/next|verify|continue/i.test((x.innerText||x.value||'').trim()))
+          .slice(0,15).map(x=>({tag:x.tagName,id:x.id,text:(x.innerText||x.value||'').trim().slice(0,75),
+          disabled:x.disabled||false,aria:x.getAttribute('aria-disabled'),
+          classes:typeof x.className==='string'?x.className.slice(0,140):''}))""")
+        return dict(receipt,state="next_button_unavailable",controls=found,excerpt=brief(page))
     button.click(timeout=11000)
     page.wait_for_timeout(700)
     if risk(page):
@@ -133,8 +139,13 @@ def main():
         page=browser.new_page(viewport={"width":1280,"height":900})
         for key, group in GROUPS.items():
             if key in data["groups"]:
-                print("PREVIOUS_ATTEMPT_KEPT",key,data["groups"][key].get("state"),flush=True)
-                continue
+                prior=data["groups"][key]
+                if prior.get("state")=="next_button_unavailable" and not prior.get("rechecked_ui_once"):
+                    prior["rechecked_ui_once"]=True
+                    save(data)
+                else:
+                    print("PREVIOUS_ATTEMPT_KEPT",key,prior.get("state"),flush=True)
+                    continue
             try: receipt=one(page,key,group,data)
             except Exception as e:
                 receipt={"group":key,"url":group["url"],"state":"error_or_uncertain_no_retry","error":type(e).__name__+": "+str(e)[:220],"timestamp":utcnow()}
