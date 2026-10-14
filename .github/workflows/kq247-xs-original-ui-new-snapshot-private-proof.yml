@@ -45,8 +45,8 @@ jobs:
            if(!target.includes("const d={"))throw Error("COPY_HANDLER_DATA_MISSING_"+reg);
            if(!target.includes("DÀN 3 CÀNG (500 số)"))throw Error("THREE_DIGITS_MISSING_"+reg);
            if(!target.includes("id=\"kq247-xs-qc\""))throw Error("QC_MISSING_"+reg);
-           const matched=target.split('<div class="stations">')[1]?.split("</div>")[0];
-           if(!matched||(matched.split('class="btn ').length-1)!==rows.length)throw Error("EXTRA_STATIONS_"+reg);
+           const matched=target.split("<div class=\"stations\">")[1]?.split("</div>")[0];
+           if(!matched||(matched.split("class=\"btn ").length-1)!==rows.length)throw Error("EXTRA_STATIONS_"+reg);
            for(const r of rows){if(!matched.includes(encodeURIComponent(r.station)))throw Error("STATION_NOT_SHOWN_"+r.station);}
            console.log("ORIGINAL_UI_NEW_METHOD_PRIVATE_PASS",reg,rows.length,rows.map(x=>x.station).join("|"),target.length);
           }
