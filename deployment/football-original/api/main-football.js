@@ -30,8 +30,13 @@ const toLegacy=(m,validated=false)=>{
  return {id:String(m.id),home:m.home,away:m.away,league:m.league,country:m.country||"",ts:new Date(m.kickoff).getTime(),
   provider:"Bongdalu",source_detail:m.sourceRef||"bongdalu_native_original_v128",trusted_pick:validated,confidence_score:null,model_score:m.score??null,research_only:!validated,verification_status:validated?"walk_forward_passed":"research_unvalidated",
   ah:type==="AH"?choice:null,ou:type==="OU"?choice:null,
-  ah_release:type==="AH",ou_release:type==="OU",bookmaker_count:m.bookmakerCount||1,
-  bookmaker_names:k.bookmaker?[k.bookmaker]:[],learning_methods:[slug(m)],
+  ah_release:type==="AH",ou_release:type==="OU",bookmaker_count:Number(k.bookmakers??m.bookmakerCount??0),
+  bookmaker_names:Array.isArray(k.bookmakerNames)&&k.bookmakerNames.length?k.bookmakerNames:(k.bookmaker?[k.bookmaker]:[]),
+  history_home_games:Number(m.history?.homeGames??0),history_away_games:Number(m.history?.awayGames??0),
+  history_h2h_games:Number(m.history?.h2hGames??0),
+  history_ah_games:Number(m.history?.homeAsianGames??0)+Number(m.history?.awayAsianGames??0),
+  history_price_rows:Number(m.history?.historicalPriceRows??0),
+  learning_methods:[slug(m)],
   method:slug(m),top:priority(m),market_scores:type==="AH"?{ah:Number(k.confidence)||0}:{ou:Number(k.confidence)||0}};
 };
 export default async function(req,res){
