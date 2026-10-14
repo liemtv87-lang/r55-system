@@ -6,11 +6,12 @@ const dateLabel=d=>d.split('-').reverse().join('/');
 function activeDay(){const p=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));return p.year+'-'+p.month+'-'+p.day;}
 function valid(r,day){
  const x=r?.payload;
- if(!x||!['mt','mn'].includes(r.region)||r.region!==x.region||r.station!==x.station||
+ if(!x||!['mb','mt','mn'].includes(r.region)||r.region!==x.region||r.station!==x.station||
   x.sourceDate!==r.sourceDate||x.predictionDate!==r.predictionDate||
-  x.sourcePrizes!==18||x.digitPositions!==82||!x.allPrizesUsed||!x.allPositionsUsed||
+  x.sourcePrizes!==(r.region==='mb'?27:18)||x.digitPositions!==(r.region==='mb'?107:82)||!x.allPrizesUsed||!x.allPositionsUsed||
   !x.exclusionsValidated||x.previousForecastsUsed!==false||x.audit?.coveredPositions!==82||
-  x.audit?.bridgeSourceDrawCount!==1||r.predictionDate<day)throw Error('INVALID_LOCKED_SNAPSHOT');
+  x.audit?.bridgeSourceDrawCount!==1||x.audit?.bridgeSourceStation!==r.station||
+  x.audit?.coveredPositions!==(r.region==='mb'?107:82)||r.predictionDate<day)throw Error('INVALID_LOCKED_SNAPSHOT');
  for(const [key,len,size] of [['lotto3',3,2],['doubles',2,2],['dan50',50,2],['dan60',60,2],['dan75',75,2],['three_digit',500,3]]){
   if(!Array.isArray(x[key])||x[key].length!==len||new Set(x[key]).size!==len||
    x[key].some(z=>typeof z!=='string'||z.length!==size||!/^\d+$/.test(z)))throw Error('INVALID_DAN_'+key);
@@ -27,12 +28,12 @@ function pool(label,nums,id){
 function page(region,records,selected){
  const opts=records.map(r=>'<a href="/xoso?region=xs'+region+'&station='+encodeURIComponent(r.station)+'">'+
  esc(r.station)+' • '+dateLabel(r.predictionDate)+'</a>').join('');
- const title=region==='mt'?'XSMT':'XSMN';
+ const title=region==='mb'?'XSMB':region==='mt'?'XSMT':'XSMN';
  const x=selected?.payload;
  let body='<section><h2>Chọn đài để xem snapshot đã khóa</h2></section>';
  if(x){
   body='<h1>'+title+' • '+esc(selected.station)+' • '+dateLabel(selected.predictionDate)+'</h1>'+
-   '<p class="info">Chỉ dùng tất cả 18 giải (82 vị trí) kỳ '+dateLabel(selected.sourceDate)+
+   '<p class="info">Chỉ dùng tất cả '+(region==='mb'?'27 giải (107 vị trí)':'18 giải (82 vị trí)')+' kỳ '+dateLabel(selected.sourceDate)+
    ' của chính đài '+esc(selected.station)+'. Snapshot PostgreSQL VPS đã khóa, chỉ đọc.</p>'+
    '<section><h2>3 LÔ BẠCH THỦ</h2><p class="picks">'+x.lotto3.map(esc).join(' – ')+'</p>'+
    '<h2>2 LÔ KÉP</h2><p class="picks">'+x.doubles.map(esc).join(' – ')+'</p></section>'+
@@ -62,8 +63,8 @@ http.createServer(async(req,res)=>{
    records=raw.records.filter(x=>{try{valid(x,d);return true;}catch{return false;}});
   }catch(e){console.error('NO_LOCKED_INDEX',e.message);return reply(res,503,'Chưa có snapshot đã khóa');}
   if(u.pathname==='/healthz')return reply(res,200,JSON.stringify({ok:true,readonly:true,mt:records.filter(r=>r.region==='mt').length,
-    mn:records.filter(r=>r.region==='mn').length}),'application/json');
-  const r=u.searchParams.get('region'),region=r==='xsmt'?'mt':r==='xsmn'?'mn':null;
+    mn:records.filter(r=>r.region==='mn').length,mb:records.filter(r=>r.region==='mb').length}),'application/json');
+  const r=u.searchParams.get('region'),region=r==='xsmb'?'mb':r==='xsmt'?'mt':r==='xsmn'?'mn':null;
   if(!region||!['/xoso','/xoso/'].includes(u.pathname))return reply(res,404,'Not found','text/plain');
   const available=records.filter(x=>x.region===region).sort((a,b)=>a.predictionDate.localeCompare(b.predictionDate)||a.station.localeCompare(b.station,'vi'));
   if(!available.length)return reply(res,503,'Chưa có snapshot mới đã khóa của miền này');
