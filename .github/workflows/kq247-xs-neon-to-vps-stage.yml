@@ -1,0 +1,25 @@
+name: KQ247 XS independent daily staging on VPS
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-neon-to-vps-stage.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Copy isolated lotto prediction source to VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'install -d -m 0755 /opt/kq247/lottery-daily-staging'
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/independent500.mjs deployment/lottery-vps-daily-staging/schema.sql root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'node --check /opt/kq247/lottery-daily-staging/independent500.mjs && echo XS_STAGING_FILES_ON_VPS=PASS'
