@@ -1,0 +1,63 @@
+name: KQ247 all stations one prior draw positional proof v2
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-all-stations-one-draw-proof-v2.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Test per-station 1 prior actual draw across all regions, zero 500-draw backtest
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new \
+            deployment/lottery-vps-daily-staging/normalize-all-prizes.mjs \
+            deployment/lottery-vps-daily-staging/previous-station-draw-only.mjs \
+            deployment/lottery-vps-daily-staging/mtmn-35stations-prior-draw-samples.json \
+            root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run -i --rm --read-only --network none -v /opt/kq247/lottery-daily-staging:/stage:ro --cpus=2 --memory=600m node:22-alpine node --input-type=module' <<'JS'
+          import fs from 'node:fs';
+          import {predictFromPreviousStationDraw} from '/stage/previous-station-draw-only.mjs';
+          const rows=JSON.parse(fs.readFileSync('/stage/mtmn-35stations-prior-draw-samples.json','utf8')).stations;
+          const groups=new Map();
+          for(const r of rows){
+           const key=r.region+'|'+r.station;
+           if(!groups.has(key))groups.set(key,[]);
+           groups.get(key).push(r);
+          }
+          const mb=JSON.parse(fs.readFileSync('/stage/xsmb-history-live.json','utf8'))
+           .filter(r=>r.region==='mb'&&r.station==='XSMB')
+           .sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,11);
+          groups.set('mb|XSMB',mb);
+          if(groups.size!==36)throw Error('36_STATIONS_EXPECTED_'+groups.size);
+          let passed=0,failed=[];
+          for(const [id,raw] of groups){
+           const [region,station]=id.split('|');
+           const src=[...raw].sort((a,b)=>b.draw_date.localeCompare(a.draw_date));
+           try{
+            const result=predictFromPreviousStationDraw({
+             predictionDate:'2026-10-15',region,station,previousDraw:src[0],exclusionHistory:src
+            });
+            const expect=region==='mb'?107:82;
+            if(result.audit.coveredPositions!==expect||result.sourcePrizes!==(region==='mb'?27:18)||
+             result.audit.catchTripleRules<1e6||result.audit.removeTripleRules<1e6||
+             result.audit.bridgeSourceDrawCount!==1||result.audit.bridgeSourceStation!==station||
+             !result.exclusionsValidated)throw Error('WRONG_SOURCE_OR_COVERAGE');
+            if(result.three_digit.some(n=>!result.dan75.includes(n.slice(-2))))throw Error('3C_OUTSIDE_75');
+            console.log('SAME_STATION_POSITIONAL_PASS',JSON.stringify({id,sourceDate:result.sourceDate,
+             positions:result.digitPositions,catchRules:result.audit.catchTripleRules,
+             removeRules:result.audit.removeTripleRules,lotto:result.lotto3,doubles:result.doubles,
+             de: [result.dan50.length,result.dan60.length,result.dan75.length,result.three_digit.length]}));
+            passed++;
+           }catch(e){failed.push({id,error:String(e.message)});console.log('SAME_STATION_POSITIONAL_FAIL',JSON.stringify({id,error:String(e.message)}))}
+          }
+          console.log('ALL_STATIONS_PREVIOUS_DRAW_CHECK',JSON.stringify({passed,total:groups.size,failed}));
+          if(failed.length)throw Error('FAILED_STATIONS_'+failed.length);
+          JS
