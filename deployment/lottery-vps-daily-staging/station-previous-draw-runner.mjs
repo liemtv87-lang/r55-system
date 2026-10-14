@@ -61,13 +61,14 @@ if(useVerifiedVpsCache){
  if(cache.source!=='ONE_REAL_DRAW_PER_STATION_VPS_VALIDATED'||cache.draws?.length!==35)
   throw Error('NO_VALIDATED_35_STATION_ACTUAL_CACHE');
  const unique=new Set();
- for(const source of cache.draws){
+ for(const source of [...(cache.history||[]),...cache.draws]){
   const id=source.region+'|'+source.station;
-  if(unique.has(id)||!stations.has(id))throw Error('UNRECOGNIZED_OR_DUPLICATE_VERIFIED_STATION_'+id);
+  if(!stations.has(id))throw Error('UNRECOGNIZED_VERIFIED_STATION_'+id);
   unique.add(id);
   const clean=normalizedStationDraw(source);
   const history=stations.get(id),maxDate=[...history].sort((a,b)=>b.draw_date.localeCompare(a.draw_date))[0].draw_date;
-  if(clean.draw_date<maxDate)throw Error('OLDER_VERIFIED_SOURCE_THAN_ARCHIVE_'+id);
+  if(clean.draw_date<maxDate && !history.some(r=>r.draw_date===clean.draw_date))
+   throw Error('VERIFIED_SOURCE_OLDER_THAN_ARCHIVE_WITHOUT_MATCH_'+id);
   const matched=history.find(x=>x.draw_date===clean.draw_date);
   if(matched){
    if(matched.full_results){
