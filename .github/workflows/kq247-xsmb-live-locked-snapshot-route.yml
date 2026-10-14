@@ -1,4 +1,4 @@
-name: KQ247 XSMB safe production route to VPS locked snapshot
+name: KQ247 XS all 36 same-link safe public sync
 on:
   push:
     branches: [main]
@@ -6,60 +6,71 @@ on:
 permissions:
   contents: read
 jobs:
-  route:
+  sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Validate, route XSMB snapshot only, and rollback on any regression
+      - name: Replace only XS backend on existing URLs with automatic rollback
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
         run: |
           set -euo pipefail
           install -d -m 700 "$HOME/.ssh"
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
-          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/route-xsmb-vps-only.py root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/route-xs-all36-safe.py root@64.120.92.172:/opt/kq247/lottery-daily-staging/
           sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           BASE=/opt/kq247/lottery-daily-staging
           LIVE=/opt/kq247/deployment/football-staging/Caddyfile
-          cp -a "$LIVE" "$BASE/Caddyfile.before-xsmb-locked"
-          python3 "$BASE/route-xsmb-vps-only.py"
-          CANDIDATE=/opt/kq247/deployment/football-staging/Caddyfile.xsmb-lock-verified
+          BACKUP="$BASE/Caddyfile.same-link-backup"
+          test -s "$LIVE"
+          python3 "$BASE/route-xs-all36-safe.py"
+          CANDIDATE=/opt/kq247/deployment/football-staging/Caddyfile.xs-all36-candidate
           test -s "$CANDIDATE"
-          echo READONLY_VIEWER_PRECHECK
+          cp "$LIVE" "$BACKUP"
+          echo XS_EXISTING_URLS_PRECHECK
+          for r in xsmb xsmt xsmn; do
+            curl --fail -sS -m 12 "http://127.0.0.1:18080/xoso-khach?region=$r" > "$BASE/customer-before-$r.html"
+          done
           docker run --rm --network football-staging_default node:22-alpine node --input-type=module -e '
-          let r=await fetch("http://kq247-xsmb-snapshot-reader:3018/healthz"),j=await r.json();
-          if(!j.ok||!j.readOnly||!j.hasCurrentLockedSnapshot)throw Error("snapshot_not_ready");
-          console.log("LOCKED_XSMB_BACKEND_PRECHECK_PASS",j.day);
+          const root="http://kq247-xs-36-reader:3019";
+          const j=await(await fetch(root+"/healthz")).json();
+          if(!j.ok||j.mb!==1||j.mt!==14||j.mn!==21)throw Error("NOT_ALL_36_READY_"+JSON.stringify(j));
+          for(const region of ["xsmb","xsmt","xsmn"]){
+           const r=await fetch(root+"/xoso?region="+region),t=await r.text();
+           if(!r.ok||!["3 LÔ BẠCH THỦ","DÀN ĐỀ 50","DÀN ĐỀ 60","DÀN ĐỀ 75","DÀN 3 CÀNG"].every(x=>t.includes(x)))throw Error("INVALID_PRIVATE_REGION_"+region);
+          }
+          console.log("XS_36_STATION_BACKEND_READY");
           '
-          echo BEFORE_PAGE_STATUS
-          curl -sS -m 10 -o /dev/null -w 'XSMB_PREV_HTTP=%{http_code}\n' 'http://127.0.0.1:18080/xoso?region=xsmb'
-          rollback() {
-            if [ "${DEPLOY_OK:-0}" != 1 ]; then
-              echo CADDY_ROUTE_ROLLBACK_START
-              cp -a "$BASE/Caddyfile.before-xsmb-locked" "$LIVE"
+          changed=0
+          rollback(){
+            if [ "$changed" = 1 ]; then
+              cp "$BACKUP" "$LIVE"
               docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              echo XS_PUBLIC_ROUTE_RESTORED
             fi
           }
           trap rollback EXIT
           cp "$CANDIDATE" "$LIVE"
+          changed=1
           docker exec kq247-football-staging caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
-          echo NEW_XSMB_PUBLIC_PAGE_CHECK
-          curl -fsS -m 14 'http://127.0.0.1:18080/xoso?region=xsmb' -o "$BASE/live-xsmb-check.html"
-          grep -q '51 – 52 – 91' "$BASE/live-xsmb-check.html"
-          grep -q '33 – 77' "$BASE/live-xsmb-check.html"
-          grep -q 'DÀN 3 CÀNG' "$BASE/live-xsmb-check.html"
-          if grep -qi 'BẢN KHÁCH NEON' "$BASE/live-xsmb-check.html"; then echo 'WRONG_XSMB_SOURCE';exit 2;fi
-          echo CUSTOMER_GATE_UNCHANGED
-          curl -fsS -m 14 'http://127.0.0.1:18080/xoso-khach?region=xsmb' -o "$BASE/live-xsmb-client-check.html"
-          grep -q 'kq247_lottery_code' "$BASE/live-xsmb-client-check.html"
-          echo OTHER_REGIONS_STILL_OLD_BACKEND
-          curl -sS -m 12 -o /dev/null -w 'XSMT_HTTP=%{http_code}\n' 'http://127.0.0.1:18080/xoso?region=xsmt'
-          curl -sS -m 12 -o /dev/null -w 'XSMN_HTTP=%{http_code}\n' 'http://127.0.0.1:18080/xoso?region=xsmn'
-          DEPLOY_OK=1
-          echo XSMB_PRODUCTION_LOCKED_SNAPSHOT_ROUTE_SUCCESS
+          for r in xsmb xsmt xsmn; do
+            curl --fail -sS -m 15 "http://127.0.0.1:18080/xoso?region=$r" > "$BASE/live-xs-$r.html"
+            grep -q 'DÀN 3 CÀNG' "$BASE/live-xs-$r.html"
+            grep -q '3 LÔ BẠCH THỦ' "$BASE/live-xs-$r.html"
+            curl --fail -sS -m 12 "http://127.0.0.1:18080/xoso-khach?region=$r" > "$BASE/customer-after-$r.html"
+            cmp "$BASE/customer-before-$r.html" "$BASE/customer-after-$r.html"
+            grep -q 'kq247_lottery_code' "$BASE/customer-after-$r.html"
+            echo "XS_SAME_EXISTING_URL_VERIFIED $r"
+          done
+          curl --fail -sS -m 15 'https://64-120-92-172.sslip.io/xoso?region=xsmt' | grep -q 'DÀN ĐỀ 75'
+          curl --fail -sS -m 15 'https://64-120-92-172.sslip.io/xoso?region=xsmn' | grep -q 'DÀN ĐỀ 75'
+          changed=0
+          trap - EXIT
+          echo KQ247_XS_ALL36_SAME_LINK_PUBLIC_SYNC_PASS
           VPS
