@@ -10,7 +10,7 @@ const stateFile=root+'/mtmn-one-draw-actual-latest.json';
 let previous;
 try{previous=JSON.parse(await readFile(stateFile,'utf8')).draws}catch(e){if(e.code!=='ENOENT')throw e;previous=seed;}
 const fixed=(r)=>r.region+'|'+r.station;
-const norm=x=>String(x||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9]/g,'');
+const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9]/g,'');
 const alias=x=>{const k=norm(x);return ['thanhphohcm','thanhphohochiminh','tphochiminh','hochiminh','tphcm'].includes(k)?'tphcm':['thuathienhue','hue'].includes(k)?'hue':k;};
 
 const rows=new Map();
