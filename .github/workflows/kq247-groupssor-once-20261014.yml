@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/kq247-groupssor-once-20261014.yml
+      - seo-vps/groupssor-submit-once.py
   workflow_dispatch:
 permissions:
   contents: read
