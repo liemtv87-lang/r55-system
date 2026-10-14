@@ -85,6 +85,31 @@ export function calibrateStation500({history,region,station,predictionDate}){
   report[tasks[t]]={heldoutTransitions:testN,selectedMethods:selectedCount,
    meanSelectedMethodHitRate:+(hit/(testN*selectedCount)).toFixed(5)};
  }
+ // Truly out-of-sample ensemble test: select IDs using the older 349
+ // transitions and score only the subsequent 150 unseen transitions.
+ // For each evaluation day, features come exclusively from its previous actual.
+ const oos={testedTransitions:0,daysWithAtLeastOneHit:0,daysWithTwoOrMoreHits:0,
+   prizeHits:0,selectionTrainedThrough:h[349].draw_date,leakFree:true};
+ for(let i=349;i<499;i++){
+  const span=delta(h[i+1].draw_date,h[i].draw_date);
+  if(span<1||(region==='mb'?span!==1:span>7))continue;
+  const todayMethods=derive(h[i]),caught=new Float64Array(100),rejected=new Float64Array(100);
+  for(const id of pick.loCatch)caught[todayMethods[id][0]]++;
+  for(const id of pick.loReject)rejected[todayMethods[id][1]]++;
+  const excluded=bannedFromHistory(h.slice(0,i+1),region,station);
+  const available=Array.from({length:100},(_,n)=>n).filter(n=>!excluded.has(p2(n)));
+  if(available.length<3)throw Error('OOS_HARD_EXCLUSION_NO_THREE_LOTTO');
+  available.sort((a,b)=>(caught[b]-.45*rejected[b])-(caught[a]-.45*rejected[a])||a-b);
+  const picks=new Set(available.slice(0,3).map(p2));
+  const hitCount=h[i+1].all2.filter(n=>picks.has(n)).length;
+  oos.testedTransitions++;oos.prizeHits+=hitCount;
+  if(hitCount>=1)oos.daysWithAtLeastOneHit++;
+  if(hitCount>=2)oos.daysWithTwoOrMoreHits++;
+ }
+ if(oos.testedTransitions!==testN)throw Error('HELDOUT_REPLAY_COUNT_MISMATCH');
+ oos.hitDayRate=+(oos.daysWithAtLeastOneHit/testN).toFixed(5);
+ oos.twoPlusDayRate=+(oos.daysWithTwoOrMoreHits/testN).toFixed(5);
+ report.outOfSampleEnsembleLotto3=oos;
  return {region,station,predictionDate,sourceDate:h.at(-1).draw_date,
   selected:pick,methodSelectionSHA256:sha(pick),historySHA256:historyFingerprint(h),
   backtest:{realCompleteDraws:500,trainTransitions:trainN,heldoutTransitions:testN,
