@@ -1,0 +1,97 @@
+name: KQ247 XS Canonical Redeploy Protection
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-canonical-persist.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-xs-canonical-persist
+  cancel-in-progress: false
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install canonical locked XS service without changing URLs or other containers
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          tar -czf /tmp/kq247-xs-canonical.tgz deployment/football-staging/compose.yaml deployment/football-staging/deploy.sh deployment/lottery-original/Dockerfile.locked xs-release/original-ui-locked-server.mjs xs-release/neon-locked-overlay.mjs
+          sshpass -e scp -o StrictHostKeyChecking=yes /tmp/kq247-xs-canonical.tgz root@64.120.92.172:/tmp/kq247-xs-canonical.tgz
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          cd /opt/kq247
+          test -f xs-release/compose-overlay.yml
+          test -s lottery-daily-staging/public-locked/xsmb-2026-10-15.json
+          test -s lottery-daily-staging/public-locked/station-locked-index.json
+          bk=$(mktemp -d /tmp/kq247-xs-canonical-XXXXXX)
+          cp deployment/football-staging/compose.yaml "$bk/compose.yaml"
+          cp deployment/football-staging/deploy.sh "$bk/deploy.sh"
+          previous=$(docker inspect --format '{{.Image}}' kq247-lottery-original)
+          test -n "$previous"
+          docker tag "$previous" kq247/xs-ui-canonical-rollback:20261015-v1
+          promoted=no
+          recover() {
+            echo XS_CANONICAL_GATE_FAILED_ROLLBACK
+            cp "$bk/compose.yaml" /opt/kq247/deployment/football-staging/compose.yaml
+            cp "$bk/deploy.sh" /opt/kq247/deployment/football-staging/deploy.sh
+            if [ "$promoted" = yes ]; then
+              docker tag kq247/xs-ui-canonical-rollback:20261015-v1 kq247/xs-ui-original-locked:20261015-v1 || true
+              cd /opt/kq247/deployment/football-staging
+              docker compose -f compose.yaml -f /opt/kq247/xs-release/compose-overlay.yml up --no-build -d --no-deps lottery-original || true
+            fi
+          }
+          cleanup() { docker rm -f kq247-xs-canonical-canary >/dev/null 2>&1 || true; }
+          trap 'recover; cleanup' ERR
+          trap 'cleanup' EXIT
+          tar -xzf /tmp/kq247-xs-canonical.tgz -C /opt/kq247
+          cd /opt/kq247/deployment/football-staging
+          docker compose config -q
+          docker build --pull=false -q -t kq247/xs-ui-canonical-candidate:20261015-v1 -f /opt/kq247/deployment/lottery-original/Dockerfile.locked /opt/kq247 >/dev/null
+          docker rm -f kq247-xs-canonical-canary >/dev/null 2>&1 || true
+          docker run -d --name kq247-xs-canonical-canary --network football-staging_default --read-only --tmpfs /tmp:size=16m --restart no -v /opt/kq247/lottery-daily-staging/public-locked:/app/locked:ro kq247/xs-ui-canonical-candidate:20261015-v1 >/dev/null
+          docker exec -i kq247-xs-canonical-canary node --input-type=module <<'NODE'
+          const fs = await import('node:fs/promises');
+          const snapshot=JSON.parse(await fs.readFile('/app/locked/xsmb-2026-10-15.json','utf8'));
+          if(snapshot.prediction?.lotto3?.join(',')!=='51,52,91')throw Error('MB_LOCK_CHANGED');
+          const css=s=>[...s.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)].map(x=>x[0]).join('\n');
+          for(const region of ['xsmb','xsmt','xsmn']){
+            let path='/xoso?region='+region;
+            const [a,b]=await Promise.all([fetch('http://lottery-original:3004'+path),fetch('http://127.0.0.1:3004'+path)]);
+            if(!a.ok||!b.ok)throw Error('CANARY_PAGE_NOT_OK_'+region);
+            const [oldHTML,newHTML]=await Promise.all([a.text(),b.text()]);
+            if(css(oldHTML)!==css(newHTML))throw Error('ORIGINAL_STYLES_CHANGED_'+region);
+            if(!newHTML.includes('DÀN 3 CÀNG (500 số)')||!newHTML.includes('id="kq247-xs-qc"')||!newHTML.includes('data-copy="lotto3"'))throw Error('MISSING_UI_ELEMENTS_'+region);
+            if(region==='xsmb'&&!['51','52','91'].every(x=>newHTML.includes('>'+x+'</span>')))throw Error('MB_USER_LOCK_CHANGED');
+            console.log('CANARY_SOURCE_CSS_UI_LOCK_PASS_'+region);
+          }
+          const [oldClient,newClient]=await Promise.all([fetch('http://lottery-original:3004/xoso-khach?region=xsmb'),fetch('http://127.0.0.1:3004/xoso-khach?region=xsmb')]);
+          if(!oldClient.ok||!newClient.ok||await oldClient.text()!==await newClient.text())throw Error('CUSTOMER_PAGE_CHANGED');
+          console.log('ORIGINAL_CUSTOMER_LICENSE_PAGE_IDENTICAL');
+          NODE
+          docker tag kq247/xs-ui-canonical-candidate:20261015-v1 kq247/xs-ui-original-locked:20261015-v1
+          promoted=yes
+          docker compose up --no-build -d --no-deps lottery-original
+          for i in $(seq 1 12); do
+            if curl -fsS --max-time 8 'http://127.0.0.1:18084/healthz' | grep -Fq 'VPS_POSTGRES_IMMUTABLE_LOCKED'; then break; fi
+            sleep 2
+          done
+          curl -fsS --max-time 15 'http://127.0.0.1:18080/xoso?region=xsmb' -o /tmp/xs-canonical-smoke.html
+          for n in 51 52 91; do grep -Fq "<span class=\"num\">$n</span>" /tmp/xs-canonical-smoke.html; done
+          for reg in xsmt xsmn; do
+            curl -fsS --max-time 15 "http://127.0.0.1:18080/xoso?region=$reg" -o "/tmp/xs-canonical-$reg.html"
+            grep -Fq 'DÀN 3 CÀNG (500 số)' "/tmp/xs-canonical-$reg.html"
+          done
+          curl -fsS --max-time 10 'http://127.0.0.1:18080/xoso-khach?region=xsmb' | cmp - /opt/kq247/deployment/lottery-original/public/client-vps.html
+          echo XS_CANONICAL_BLANKET_REDEPLOY_PROTECTION=PASS
+          trap - ERR
+          cleanup
+          VPS

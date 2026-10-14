@@ -136,14 +136,17 @@ services:
     cpus: "1.0"
     security_opt:
       - no-new-privileges:true
-  # Read-through of original live Neon HTML; no new prediction algorithm or snapshot writes.
+  # Canonical XS service: preserve exact Neon UI, overlay VPS immutable per-station data.
+  # Keep the same URLs/container. Explicit build prevents blanket redeploy regression.
   lottery-original:
     build:
-      context: ..
-      dockerfile: lottery-original/Dockerfile
-    image: kq247/lottery-original-ui:local
+      context: ../..
+      dockerfile: deployment/lottery-original/Dockerfile.locked
+    image: kq247/xs-ui-original-locked:20261015-v1
     container_name: kq247-lottery-original
     restart: unless-stopped
+    volumes:
+      - /opt/kq247/lottery-daily-staging/public-locked:/app/locked:ro
     ports:
       - "127.0.0.1:18084:3004"
     read_only: true

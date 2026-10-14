@@ -30,6 +30,10 @@ umask 077
 if [ ! -s .env ]; then
   printf 'R55_DB_PASSWORD=%s\n' "$(openssl rand -hex 32)" > .env
 fi
+# Never replace the immutable VPS source with the old read-through image on blanket rebuild.
+test -s /opt/kq247/xs-release/original-ui-locked-server.mjs
+test -s /opt/kq247/xs-release/neon-locked-overlay.mjs
+test -s /opt/kq247/lottery-daily-staging/public-locked/station-locked-index.json
 docker compose config -q
 docker compose up -d football-db </dev/null
 ready=no
@@ -119,7 +123,7 @@ curl -fsS --max-time 8 http://127.0.0.1:18083/healthz -o /tmp/r55-vps-group-stat
 python3 -c 'import json;d=json.load(open("/tmp/r55-vps-group-status.json"));assert d["ok"] and d["service"]=="r55-vps-telegram-group" and (not d["active"] or (d["tokenConfigured"] and d["primarySender"]));print("R55_VPS_GROUP_HEALTH="+("PRIMARY" if d["primarySender"] else "STANDBY"))'
 # Verify exact live Neon UI/read-only copy works on VPS for all 3 regions and customer.
 curl -fsS --max-time 8 http://127.0.0.1:18084/healthz -o /tmp/kq247-xs-health.json
-python3 -c 'import json;d=json.load(open("/tmp/kq247-xs-health.json"));assert d["ok"] and not d["backendMigrated"] and d["neonOriginalReadThrough"];print("KQ247_XS_ORIGINAL_FRONTEND=READY")'
+python3 -c 'import json;d=json.load(open("/tmp/kq247-xs-health.json"));assert d["ok"] and not d["backendMigrated"] and d["neonOriginalReadThrough"] and d.get("predictionSource")=="VPS_POSTGRES_IMMUTABLE_LOCKED" and d.get("originalLayoutPreserved") is True;print("KQ247_XS_ORIGINAL_UI_AND_VPS_IMMUTABLE_SOURCE=READY")'
 for region in xsmb xsmt xsmn; do
   curl -fsS --max-time 20 "http://127.0.0.1:18080/xoso?region=$region" -o "/tmp/kq247-xs-$region.html"
   grep -q 'XSMB' "/tmp/kq247-xs-$region.html"
