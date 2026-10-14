@@ -76,6 +76,6 @@ test("counts line agreement only for identical published AH/OU quotes",()=>{
  const ah=bookmakerSideAgreement(q,{type:"AH",pick:"HOME",line:-.5});
  assert.equal(ah.sameLineBookmakers,3);assert.equal(ah.priceLeanForPick,3);
  const ou=bookmakerSideAgreement(q,{type:"OU",pick:"UNDER",line:2.75});
- assert.equal(ou.sameLineBookmakers,2);assert.equal(ou.priceLeanForPick,2);
+ assert.equal(ou.sameLineBookmakers,2);assert.equal(ou.priceLeanForPick,1);assert.equal(ou.neutralPriceVotes,1);
  assert.equal(bookmakerSideAgreement(q,{type:"AH",pick:"HOME",line:-1}).sameLineBookmakers,0);
 });
