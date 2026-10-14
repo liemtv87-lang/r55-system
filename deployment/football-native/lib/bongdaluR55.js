@@ -1,5 +1,6 @@
 import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
+import {primaryFormEvidence} from "lib/r55FormFirst.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
 import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus} from "lib/r55BookmakerConsensus.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "lib/r55BookmakerPage.js";
@@ -275,7 +276,9 @@ function makeMarket(row,h,learned){
  // football-all-refresh-v3 source. No locally invented market prediction.
  const originalMatch={live_id:"bongdalu:"+row.bongdaluId,ts:row.ts,home:row.home,away:row.away,
     country:row.country,league:row.league,rank:clamp(row.priority>0?row.priority/4:40,0,100)};
- const result=nativeBongMarket(originalMatch,{market:mk},h,null,null,null,[]);
+ // Primary signal: own-team form and historical odds. H2H stays recorded
+ // as optional context, not a primary input or rejection gate.
+ const result=nativeBongMarket(originalMatch,{market:mk},primaryFormEvidence(h),null,null,null,[]);
  if(!result||!result.ah||!result.ou)return null;
  // v3 checks both handicap directions and both goal-total directions,
  // calculating quarter-line payoff under three independent pre-match scenarios.
