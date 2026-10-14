@@ -32,13 +32,21 @@ def text(page):
 def visible(loc):
     return [i for i in loc.all() if i.is_visible()]
 def select_by_text(page, keyword, expected):
+    # Form fields are ordered Category, Country, Language. Never choose
+    # an 'Other' option from a different field.
     selects=visible(page.locator("select"))
-    for field in selects:
-        info=field.locator("option").evaluate_all("(xs)=>xs.map(x=>({value:x.value,text:x.textContent.trim()}))")
-        hits=[o for o in info if o["value"] and o["text"].lower()==expected.lower()]
-        if hits:
-            field.select_option(value=hits[0]["value"])
-            return True
+    positions={"category":0,"country":1,"language":2}
+    position=positions.get(keyword,-1)
+    if position<0 or len(selects)<=position:return False
+    field=selects[position]
+    info=field.locator("option").evaluate_all("(xs)=>xs.map(x=>({value:x.value,text:x.textContent.trim()}))")
+    hits=[o for o in info if o["value"] and (
+        o["text"].strip().lower()==expected.lower() or
+        o["text"].strip().lower().endswith(" "+expected.lower()) or
+        o["value"].strip().lower()==expected.lower())]
+    if hits:
+        field.select_option(value=hits[0]["value"])
+        return True
     return False
 def fill_first(page, terms, value):
     for term in terms:
@@ -60,9 +68,12 @@ def main():
             if previous:
                 # The previous attempt never reached Submit: radio action timed out.
                 # Only this provably pre-submit state can be retried.
-                safe_retry=(previous.get("state")=="error_or_uncertain_no_retry"
-                            and "Locator.check" in previous.get("error","")
-                            and "response_excerpt" not in previous)
+                safe_retry=(
+                    (previous.get("state")=="error_or_uncertain_no_retry"
+                     and "Locator.check" in previous.get("error","")
+                     and "response_excerpt" not in previous)
+                    or previous.get("state")=="form_mapping_incomplete"
+                )
                 if safe_retry:
                     print("GROUPSSOR_RETRY_PRE_SUBMIT_RADIO",key,flush=True)
                     del state["groups"][key]
@@ -106,6 +117,8 @@ def main():
                     "input[name*='description' i]"],g["description"]) and ok
                 country=select_by_text(page,"country","Vietnam")
                 language=select_by_text(page,"language","Vietnamese")
+                if not language:language=select_by_text(page,"language","Other")
+                if not country:country=select_by_text(page,"country","Other")
                 category=select_by_text(page,"category",g["category"])
                 if not category and key=="lottery":
                     # Only a clearly relevant factual-results classification.
@@ -113,8 +126,9 @@ def main():
                 tags=visible(page.locator("input[placeholder*='coding']"))
                 if tags:tags[0].fill(g["tags"])
                 if not (ok and country and language and category):
+                    options=[x.locator("option").all_text_contents() for x in visible(page.locator("select"))]
                     receipt.update(state="form_mapping_incomplete",fields_ok=ok,country=country,
-                                   language=language,category=category,excerpt=text(page))
+                                   language=language,category=category,option_sets=options,excerpt=text(page))
                     state["groups"][key]=receipt;save(state);continue
                 submit=visible(page.get_by_role("button",name=re.compile(r"Submit Group",re.I)))
                 if not submit:
