@@ -48,6 +48,18 @@ def read_vps_locked_snapshot(day,region,index_path):
     records=data.get("records")
     if not isinstance(records,list) or len(records)!=36:
         raise ValueError("missing locked 36 station index")
+    # The public viewer moves to tomorrow after 19:30. Results for today
+    # must still use the exact immutable prediction locked before the draw.
+    if not any(r.get("region")==region and r.get("predictionDate")==day for r in records):
+        archive_path=Path(index_path).with_name("station-locked-history.json")
+        if not archive_path.is_file():
+            raise ValueError("locked historical snapshot not available for "+day)
+        archive=json.loads(archive_path.read_text(encoding="utf-8"))
+        if archive.get("type")!="READ_ONLY_LOCKED_STATION_HISTORY" or not isinstance(archive.get("records"),list):
+            raise ValueError("invalid locked snapshot historical timeline")
+        records=[r for r in archive["records"] if r.get("region")==region and r.get("predictionDate")==day]
+        if not records:
+            raise ValueError("no original pre-draw locked snapshot for "+region+"/"+day)
     found={}
     digests=[]
     seen=set()
