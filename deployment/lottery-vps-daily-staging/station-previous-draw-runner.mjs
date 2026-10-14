@@ -35,6 +35,8 @@ const vn=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Ho_C
 const nowDate=vn.year+'-'+vn.month+'-'+vn.day;
 const completedDate=(vn.hour+':'+vn.minute)>='19:30'?nowDate:dateShift(nowDate,-1);
 const offline=process.argv.includes('--offline');
+const useVerifiedVpsCache=process.argv.includes('--local-verified');
+if(offline&&useVerifiedVpsCache)throw Error('CONFLICTING_SOURCE_FLAGS');
 const affected=new Set();
 // Verified real October 14 provincial results; used only to fill gaps in archived sources.
 // No synthetic prizes, no reuse for later station source dates.
@@ -54,7 +56,33 @@ for(const row of supplemental.stations){
   old.push(normalized);affected.add(id);
  }
 }
-if(!offline){
+if(useVerifiedVpsCache){
+ const cache=JSON.parse(await readFile(join(ROOT,'mtmn-one-draw-actual-latest.json'),'utf8'));
+ if(cache.source!=='ONE_REAL_DRAW_PER_STATION_VPS_VALIDATED'||cache.draws?.length!==35)
+  throw Error('NO_VALIDATED_35_STATION_ACTUAL_CACHE');
+ const unique=new Set();
+ for(const source of cache.draws){
+  const id=source.region+'|'+source.station;
+  if(unique.has(id)||!stations.has(id))throw Error('UNRECOGNIZED_OR_DUPLICATE_VERIFIED_STATION_'+id);
+  unique.add(id);
+  const clean=normalizedStationDraw(source);
+  const history=stations.get(id),maxDate=[...history].sort((a,b)=>b.draw_date.localeCompare(a.draw_date))[0].draw_date;
+  if(clean.draw_date<maxDate)throw Error('OLDER_VERIFIED_SOURCE_THAN_ARCHIVE_'+id);
+  const matched=history.find(x=>x.draw_date===clean.draw_date);
+  if(matched){
+   if(matched.full_results){
+    const old=normalizedStationDraw(matched);
+    if(old.special!==clean.special||old.all2.some((v,i)=>v!==clean.all2[i]))
+     throw Error('VERIFIED_VPS_SOURCE_CONFLICT_'+id);
+   }else if(matched.all2?.length===clean.all2.length&&
+    [...matched.all2].sort().join(',')!==[...clean.all2].sort().join(','))
+     throw Error('VERIFIED_SOURCE_ENDINGS_CONFLICT_'+id);
+   Object.assign(matched,clean);
+  }else{history.push(clean);affected.add(id);}
+ }
+ if(unique.size!==35)throw Error('MISSING_VERIFIED_STATION');
+}
+if(!offline&&!useVerifiedVpsCache){
  const queries=[];
  for(let delta=7;delta>=0;delta--)for(const region of ['mt','mn'])
   queries.push({day:dateShift(completedDate,-delta),region});
@@ -76,9 +104,9 @@ if(!offline){
      const newCanon=normalizedStationDraw({...fresh,station:id.split('|')[1]});
      if(oldCanon.all2.some((v,n)=>v!==newCanon.all2[n])||oldCanon.special!==newCanon.special)
       throw Error('PRIZE_SOURCE_CONFLICT_'+id+'_'+fresh.draw_date);
-     matching.full_results=fresh.full_results;
+     Object.assign(matching,newCanon);
     }else{
-     old.push({...fresh,station:id.split('|')[1]});
+     old.push(normalizedStationDraw({...fresh,station:id.split('|')[1]}));
      affected.add(id);
     }
    }
