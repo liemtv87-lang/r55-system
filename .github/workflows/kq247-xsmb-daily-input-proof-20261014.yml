@@ -1,0 +1,49 @@
+name: KQ247 XSMB exact daily 500-input fingerprint proof
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-daily-input-proof-20261014.yml']
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Independently fingerprint 500 input draws and predict each day on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          docker run --rm --network none --read-only -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {predictIndependentDaily} from '/stage/independent500.mjs';
+          const draws=JSON.parse(fs.readFileSync('/stage/xsmb-505-actual-through-20261014.json','utf8'));
+          const metadata=[];
+          const days=['2026-10-11','2026-10-12','2026-10-13','2026-10-14','2026-10-15'];
+          for(const day of days){
+            const input=draws.filter(d=>d.region==='mb'&&d.station==='XSMB'&&d.draw_date<day)
+              .sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
+            if(input.length!==500)throw Error(day+':not_500');
+            const identity=createHash('sha256').update(JSON.stringify(input.map(d=>[d.draw_date,d.all2]))).digest('hex');
+            const p=predictIndependentDaily({predictionDate:day,region:'mb',station:'XSMB',draws:input,ganDaysLimit:10});
+            const last=input[0],second=input[1];
+            if(last.draw_date!==p.sourceLastDate)throw Error('wrong_latest');
+            metadata.push({day,sourceDate:last.draw_date,sourcePriorDay:second.draw_date,source500Hash:identity,
+              latest27Hash:createHash('sha256').update(JSON.stringify(last.all2)).digest('hex'),
+              latest27:last.all2,three:p.picks,doubles:p.doubles,sourceCount:input.length});
+          }
+          if(metadata[0].source500Hash===metadata[4].source500Hash)throw Error('days_11_and_15_reused_same_history');
+          if(metadata[4].sourceDate!=='2026-10-14')throw Error('day15_not_based_on_14');
+          if(metadata[4].source500Hash===metadata[3].source500Hash)throw Error('day15_reusing_day14_history');
+          console.log('VPS_TRUE_DAY_WALKFORWARD_INPUT_PROOF',JSON.stringify(metadata));
+          JS
+          docker exec kq247-r55-postgres sh -c 'psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT draw_date||chr(124)||all2::text FROM kq247_xs_vps.actual_draws WHERE region=chr(109)||chr(98) ORDER BY draw_date DESC LIMIT 2;"' | cut -c 1-320
+          REMOTE
