@@ -2,7 +2,7 @@ import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
 import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus} from "lib/r55BookmakerConsensus.js";
-import {collectBongdaluPageBookmakers} from "lib/r55BookmakerPage.js";
+import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "lib/r55BookmakerPage.js";
 import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseFormTable as nativeParseFormTable,parseH2HTable as nativeParseH2HTable,parseAsianHistory as nativeParseAsianHistory,parseBongOdds as nativeParseBongOdds,parseBongFeed as nativeParseBongFeed,parseBongLeagueMeta as nativeParseBongLeagueMeta,discoverBongdaluRoots as nativeDiscoverBongdaluRoots,bongNeighborRoots as nativeBongNeighborRoots} from "lib/original-bongdalu/r55-core-verbatim-transpiled.js";
 // Port of the production football-all-refresh-v3 Bongdalu ingestion/model layer.
 // No Goaloo/NowGoal, ESPN, Livescore or synthetic odds may contribute market input.
@@ -214,8 +214,11 @@ async function history(base,id){
     if(Number(parsed.home?.n)>0&&Number(parsed.away?.n)>0){
      // Independent official odds-comparison page; absence is reported, not guessed.
      const oddsPage=await get(base,"oddscomp/"+encodeURIComponent(id),"text/html",10000).catch(()=>null);
-     return {...result,oddsComparisonFetched:!!oddsPage,
-       oddscompCompanies:oddsPage?collectBongdaluPageBookmakers(oddsPage):[]};
+     // A 200 "Security Verification" HTML response is NOT valid bookmaker data.
+     const oddsComparisonStatus=oddsComparisonPageState(oddsPage);
+     return {...result,oddsComparisonFetched:oddsComparisonStatus==="genuine_odds_rows",
+       oddsComparisonStatus,
+       oddscompCompanies:oddsComparisonStatus==="genuine_odds_rows"?collectBongdaluPageBookmakers(oddsPage):[]};
     }
    }
   }catch(e){if(attempt===3&&result)return {...result,fetchAttempts:attempt};}
