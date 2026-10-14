@@ -30,14 +30,14 @@ GROUPS={
             "description":"Nhóm chia sẻ thông tin kết quả xổ số XSMB, XSMT, XSMN và thống kê tham khảo.",
             "categories":["Lottery","News","Entertainment","Games"]}}
 # Prior submission must not be repeated even if a live listing is not yet indexed.
-ALREADY_SENT_HOSTS={"tgfind.net","toptglinks.com","telejoiner.com","groupmandi.com","tgmania.com"}
+ALREADY_SENT_HOSTS={"tgfind.net","toptglinks.com","telejoiner.com","groupmandi.com","tgmania.com","tgfinder.net","telegram-group.com","telegramhub.org","tgden.com"}
 # Separate workflows already own submission state for this domain.
 EXTERNAL_WORKFLOW_HOSTS={"buyinoffer.com","tgden.com","vi.tgdio.com"}
 BATCH_LIMIT=min(400,max(1,int(os.environ.get("KQ247_SUBMIT_MAX", "120"))))
 TIME_LIMIT=min(7200,max(60,int(os.environ.get("KQ247_SUBMIT_SECONDS","2400"))))
 PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
 WATCH = "--watch" in sys.argv
-POLL_SECONDS = max(60,min(3600,int(os.environ.get("KQ247_POST_POLL_S","600"))))
+POLL_SECONDS = max(60,min(120,int(os.environ.get("KQ247_POST_POLL_S","120"))))
 # Explicitly opt-in directories: never post merely because a URL looks like a form.
 OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org"}
 # Explicit no-account, free Telegram listing page confirmed by the publisher.
