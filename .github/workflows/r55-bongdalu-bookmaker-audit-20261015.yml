@@ -20,7 +20,7 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
           for attempt in $(seq 1 18); do
             if sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 \
-              'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native sh -c '''test -f /app/lib/r55BookmakerConsensus.js && grep -q decimalQuotes /app/lib/bongdaluR55.js'''' >/dev/null 2>&1; then break; fi
+              'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native sh -c "test -f /app/lib/r55BookmakerConsensus.js && grep -q decimalQuotes /app/lib/bongdaluR55.js"' >/dev/null 2>&1; then break; fi
             if [ "$attempt" -eq 18 ]; then echo R55_BOOKMAKER_CODE_NOT_DEPLOYED; exit 2; fi
             sleep 10
           done
