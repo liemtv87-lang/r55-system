@@ -227,9 +227,25 @@ def add_url(con, raw, force=False):
         con.execute("UPDATE hosts SET url=? WHERE host=? AND status='pending' AND url LIKE '%/'", (url,host))
 
 def source_file():
+    """Always provide a real, deduplicated source file; never invent scan volume.
+
+    Large inventories can be appended to this same file. If prior one-off scans
+    did not retain their URL records, bootstrap from the public submission
+    routes actually known to the crawler instead of running with no input.
+    """
     for f in INPUTS:
-        if f.is_file(): return f
-    return None
+        if f.is_file() and f.stat().st_size > 0:
+            return f
+    bootstrap = INPUTS[0]
+    bootstrap.parent.mkdir(parents=True, exist_ok=True)
+    actual_routes = list(dict.fromkeys(SEED))
+    with bootstrap.open("x", encoding="utf-8") as stream:
+        stream.write("\n".join(actual_routes) + "\n")
+    print("KQ247_BOOTSTRAP_INVENTORY=" + json.dumps({
+        "path": str(bootstrap), "real_seed_urls": len(actual_routes),
+        "note": "Seed URL records only; not published backlinks or billions of scans."
+    }), flush=True)
+    return bootstrap
 
 def ingest(con, f, max_records):
     name = "inventory:" + str(f.resolve())
@@ -283,6 +299,8 @@ def selftest():
     x=HtmlScan()
     x.feed('<form><input name="telegram_link" /></form>')
     assert x.forms == 1 and any("telegram_link" in field for field in x.fields)
+    assert len(dict.fromkeys(SEED)) >= 35
+    assert any("telegrmgrouplink.com" in u for u in SEED)
     print("SELFTEST_OK")
 
 def main():
@@ -330,7 +348,9 @@ def main():
                 responses = list(pool.map(inspect, entries))
             for host, final, status, reason, suggestions in responses:
                 # Follow in-domain first-party submission links at most once.
-                if status=="no_form" and suggestions and suggestions[0] != final and urlsplit(final).path != urlsplit(suggestions[0]).path:
+                if (status=="no_form" and suggestions and suggestions[0] != final
+                    and urlsplit(final).path != urlsplit(suggestions[0]).path
+                    and con.execute("SELECT reason FROM hosts WHERE host=?", (host,)).fetchone()[0] != "follow_submit_link"):
                     con.execute("UPDATE hosts SET url=?,reason='follow_submit_link' WHERE host=?", (suggestions[0],host))
                 else:
                     con.execute("UPDATE hosts SET url=?,status=?,reason=?,checked=? WHERE host=?",
