@@ -1,0 +1,976 @@
+{
+  "checked_at_utc": "2026-10-14T11:40:18.713470+00:00",
+  "mode": "read_only_public_submission_endpoint_audit",
+  "domains_checked": 51,
+  "entrypoints_checked": 36,
+  "http_200_form_pages": [
+    {
+      "domain": "groupda.com",
+      "url": "https://groupda.com/add/group/addgroup",
+      "status": "http_200",
+      "forms": 2,
+      "inputs_selects": 9,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "groupssor.com",
+      "url": "https://www.groupssor.com/submit/",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 9,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "groupssor.com",
+      "url": "https://groupssor.com/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 9,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "groupswa.com",
+      "url": "https://groupswa.com/submit-group-links/",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 8,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "groupswa.com",
+      "url": "https://groupswa.com/submit-group-link/",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 8,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "linequn.com",
+      "url": "https://linequn.com/submit/",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 12,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegram-group.com",
+      "url": "https://telegram-group.com/en/publish/",
+      "status": "http_200",
+      "forms": 3,
+      "inputs_selects": 19,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegram-group.org",
+      "url": "https://telegram-group.org/SubmitGroup.php",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 4,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegramchannels.io",
+      "url": "https://telegramchannels.io/submit-channel",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 6,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegramgroup.arkservices.in",
+      "url": "https://telegramgroup.arkservices.in/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 8,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegramgroups.co",
+      "url": "https://telegramgroups.co/submit",
+      "status": "http_200",
+      "forms": 2,
+      "inputs_selects": 13,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": true
+    },
+    {
+      "domain": "telegramhub.app",
+      "url": "https://www.telegramhub.app/submit",
+      "status": "http_200",
+      "forms": 4,
+      "inputs_selects": 10,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegramhub.org",
+      "url": "https://telegramhub.org/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 5,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegramradar.com",
+      "url": "https://www.telegramradar.com/en/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 1,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telegramradar.com",
+      "url": "https://www.telegramradar.com/en/bots/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 6,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telekit.link",
+      "url": "https://telekit.link/addgroup",
+      "status": "http_200",
+      "forms": 4,
+      "inputs_selects": 16,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "televerse.click",
+      "url": "https://televerse.click/submit",
+      "status": "http_200",
+      "forms": 3,
+      "inputs_selects": 4,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telxplorer.com",
+      "url": "https://telxplorer.com/en/create_group",
+      "status": "http_200",
+      "forms": 5,
+      "inputs_selects": 23,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tg-hub.com",
+      "url": "https://tg-hub.com/submit-telegram-channel-and-group-links/",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 11,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tgcamp.com",
+      "url": "https://tgcamp.com/auth/register",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 3,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tgcamp.com",
+      "url": "https://tgcamp.com/dashboard/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 3,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tgden.com",
+      "url": "https://tgden.com/en/suggest",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 1,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tgfind.net",
+      "url": "https://tgfind.net/en/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 3,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": true
+    },
+    {
+      "domain": "tgfinder.net",
+      "url": "https://tgfinder.net/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 12,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tglinks.net",
+      "url": "https://tglinks.net/en/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 8,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "togather.in",
+      "url": "https://www.togather.in/submit",
+      "status": "http_200",
+      "forms": 2,
+      "inputs_selects": 21,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "togather.in",
+      "url": "https://togather.in/submit",
+      "status": "http_200",
+      "forms": 2,
+      "inputs_selects": 21,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "togather.in",
+      "url": "https://togather.in/blog/submit-community-moderation-flow",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 1,
+      "possible_captcha": true,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "toptglinks.com",
+      "url": "https://toptglinks.com/submit",
+      "status": "http_200",
+      "forms": 2,
+      "inputs_selects": 6,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "view.tg",
+      "url": "https://view.tg/submit",
+      "status": "http_200",
+      "forms": 1,
+      "inputs_selects": 2,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    }
+  ],
+  "http_200_without_form": [
+    {
+      "domain": "groupsgyani.org",
+      "url": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+      "status": "http_200",
+      "forms": 0,
+      "inputs_selects": 1,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "groupverse.co.in",
+      "url": "https://groupverse.co.in/submit-your-group.html",
+      "status": "http_200",
+      "forms": 0,
+      "inputs_selects": 0,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "telehub.to",
+      "url": "https://telehub.to/add-channel",
+      "status": "http_200",
+      "forms": 0,
+      "inputs_selects": 0,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    },
+    {
+      "domain": "tgfind.io",
+      "url": "https://tgfind.io/en/inclusion-link",
+      "status": "http_200",
+      "forms": 0,
+      "inputs_selects": 3,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": true
+    },
+    {
+      "domain": "tgmania.com",
+      "url": "https://tgmania.com/submit",
+      "status": "http_200",
+      "forms": 0,
+      "inputs_selects": 3,
+      "possible_captcha": false,
+      "possible_login": false,
+      "possible_payment": false
+    }
+  ],
+  "unavailable_or_blocked": [
+    {
+      "domain": "telegroups.org",
+      "url": "https://telegroups.org/submit",
+      "status": "HTTPError: HTTP Error 403: Forbidden"
+    }
+  ],
+  "domain_details": [
+    {
+      "domain": "groupda.com",
+      "candidates": [
+        {
+          "url": "https://groupda.com/add/group/addgroup",
+          "status": "http_200",
+          "forms": 2,
+          "inputs_selects": 9,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "groupmandi.com",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "groupsgyani.org",
+      "candidates": [
+        {
+          "url": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+          "status": "http_200",
+          "forms": 0,
+          "inputs_selects": 1,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": "ValueError: response_too_big"
+    },
+    {
+      "domain": "groupssor.com",
+      "candidates": [
+        {
+          "url": "https://www.groupssor.com/submit/",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 9,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        },
+        {
+          "url": "https://groupssor.com/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 9,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "groupswa.com",
+      "candidates": [
+        {
+          "url": "https://groupswa.com/submit-group-links/",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 8,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        },
+        {
+          "url": "https://groupswa.com/submit-group-link/",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 8,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "groupverse.co.in",
+      "candidates": [
+        {
+          "url": "https://groupverse.co.in/submit-your-group.html",
+          "status": "http_200",
+          "forms": 0,
+          "inputs_selects": 0,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": "ValueError: response_too_big"
+    },
+    {
+      "domain": "linequn.com",
+      "candidates": [
+        {
+          "url": "https://linequn.com/submit/",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 12,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "metricgram.com",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "open.tg",
+      "candidates": [],
+      "root_error": "URLError: <urlopen error [Errno -5] No address associated with hostname>"
+    },
+    {
+      "domain": "search-t.me",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "tdirectory.me",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "telegradia.com",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "telegram-group-links.com",
+      "candidates": [],
+      "root_error": "URLError: <urlopen error [SSL: TLSV1_ALERT_INTERNAL_ERROR] tlsv1 alert internal error (_ssl.c:1000)>"
+    },
+    {
+      "domain": "telegram-group.com",
+      "candidates": [
+        {
+          "url": "https://telegram-group.com/en/publish/",
+          "status": "http_200",
+          "forms": 3,
+          "inputs_selects": 19,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegram-group.org",
+      "candidates": [
+        {
+          "url": "https://telegram-group.org/SubmitGroup.php",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 4,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegram-groups.com",
+      "candidates": [],
+      "root_error": "HTTPError: HTTP Error 403: FORBIDDEN"
+    },
+    {
+      "domain": "telegram-groups.net",
+      "candidates": [],
+      "root_error": "URLError: <urlopen error [Errno -2] Name or service not known>"
+    },
+    {
+      "domain": "telegramchannels.io",
+      "candidates": [
+        {
+          "url": "https://telegramchannels.io/submit-channel",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 6,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegramchannels.me",
+      "candidates": [],
+      "root_error": "HTTPError: HTTP Error 403: Forbidden"
+    },
+    {
+      "domain": "telegramgroup.arkservices.in",
+      "candidates": [
+        {
+          "url": "https://telegramgroup.arkservices.in/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 8,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegramgroup.link",
+      "candidates": [],
+      "root_error": "URLError: <urlopen error [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] sslv3 alert handshake failure (_ssl.c:1000)>"
+    },
+    {
+      "domain": "telegramgroups.co",
+      "candidates": [
+        {
+          "url": "https://telegramgroups.co/submit",
+          "status": "http_200",
+          "forms": 2,
+          "inputs_selects": 13,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": true
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegramhub.app",
+      "candidates": [
+        {
+          "url": "https://www.telegramhub.app/submit",
+          "status": "http_200",
+          "forms": 4,
+          "inputs_selects": 10,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegramhub.org",
+      "candidates": [
+        {
+          "url": "https://telegramhub.org/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 5,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegramradar.com",
+      "candidates": [
+        {
+          "url": "https://www.telegramradar.com/en/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 1,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        },
+        {
+          "url": "https://www.telegramradar.com/en/bots/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 6,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telegramtop.com",
+      "candidates": [],
+      "root_error": "URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certific"
+    },
+    {
+      "domain": "telegroups.org",
+      "candidates": [
+        {
+          "url": "https://telegroups.org/submit",
+          "status": "HTTPError: HTTP Error 403: Forbidden"
+        }
+      ],
+      "root_error": "HTTPError: HTTP Error 403: Forbidden"
+    },
+    {
+      "domain": "telehub.to",
+      "candidates": [
+        {
+          "url": "https://telehub.to/add-channel",
+          "status": "http_200",
+          "forms": 0,
+          "inputs_selects": 0,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telejoiner.com",
+      "candidates": [],
+      "root_error": "ValueError: response_too_big"
+    },
+    {
+      "domain": "telekit.link",
+      "candidates": [
+        {
+          "url": "https://telekit.link/addgroup",
+          "status": "http_200",
+          "forms": 4,
+          "inputs_selects": 16,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": "ValueError: response_too_big"
+    },
+    {
+      "domain": "televerse.click",
+      "candidates": [
+        {
+          "url": "https://televerse.click/submit",
+          "status": "http_200",
+          "forms": 3,
+          "inputs_selects": 4,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "telxplorer.com",
+      "candidates": [
+        {
+          "url": "https://telxplorer.com/en/create_group",
+          "status": "http_200",
+          "forms": 5,
+          "inputs_selects": 23,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tg-hub.com",
+      "candidates": [
+        {
+          "url": "https://tg-hub.com/submit-telegram-channel-and-group-links/",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 11,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tg.app",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "tgbox.cc",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "tgcamp.com",
+      "candidates": [
+        {
+          "url": "https://tgcamp.com/auth/register",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 3,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        },
+        {
+          "url": "https://tgcamp.com/dashboard/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 3,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tgcompass.com",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "tgden.com",
+      "candidates": [
+        {
+          "url": "https://tgden.com/en/suggest",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 1,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": "ValueError: response_too_big"
+    },
+    {
+      "domain": "tgfind.io",
+      "candidates": [
+        {
+          "url": "https://tgfind.io/en/inclusion-link",
+          "status": "http_200",
+          "forms": 0,
+          "inputs_selects": 3,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": true
+        }
+      ],
+      "root_error": "ValueError: response_too_big"
+    },
+    {
+      "domain": "tgfind.net",
+      "candidates": [
+        {
+          "url": "https://tgfind.net/en/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 3,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": true
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tgfinder.net",
+      "candidates": [
+        {
+          "url": "https://tgfinder.net/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 12,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tgkit.io",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "tglinks.net",
+      "candidates": [
+        {
+          "url": "https://tglinks.net/en/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 8,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tgmania.com",
+      "candidates": [
+        {
+          "url": "https://tgmania.com/submit",
+          "status": "http_200",
+          "forms": 0,
+          "inputs_selects": 3,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "tgram.com.vn",
+      "candidates": [],
+      "root_error": "URLError: <urlopen error [Errno -2] Name or service not known>"
+    },
+    {
+      "domain": "tgram.vn",
+      "candidates": [],
+      "root_error": null
+    },
+    {
+      "domain": "tgramlink.com",
+      "candidates": [],
+      "root_error": "HTTPError: HTTP Error 403: Forbidden"
+    },
+    {
+      "domain": "tgstat.com",
+      "candidates": [],
+      "root_error": "HTTPError: HTTP Error 403: Forbidden"
+    },
+    {
+      "domain": "togather.in",
+      "candidates": [
+        {
+          "url": "https://www.togather.in/submit",
+          "status": "http_200",
+          "forms": 2,
+          "inputs_selects": 21,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        },
+        {
+          "url": "https://togather.in/submit",
+          "status": "http_200",
+          "forms": 2,
+          "inputs_selects": 21,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        },
+        {
+          "url": "https://togather.in/blog/submit-community-moderation-flow",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 1,
+          "possible_captcha": true,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "toptglinks.com",
+      "candidates": [
+        {
+          "url": "https://toptglinks.com/submit",
+          "status": "http_200",
+          "forms": 2,
+          "inputs_selects": 6,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    },
+    {
+      "domain": "view.tg",
+      "candidates": [
+        {
+          "url": "https://view.tg/submit",
+          "status": "http_200",
+          "forms": 1,
+          "inputs_selects": 2,
+          "possible_captcha": false,
+          "possible_login": false,
+          "possible_payment": false
+        }
+      ],
+      "root_error": null
+    }
+  ],
+  "submissions_attempted": 0,
+  "published_backlinks_claimed": 0,
+  "notice": "A visible HTML form is only a candidate, not proof registration or approval is allowed; validate terms/captcha/login before any one-time submission."
+}
