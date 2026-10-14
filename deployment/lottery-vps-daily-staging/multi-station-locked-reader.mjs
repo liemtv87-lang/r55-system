@@ -64,7 +64,7 @@ http.createServer(async(req,res)=>{
   }catch(e){console.error('NO_LOCKED_INDEX',e.message);return reply(res,503,'Chưa có snapshot đã khóa');}
   if(u.pathname==='/healthz')return reply(res,200,JSON.stringify({ok:true,readonly:true,mt:records.filter(r=>r.region==='mt').length,
     mn:records.filter(r=>r.region==='mn').length,mb:records.filter(r=>r.region==='mb').length}),'application/json');
-  const r=u.searchParams.get('region'),region=r==='xsmb'?'mb':r==='xsmt'?'mt':r==='xsmn'?'mn':null;
+  const r=u.searchParams.get('region'),region=r===null||r==='xsmb'?'mb':r==='xsmt'?'mt':r==='xsmn'?'mn':null;
   if(!region||!['/xoso','/xoso/'].includes(u.pathname))return reply(res,404,'Not found','text/plain');
   const available=records.filter(x=>x.region===region).sort((a,b)=>a.predictionDate.localeCompare(b.predictionDate)||a.station.localeCompare(b.station,'vi'));
   if(!available.length)return reply(res,503,'Chưa có snapshot mới đã khóa của miền này');
