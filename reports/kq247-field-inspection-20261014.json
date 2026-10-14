@@ -1,0 +1,2188 @@
+{
+  "at": "2026-10-14T11:43:26.151013+00:00",
+  "mode": "readonly_form_metadata",
+  "form_pages": [
+    {
+      "url": "https://groupswa.com/submit-group-links/",
+      "actual_url": "https://groupswa.com/submit-group-links/",
+      "forms": [
+        {
+          "id": "fluentform_3",
+          "action": null,
+          "method": "POST",
+          "fields": [
+            {
+              "name": "__fluent_form_embded_post_id",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "_fluentform_3_fluentformnonce",
+              "id": "_fluentform_3_fluentformnonce",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "_wp_http_referer",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "dropdown",
+              "id": "ff_3_dropdown",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": false,
+              "options": [
+                {
+                  "value": "",
+                  "label": "- Select Platform -"
+                },
+                {
+                  "value": "Whatsapp",
+                  "label": "Whatsapp"
+                },
+                {
+                  "value": "Telegram",
+                  "label": "Telegram"
+                },
+                {
+                  "value": "Signal",
+                  "label": "Signal"
+                },
+                {
+                  "value": "Session",
+                  "label": "Session"
+                },
+                {
+                  "value": "Viber",
+                  "label": "Viber"
+                },
+                {
+                  "value": "KiK",
+                  "label": "KiK"
+                },
+                {
+                  "value": "LINE",
+                  "label": "LINE"
+                },
+                {
+                  "value": "WeChat",
+                  "label": "WeChat"
+                },
+                {
+                  "value": "Teleguard",
+                  "label": "Teleguard"
+                }
+              ]
+            },
+            {
+              "name": "input_text",
+              "id": "ff_3_input_text",
+              "type": "text",
+              "placeholder": "Submit Your Group Link",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "input_text_1",
+              "id": "ff_3_input_text_1",
+              "type": "text",
+              "placeholder": "What's your group name?",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "input_text_2",
+              "id": "ff_3_input_text_2",
+              "type": "text",
+              "placeholder": "Tell Us About Your Group?",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "dropdown_1",
+              "id": "ff_3_dropdown_1",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": false,
+              "options": [
+                {
+                  "value": "",
+                  "label": "Select A Category"
+                },
+                {
+                  "value": "Bikini / Fashion Girls",
+                  "label": "Bikini / Fashion Girls"
+                },
+                {
+                  "value": "Influencers & Celebrities",
+                  "label": "Influencers & Celebrities"
+                },
+                {
+                  "value": "Youtube Channel Groups",
+                  "label": "Youtube Channel Groups"
+                },
+                {
+                  "value": "Buy & Sell Groups",
+                  "label": "Buy & Sell Groups"
+                },
+                {
+                  "value": "Study Groups",
+                  "label": "Study Groups"
+                },
+                {
+                  "value": "Freelancer & Job Alerts",
+                  "label": "Freelancer & Job Alerts"
+                },
+                {
+                  "value": "Matchmaking & Matrimony Groups",
+                  "label": "Matchmaking & Matrimony Groups"
+                },
+                {
+                  "value": "Community Support & Donation",
+                  "label": "Community Support & Donation"
+                },
+                {
+                  "value": "Make Money Online",
+                  "label": "Make Money Online"
+                },
+                {
+                  "value": "Family Groups",
+                  "label": "Family Groups"
+                },
+                {
+                  "value": "Make New Friends",
+                  "label": "Make New Friends"
+                },
+                {
+                  "value": "Mutual Funds & SIP",
+                  "label": "Mutual Funds & SIP"
+                },
+                {
+                  "value": "Motivation",
+                  "label": "Motivation"
+                },
+                {
+                  "value": "Hobbies",
+                  "label": "Hobbies"
+                },
+                {
+                  "value": "Business",
+                  "label": "Business"
+                },
+                {
+                  "value": "Lifestyle",
+                  "label": "Lifestyle"
+                },
+                {
+                  "value": "Books, Arts & Creativity",
+                  "label": "Books, Arts & Creativity"
+                },
+                {
+                  "value": "Entertainment & Pop Culture",
+                  "label": "Entertainment & Pop Culture"
+                },
+                {
+                  "value": "Tech, AI, & Programming",
+                  "label": "Tech, AI, & Programming"
+                },
+                {
+                  "value": "Personal Development & Mindset",
+                  "label": "Personal Development & Mindset"
+                },
+                {
+                  "value": "Health, Beauty & Wellness",
+                  "label": "Health, Beauty & Wellness"
+                },
+                {
+                  "value": "Stock Market",
+                  "label": "Stock Market"
+                },
+                {
+                  "value": "Learn New Language",
+                  "label": "Learn New Language"
+                },
+                {
+                  "value": "Parenting & Kids Groups",
+                  "label": "Parenting & Kids Groups"
+                },
+                {
+                  "value": "Travelling & Backpacking Buddies",
+                  "label": "Travelling & Backpacking Buddies"
+                },
+                {
+                  "value": "Pet Owners & Animal Lovers",
+                  "label": "Pet Owners & Animal Lovers"
+                },
+                {
+                  "value": "Anime, Manga, & Cosplay Fans",
+                  "label": "Anime, Manga, & Cosplay Fans"
+                },
+                {
+                  "value": "Gaming",
+                  "label": "Gaming"
+                },
+                {
+                  "value": "Meme Sharing",
+                  "label": "Meme Sharing"
+                },
+                {
+                  "value": "Movie, & Web Series",
+                  "label": "Movie, & Web Series"
+                },
+                {
+                  "value": "Crypto, & NFT Groups",
+                  "label": "Crypto, & NFT Groups"
+                }
+              ]
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://tgfinder.net/submit",
+      "actual_url": "https://tgfinder.net/submit",
+      "forms": [
+        {
+          "id": null,
+          "action": "https://tgfinder.net/submit",
+          "method": "POST",
+          "fields": [
+            {
+              "name": "_token",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "type",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "channel",
+                  "label": "Channel"
+                },
+                {
+                  "value": "group",
+                  "label": "Group"
+                },
+                {
+                  "value": "bot",
+                  "label": "Bot"
+                },
+                {
+                  "value": "sticker",
+                  "label": "Sticker Set"
+                }
+              ]
+            },
+            {
+              "name": "title",
+              "id": "",
+              "type": "",
+              "placeholder": "Channel name",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "telegram_url",
+              "id": "",
+              "type": "",
+              "placeholder": "https://t.me/username",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "logo_url",
+              "id": "",
+              "type": "",
+              "placeholder": "https://example.com/logo.png",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "subscriber_count",
+              "id": "",
+              "type": "number",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "category_id",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "1",
+                  "label": "News"
+                },
+                {
+                  "value": "2",
+                  "label": "Crypto and Finance"
+                },
+                {
+                  "value": "3",
+                  "label": "Education"
+                },
+                {
+                  "value": "4",
+                  "label": "Technology"
+                },
+                {
+                  "value": "24",
+                  "label": "AI and Automation"
+                },
+                {
+                  "value": "25",
+                  "label": "Programming"
+                },
+                {
+                  "value": "26",
+                  "label": "Cybersecurity"
+                },
+                {
+                  "value": "5",
+                  "label": "Humor"
+                },
+                {
+                  "value": "27",
+                  "label": "Memes"
+                },
+                {
+                  "value": "6",
+                  "label": "Entertainment"
+                },
+                {
+                  "value": "28",
+                  "label": "Movies and Series"
+                },
+                {
+                  "value": "29",
+                  "label": "Anime"
+                },
+                {
+                  "value": "7",
+                  "label": "Sports"
+                },
+                {
+                  "value": "8",
+                  "label": "Gaming"
+                },
+                {
+                  "value": "30",
+                  "label": "Mobile Apps"
+                },
+                {
+                  "value": "9",
+                  "label": "Jobs and Career"
+                },
+                {
+                  "value": "31",
+                  "label": "Productivity"
+                },
+                {
+                  "value": "10",
+                  "label": "Shopping and Deals"
+                },
+                {
+                  "value": "32",
+                  "label": "Coupons and Deals"
+                },
+                {
+                  "value": "11",
+                  "label": "Health and Lifestyle"
+                },
+                {
+                  "value": "33",
+                  "label": "Dating and Relationships"
+                },
+                {
+                  "value": "34",
+                  "label": "Parenting"
+                },
+                {
+                  "value": "12",
+                  "label": "Travel"
+                },
+                {
+                  "value": "13",
+                  "label": "Food"
+                },
+                {
+                  "value": "14",
+                  "label": "Music"
+                },
+                {
+                  "value": "15",
+                  "label": "Art and Design"
+                },
+                {
+                  "value": "16",
+                  "label": "Books and Culture"
+                },
+                {
+                  "value": "17",
+                  "label": "Science"
+                },
+                {
+                  "value": "18",
+                  "label": "Marketing"
+                },
+                {
+                  "value": "19",
+                  "label": "E-Commerce"
+                },
+                {
+                  "value": "35",
+                  "label": "Real Estate"
+                },
+                {
+                  "value": "36",
+                  "label": "Airdrops"
+                },
+                {
+                  "value": "37",
+                  "label": "Forex and Trading"
+                },
+                {
+                  "value": "38",
+                  "label": "Web3"
+                },
+                {
+                  "value": "39",
+                  "label": "File Sharing"
+                },
+                {
+                  "value": "20",
+                  "label": "Local Communities"
+                },
+                {
+                  "value": "21",
+                  "label": "Bots"
+                },
+                {
+                  "value": "40",
+                  "label": "Telegram Tools"
+                },
+                {
+                  "value": "22",
+                  "label": "Groups"
+                },
+                {
+                  "value": "23",
+                  "label": "Other"
+                }
+              ]
+            },
+            {
+              "name": "country_id",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "57",
+                  "label": "Afghanistan"
+                },
+                {
+                  "value": "45",
+                  "label": "Algeria"
+                },
+                {
+                  "value": "72",
+                  "label": "Argentina"
+                },
+                {
+                  "value": "26",
+                  "label": "Armenia"
+                },
+                {
+                  "value": "67",
+                  "label": "Australia"
+                },
+                {
+                  "value": "12",
+                  "label": "Austria"
+                },
+                {
+                  "value": "24",
+                  "label": "Azerbaijan"
+                },
+                {
+                  "value": "35",
+                  "label": "Bahrain"
+                },
+                {
+                  "value": "54",
+                  "label": "Bangladesh"
+                },
+                {
+                  "value": "10",
+                  "label": "Belgium"
+                },
+                {
+                  "value": "71",
+                  "label": "Brazil"
+                },
+                {
+                  "value": "20",
+                  "label": "Bulgaria"
+                },
+                {
+                  "value": "69",
+                  "label": "Canada"
+                },
+                {
+                  "value": "73",
+                  "label": "Chile"
+                },
+                {
+                  "value": "58",
+                  "label": "China"
+                },
+                {
+                  "value": "74",
+                  "label": "Colombia"
+                },
+                {
+                  "value": "18",
+                  "label": "Czechia"
+                },
+                {
+                  "value": "15",
+                  "label": "Denmark"
+                },
+                {
+                  "value": "43",
+                  "label": "Egypt"
+                },
+                {
+                  "value": "50",
+                  "label": "Ethiopia"
+                },
+                {
+                  "value": "16",
+                  "label": "Finland"
+                },
+                {
+                  "value": "6",
+                  "label": "France"
+                },
+                {
+                  "value": "25",
+                  "label": "Georgia"
+                },
+                {
+                  "value": "5",
+                  "label": "Germany"
+                },
+                {
+                  "value": "51",
+                  "label": "Ghana"
+                },
+                {
+                  "value": "1",
+                  "label": "Global"
+                },
+                {
+                  "value": "21",
+                  "label": "Greece"
+                },
+                {
+                  "value": "52",
+                  "label": "India"
+                },
+                {
+                  "value": "61",
+                  "label": "Indonesia"
+                },
+                {
+                  "value": "38",
+                  "label": "Iran"
+                },
+                {
+                  "value": "39",
+                  "label": "Iraq"
+                },
+                {
+                  "value": "37",
+                  "label": "Israel"
+                },
+                {
+                  "value": "7",
+                  "label": "Italy"
+                },
+                {
+                  "value": "59",
+                  "label": "Japan"
+                },
+                {
+                  "value": "41",
+                  "label": "Jordan"
+                },
+                {
+                  "value": "27",
+                  "label": "Kazakhstan"
+                },
+                {
+                  "value": "49",
+                  "label": "Kenya"
+                },
+                {
+                  "value": "34",
+                  "label": "Kuwait"
+                },
+                {
+                  "value": "29",
+                  "label": "Kyrgyzstan"
+                },
+                {
+                  "value": "42",
+                  "label": "Lebanon"
+                },
+                {
+                  "value": "62",
+                  "label": "Malaysia"
+                },
+                {
+                  "value": "70",
+                  "label": "Mexico"
+                },
+                {
+                  "value": "44",
+                  "label": "Morocco"
+                },
+                {
+                  "value": "56",
+                  "label": "Nepal"
+                },
+                {
+                  "value": "9",
+                  "label": "Netherlands"
+                },
+                {
+                  "value": "68",
+                  "label": "New Zealand"
+                },
+                {
+                  "value": "47",
+                  "label": "Nigeria"
+                },
+                {
+                  "value": "14",
+                  "label": "Norway"
+                },
+                {
+                  "value": "36",
+                  "label": "Oman"
+                },
+                {
+                  "value": "53",
+                  "label": "Pakistan"
+                },
+                {
+                  "value": "75",
+                  "label": "Peru"
+                },
+                {
+                  "value": "66",
+                  "label": "Philippines"
+                },
+                {
+                  "value": "17",
+                  "label": "Poland"
+                },
+                {
+                  "value": "33",
+                  "label": "Qatar"
+                },
+                {
+                  "value": "19",
+                  "label": "Romania"
+                },
+                {
+                  "value": "23",
+                  "label": "Russia"
+                },
+                {
+                  "value": "32",
+                  "label": "Saudi Arabia"
+                },
+                {
+                  "value": "63",
+                  "label": "Singapore"
+                },
+                {
+                  "value": "48",
+                  "label": "South Africa"
+                },
+                {
+                  "value": "60",
+                  "label": "South Korea"
+                }
+              ]
+            },
+            {
+              "name": "language_id",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "39",
+                  "label": "Albanian"
+                },
+                {
+                  "value": "3",
+                  "label": "Arabic"
+                },
+                {
+                  "value": "22",
+                  "label": "Azerbaijani"
+                },
+                {
+                  "value": "14",
+                  "label": "Bengali"
+                },
+                {
+                  "value": "36",
+                  "label": "Bulgarian"
+                },
+                {
+                  "value": "19",
+                  "label": "Chinese"
+                },
+                {
+                  "value": "38",
+                  "label": "Croatian"
+                },
+                {
+                  "value": "34",
+                  "label": "Czech"
+                },
+                {
+                  "value": "32",
+                  "label": "Danish"
+                },
+                {
+                  "value": "25",
+                  "label": "Dutch"
+                },
+                {
+                  "value": "2",
+                  "label": "English"
+                },
+                {
+                  "value": "33",
+                  "label": "Finnish"
+                },
+                {
+                  "value": "6",
+                  "label": "French"
+                },
+                {
+                  "value": "4",
+                  "label": "German"
+                },
+                {
+                  "value": "28",
+                  "label": "Greek"
+                },
+                {
+                  "value": "29",
+                  "label": "Hebrew"
+                },
+                {
+                  "value": "12",
+                  "label": "Hindi"
+                },
+                {
+                  "value": "35",
+                  "label": "Hungarian"
+                },
+                {
+                  "value": "15",
+                  "label": "Indonesian"
+                },
+                {
+                  "value": "7",
+                  "label": "Italian"
+                },
+                {
+                  "value": "20",
+                  "label": "Japanese"
+                },
+                {
+                  "value": "24",
+                  "label": "Kazakh"
+                },
+                {
+                  "value": "21",
+                  "label": "Korean"
+                },
+                {
+                  "value": "16",
+                  "label": "Malay"
+                },
+                {
+                  "value": "40",
+                  "label": "Multilingual"
+                },
+                {
+                  "value": "31",
+                  "label": "Norwegian"
+                },
+                {
+                  "value": "11",
+                  "label": "Persian"
+                },
+                {
+                  "value": "26",
+                  "label": "Polish"
+                },
+                {
+                  "value": "8",
+                  "label": "Portuguese"
+                },
+                {
+                  "value": "27",
+                  "label": "Romanian"
+                },
+                {
+                  "value": "9",
+                  "label": "Russian"
+                },
+                {
+                  "value": "37",
+                  "label": "Serbian"
+                },
+                {
+                  "value": "5",
+                  "label": "Spanish"
+                },
+                {
+                  "value": "30",
+                  "label": "Swedish"
+                },
+                {
+                  "value": "18",
+                  "label": "Thai"
+                },
+                {
+                  "value": "1",
+                  "label": "Turkish"
+                },
+                {
+                  "value": "10",
+                  "label": "Ukrainian"
+                },
+                {
+                  "value": "13",
+                  "label": "Urdu"
+                },
+                {
+                  "value": "23",
+                  "label": "Uzbek"
+                },
+                {
+                  "value": "17",
+                  "label": "Vietnamese"
+                }
+              ]
+            },
+            {
+              "name": "owner_name",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "owner_email",
+              "id": "",
+              "type": "email",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "description",
+              "id": "",
+              "type": "",
+              "placeholder": "What does it share, who is it for, and why should people follow it?",
+              "tag": "textarea",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://telegramchannels.io/submit-channel",
+      "actual_url": "https://telegramchannels.io/submit-channel",
+      "forms": [
+        {
+          "id": null,
+          "action": null,
+          "method": "post",
+          "fields": [
+            {
+              "name": "channelLink",
+              "id": "channelLink",
+              "type": "text",
+              "placeholder": "t.me/yourchannel",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "channelDesc",
+              "id": "channelDesc",
+              "type": "",
+              "placeholder": "Read from Telegram — edit if you like",
+              "tag": "textarea",
+              "required": true
+            },
+            {
+              "name": "channelCategory",
+              "id": "channelCategory",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "",
+                  "label": "Choose a category…"
+                },
+                {
+                  "value": "cmt369v13000214onj57epyss",
+                  "label": "AI"
+                },
+                {
+                  "value": "cmt36aycf000l14onwdf6ee8y",
+                  "label": "Airdrops"
+                },
+                {
+                  "value": "cmt36a0zm000514onqvyouwim",
+                  "label": "Animals & Pets"
+                },
+                {
+                  "value": "cmt369qwl000014on0hus7ydx",
+                  "label": "Crypto"
+                },
+                {
+                  "value": "cmt36aueo000j14on08e63ad3",
+                  "label": "DeFi"
+                },
+                {
+                  "value": "cmt36ab7e000a14ong267mnqu",
+                  "label": "Education"
+                },
+                {
+                  "value": "cmt36a95w000914onz3cx9djx",
+                  "label": "Entertainment"
+                },
+                {
+                  "value": "cmt36a768000814oniwoor3fa",
+                  "label": "Finance"
+                },
+                {
+                  "value": "cmt369wze000314onkjn8ebw2",
+                  "label": "Football"
+                },
+                {
+                  "value": "cmt36a38y000614ony65od2ao",
+                  "label": "Gaming"
+                },
+                {
+                  "value": "cmuqsia570000qx6ugdj6uz3u",
+                  "label": "General"
+                },
+                {
+                  "value": "cmt36ajek000e14oniq4whf6b",
+                  "label": "Health"
+                },
+                {
+                  "value": "cmt36ahe9000d14onzkzju9cu",
+                  "label": "Lifestyle"
+                },
+                {
+                  "value": "cmt36asfw000i14onftd1wrt6",
+                  "label": "Local Communities"
+                },
+                {
+                  "value": "cmt36afeo000c14on2tr26ab8",
+                  "label": "Memes"
+                },
+                {
+                  "value": "cmt36ansa000g14onvxjxyypi",
+                  "label": "Movies"
+                },
+                {
+                  "value": "cmt36alq0000f14onmyh37wiv",
+                  "label": "Music"
+                },
+                {
+                  "value": "cmt36awdb000k14on50smvrrv",
+                  "label": "NFTs"
+                },
+                {
+                  "value": "cmt36a57k000714onwaph1rc0",
+                  "label": "News"
+                },
+                {
+                  "value": "cmt369yzq000414onauhmn76n",
+                  "label": "Sports"
+                },
+                {
+                  "value": "cmt36ad6n000b14onlm3biodu",
+                  "label": "Technology"
+                },
+                {
+                  "value": "cmt369t0t000114onfaj0x6d3",
+                  "label": "Trading"
+                },
+                {
+                  "value": "cmt36apu7000h14ongvv26llq",
+                  "label": "Travel"
+                }
+              ]
+            },
+            {
+              "name": "channelType",
+              "id": "channelType",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": false,
+              "options": [
+                {
+                  "value": "CHANNEL",
+                  "label": "Channel"
+                },
+                {
+                  "value": "GROUP",
+                  "label": "Group"
+                },
+                {
+                  "value": "BOT",
+                  "label": "Bot"
+                }
+              ]
+            },
+            {
+              "name": "channelLanguage",
+              "id": "channelLanguage",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": false,
+              "options": [
+                {
+                  "value": "en",
+                  "label": "English"
+                },
+                {
+                  "value": "fa",
+                  "label": "Persian / فارسی"
+                },
+                {
+                  "value": "ar",
+                  "label": "Arabic"
+                },
+                {
+                  "value": "ru",
+                  "label": "Russian"
+                },
+                {
+                  "value": "uk",
+                  "label": "Ukrainian"
+                },
+                {
+                  "value": "tr",
+                  "label": "Turkish"
+                },
+                {
+                  "value": "es",
+                  "label": "Spanish"
+                },
+                {
+                  "value": "zh",
+                  "label": "Chinese"
+                },
+                {
+                  "value": "hi",
+                  "label": "Hindi"
+                },
+                {
+                  "value": "de",
+                  "label": "German"
+                },
+                {
+                  "value": "fr",
+                  "label": "French"
+                },
+                {
+                  "value": "it",
+                  "label": "Italian"
+                },
+                {
+                  "value": "pt",
+                  "label": "Portuguese"
+                }
+              ]
+            },
+            {
+              "name": "channelName",
+              "id": "channelName",
+              "type": "text",
+              "placeholder": "Only if we cannot fetch it",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://tg-hub.com/submit-telegram-channel-and-group-links/",
+      "actual_url": "https://tg-hub.com/submit-telegram-channel-and-group-links/",
+      "forms": [
+        {
+          "id": null,
+          "action": null,
+          "method": "post",
+          "fields": [
+            {
+              "name": "post_id",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "form_id",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "referer_title",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "queried_id",
+              "id": "",
+              "type": "hidden",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "form_fields[name]",
+              "id": "form-field-name",
+              "type": "text",
+              "placeholder": "Name",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "form_fields[field_b58c02b]",
+              "id": "form-field-field_b58c02b",
+              "type": "text",
+              "placeholder": "Link",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "form_fields[field_190bc79]",
+              "id": "form-field-field_190bc79",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "Digital Marketing",
+                  "label": "Digital Marketing"
+                },
+                {
+                  "value": "Games and Apps",
+                  "label": "Games and Apps"
+                },
+                {
+                  "value": "Movies & Web Series",
+                  "label": "Movies & Web Series"
+                },
+                {
+                  "value": "News",
+                  "label": "News"
+                },
+                {
+                  "value": "Education",
+                  "label": "Education"
+                },
+                {
+                  "value": "Business",
+                  "label": "Business"
+                },
+                {
+                  "value": "Finance",
+                  "label": "Finance"
+                },
+                {
+                  "value": "Technology",
+                  "label": "Technology"
+                },
+                {
+                  "value": "Entertainment and Funny",
+                  "label": "Entertainment and Funny"
+                },
+                {
+                  "value": "Music",
+                  "label": "Music"
+                },
+                {
+                  "value": "Health and Fitness",
+                  "label": "Health and Fitness"
+                },
+                {
+                  "value": "Sports",
+                  "label": "Sports"
+                },
+                {
+                  "value": "Science",
+                  "label": "Science"
+                },
+                {
+                  "value": "Books",
+                  "label": "Books"
+                },
+                {
+                  "value": "Fashion & Beauty",
+                  "label": "Fashion & Beauty"
+                },
+                {
+                  "value": "Food",
+                  "label": "Food"
+                },
+                {
+                  "value": "Jobs",
+                  "label": "Jobs"
+                },
+                {
+                  "value": "Travel",
+                  "label": "Travel"
+                },
+                {
+                  "value": "Automobile",
+                  "label": "Automobile"
+                },
+                {
+                  "value": "Art and Photos",
+                  "label": "Art and Photos"
+                }
+              ]
+            },
+            {
+              "name": "form_fields[field_722b71e]",
+              "id": "form-field-field_722b71e",
+              "type": "text",
+              "placeholder": "e.g., English",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "form_fields[field_58aeaf0]",
+              "id": "form-field-field_58aeaf0",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "Afghanistan",
+                  "label": "Afghanistan"
+                },
+                {
+                  "value": "Albania",
+                  "label": "Albania"
+                },
+                {
+                  "value": "Algeria",
+                  "label": "Algeria"
+                },
+                {
+                  "value": "Andorra",
+                  "label": "Andorra"
+                },
+                {
+                  "value": "Angola",
+                  "label": "Angola"
+                },
+                {
+                  "value": "Antigua and Barbuda",
+                  "label": "Antigua and Barbuda"
+                },
+                {
+                  "value": "Argentina",
+                  "label": "Argentina"
+                },
+                {
+                  "value": "Armenia",
+                  "label": "Armenia"
+                },
+                {
+                  "value": "Australia",
+                  "label": "Australia"
+                },
+                {
+                  "value": "Austria",
+                  "label": "Austria"
+                },
+                {
+                  "value": "Azerbaijan",
+                  "label": "Azerbaijan"
+                },
+                {
+                  "value": "Bahamas",
+                  "label": "Bahamas"
+                },
+                {
+                  "value": "Bahrain",
+                  "label": "Bahrain"
+                },
+                {
+                  "value": "Bangladesh",
+                  "label": "Bangladesh"
+                },
+                {
+                  "value": "Barbados",
+                  "label": "Barbados"
+                },
+                {
+                  "value": "Belarus",
+                  "label": "Belarus"
+                },
+                {
+                  "value": "Belgium",
+                  "label": "Belgium"
+                },
+                {
+                  "value": "Belize",
+                  "label": "Belize"
+                },
+                {
+                  "value": "Benin",
+                  "label": "Benin"
+                },
+                {
+                  "value": "Bhutan",
+                  "label": "Bhutan"
+                },
+                {
+                  "value": "Bolivia",
+                  "label": "Bolivia"
+                },
+                {
+                  "value": "Bosnia and Herzegovina",
+                  "label": "Bosnia and Herzegovina"
+                },
+                {
+                  "value": "Botswana",
+                  "label": "Botswana"
+                },
+                {
+                  "value": "Brazil",
+                  "label": "Brazil"
+                },
+                {
+                  "value": "Brunei",
+                  "label": "Brunei"
+                },
+                {
+                  "value": "Bulgaria",
+                  "label": "Bulgaria"
+                },
+                {
+                  "value": "Burkina Faso",
+                  "label": "Burkina Faso"
+                },
+                {
+                  "value": "Burundi",
+                  "label": "Burundi"
+                },
+                {
+                  "value": "Cabo Verde",
+                  "label": "Cabo Verde"
+                },
+                {
+                  "value": "Cambodia",
+                  "label": "Cambodia"
+                },
+                {
+                  "value": "Cameroon",
+                  "label": "Cameroon"
+                },
+                {
+                  "value": "Canada",
+                  "label": "Canada"
+                },
+                {
+                  "value": "Central African Republic",
+                  "label": "Central African Republic"
+                },
+                {
+                  "value": "Chad",
+                  "label": "Chad"
+                },
+                {
+                  "value": "Chile",
+                  "label": "Chile"
+                },
+                {
+                  "value": "China",
+                  "label": "China"
+                },
+                {
+                  "value": "Colombia",
+                  "label": "Colombia"
+                },
+                {
+                  "value": "Comoros",
+                  "label": "Comoros"
+                },
+                {
+                  "value": "Congo",
+                  "label": "Congo"
+                },
+                {
+                  "value": "Costa Rica",
+                  "label": "Costa Rica"
+                },
+                {
+                  "value": "Côte d’Ivoire",
+                  "label": "Côte d’Ivoire"
+                },
+                {
+                  "value": "Croatia",
+                  "label": "Croatia"
+                },
+                {
+                  "value": "Cuba",
+                  "label": "Cuba"
+                },
+                {
+                  "value": "Cyprus",
+                  "label": "Cyprus"
+                },
+                {
+                  "value": "Czech Republic",
+                  "label": "Czech Republic"
+                },
+                {
+                  "value": "Denmark",
+                  "label": "Denmark"
+                },
+                {
+                  "value": "Djibouti",
+                  "label": "Djibouti"
+                },
+                {
+                  "value": "Dominica",
+                  "label": "Dominica"
+                },
+                {
+                  "value": "Dominican Republic",
+                  "label": "Dominican Republic"
+                },
+                {
+                  "value": "Ecuador",
+                  "label": "Ecuador"
+                },
+                {
+                  "value": "Egypt",
+                  "label": "Egypt"
+                },
+                {
+                  "value": "El Salvador",
+                  "label": "El Salvador"
+                },
+                {
+                  "value": "Equatorial Guinea",
+                  "label": "Equatorial Guinea"
+                },
+                {
+                  "value": "Eritrea",
+                  "label": "Eritrea"
+                },
+                {
+                  "value": "Estonia",
+                  "label": "Estonia"
+                },
+                {
+                  "value": "Eswatini",
+                  "label": "Eswatini"
+                },
+                {
+                  "value": "Ethiopia",
+                  "label": "Ethiopia"
+                },
+                {
+                  "value": "Fiji",
+                  "label": "Fiji"
+                },
+                {
+                  "value": "Finland",
+                  "label": "Finland"
+                },
+                {
+                  "value": "France",
+                  "label": "France"
+                }
+              ]
+            },
+            {
+              "name": "form_fields[email]",
+              "id": "form-field-email",
+              "type": "email",
+              "placeholder": "Email",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "form_fields[message]",
+              "id": "form-field-message",
+              "type": "",
+              "placeholder": "About ",
+              "tag": "textarea",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://www.telegramradar.com/en/submit",
+      "actual_url": "https://www.telegramradar.com/en/submit",
+      "forms": [
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "",
+              "type": "",
+              "placeholder": "@channelname or t.me/channel",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://tglinks.net/en/submit",
+      "actual_url": "https://tglinks.net/en/submit/",
+      "forms": [
+        {
+          "id": null,
+          "action": "mailto:hello@tglinks.net?subject=Catalog%20Submission",
+          "method": "post",
+          "fields": [
+            {
+              "name": "telegram",
+              "id": "",
+              "type": "text",
+              "placeholder": "https://t.me/example or @example",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "category",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "",
+                  "label": "Select a category..."
+                },
+                {
+                  "value": "crypto",
+                  "label": "Crypto"
+                },
+                {
+                  "value": "finance",
+                  "label": "Finance"
+                },
+                {
+                  "value": "tech_ai",
+                  "label": "Tech & AI"
+                },
+                {
+                  "value": "programming",
+                  "label": "Programming"
+                },
+                {
+                  "value": "business_marketing",
+                  "label": "Business & Marketing"
+                },
+                {
+                  "value": "ecommerce_deals",
+                  "label": "Deals"
+                },
+                {
+                  "value": "education",
+                  "label": "Education"
+                },
+                {
+                  "value": "jobs_freelance",
+                  "label": "Jobs & Freelance"
+                },
+                {
+                  "value": "gaming",
+                  "label": "Gaming"
+                },
+                {
+                  "value": "anime_comics",
+                  "label": "Anime & Comics"
+                },
+                {
+                  "value": "entertainment",
+                  "label": "Entertainment"
+                },
+                {
+                  "value": "memes_humor",
+                  "label": "Memes & Humor"
+                },
+                {
+                  "value": "news_media",
+                  "label": "News & Media"
+                },
+                {
+                  "value": "sports",
+                  "label": "Sports"
+                },
+                {
+                  "value": "politics",
+                  "label": "Politics"
+                },
+                {
+                  "value": "religion",
+                  "label": "Religion"
+                },
+                {
+                  "value": "local_community",
+                  "label": "Local Communities"
+                },
+                {
+                  "value": "marketplace_buy_sell",
+                  "label": "Marketplace"
+                },
+                {
+                  "value": "travel",
+                  "label": "Travel"
+                },
+                {
+                  "value": "health_fitness",
+                  "label": "Health & Fitness"
+                },
+                {
+                  "value": "music",
+                  "label": "Music"
+                },
+                {
+                  "value": "movies_series",
+                  "label": "Movies & Series"
+                },
+                {
+                  "value": "relationships_dating",
+                  "label": "Dating"
+                }
+              ]
+            },
+            {
+              "name": "type",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": false,
+              "options": [
+                {
+                  "value": "group",
+                  "label": "Group"
+                },
+                {
+                  "value": "channel",
+                  "label": "Channel"
+                }
+              ]
+            },
+            {
+              "name": "ownership",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": false,
+              "options": [
+                {
+                  "value": "",
+                  "label": "Yes"
+                },
+                {
+                  "value": "",
+                  "label": "No"
+                }
+              ]
+            },
+            {
+              "name": "description",
+              "id": "",
+              "type": "",
+              "placeholder": "What is this community about? Who is it for? Why does it belong in this category?",
+              "tag": "textarea",
+              "required": true
+            },
+            {
+              "name": "owner_contact",
+              "id": "",
+              "type": "email",
+              "placeholder": "name@example.com",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "language",
+              "id": "",
+              "type": "text",
+              "placeholder": "English, Portuguese, Spanish...",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "notes",
+              "id": "",
+              "type": "",
+              "placeholder": "Any context about the audience, activity level, or why this listing should be reviewed.",
+              "tag": "textarea",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://www.telegramhub.app/submit",
+      "actual_url": "https://www.telegramhub.app/submit",
+      "forms": [
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "",
+              "type": "text",
+              "placeholder": "Search channels, groups & bots...",
+              "tag": "input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "",
+              "type": "email",
+              "placeholder": "you@example.com",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        },
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "website",
+              "id": "",
+              "type": "text",
+              "placeholder": "",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "text",
+              "placeholder": "https://t.me/example, https://t.me/example/app, or @example",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "text",
+              "placeholder": "Channel, Group, Bot, or Mini App name",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "",
+              "placeholder": "Brief description (max 200 chars)",
+              "tag": "textarea",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "",
+              "placeholder": "",
+              "tag": "select",
+              "required": true,
+              "options": [
+                {
+                  "value": "",
+                  "label": "Select a category"
+                },
+                {
+                  "value": "crypto",
+                  "label": "💰 Crypto"
+                },
+                {
+                  "value": "ai-tech",
+                  "label": "🤖 AI & Tech"
+                },
+                {
+                  "value": "news-media",
+                  "label": "📰 News & Media"
+                },
+                {
+                  "value": "entertainment",
+                  "label": "🎬 Entertainment"
+                },
+                {
+                  "value": "education",
+                  "label": "📚 Education"
+                },
+                {
+                  "value": "gaming",
+                  "label": "🎮 Gaming"
+                },
+                {
+                  "value": "business",
+                  "label": "💼 Business"
+                },
+                {
+                  "value": "lifestyle",
+                  "label": "🌟 Lifestyle"
+                },
+                {
+                  "value": "tools-utilities",
+                  "label": "🔧 Tools & Utilities"
+                },
+                {
+                  "value": "social",
+                  "label": "👥 Social"
+                },
+                {
+                  "value": "music",
+                  "label": "🎵 Music"
+                },
+                {
+                  "value": "sports",
+                  "label": "⚽ Sports"
+                }
+              ]
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "text",
+              "placeholder": "Comma-separated, max 5 (e.g. trading, signals, alerts)",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "email",
+              "placeholder": "For listing notifications",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        },
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "",
+              "type": "email",
+              "placeholder": "you@example.com",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://televerse.click/submit",
+      "actual_url": "https://televerse.click/login?next=/submit",
+      "forms": [
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "",
+              "type": "",
+              "placeholder": "Search...",
+              "tag": "input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "email",
+              "type": "email",
+              "placeholder": "you@example.com",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "password",
+              "type": "password",
+              "placeholder": "Your password",
+              "tag": "input",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "button",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        },
+        {
+          "id": null,
+          "action": null,
+          "method": null,
+          "fields": [
+            {
+              "name": "",
+              "id": "",
+              "type": "email",
+              "placeholder": "you@example.com",
+              "tag": "input",
+              "required": true
+            },
+            {
+              "name": "",
+              "id": "",
+              "type": "submit",
+              "placeholder": "",
+              "tag": "button",
+              "required": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submissions_attempted": 0
+}
