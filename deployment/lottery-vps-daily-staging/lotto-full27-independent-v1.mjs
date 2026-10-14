@@ -142,7 +142,7 @@ export function predictLottoFull27({predictionDate,draws,region='mb',station='XS
   };
   const rank=group=>group.reduce((best,n)=>{
     if(best===null)return n;
-    const a=rank(n),b=rank(best);
+    const a=ranked(n),b=ranked(best);
     return a>b+1e-12||Math.abs(a-b)<=1e-12&&n<best?n:best;
   },null);
   const winner=rank(usable),doubleWinner=rank(doubles);
