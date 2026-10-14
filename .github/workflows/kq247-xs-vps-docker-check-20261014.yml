@@ -1,0 +1,23 @@
+name: KQ247 XS staging Docker validation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-docker-check-20261014.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Test staging JS from existing Node Docker image
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --check /stage/independent500.mjs'
+          echo XS_STAGING_DOCKER_SYNTAX_PASS
