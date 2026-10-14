@@ -30,6 +30,13 @@ SEED_LINKS = [
     ("lottery", "https://telejoiner.com/invite/1004320899120"),
 ]
 DIRECTORIES = [
+    # Prioritize Vietnam-facing sources before the generic international pool.
+    # These are discovery checks; submissions are never made without validation.
+    ("TeleGroups Vietnam", "https://telegroups.org/submit"),
+    ("TgDio Vietnamese", "https://vi.tgdio.com/groups"),
+    ("TgramLink Vietnam", "https://tgramlink.com/vi"),
+    ("Telegram Groups Vietnam", "https://www.telegram-groups.com/dashboard/submit/"),
+    ("TGDen Vietnam", "https://tgden.com/en/chats"),
     ("TGMania", "https://tgmania.com/submit"),
     ("TopTGLinks", "https://toptglinks.com/submit"),
     ("Groupsor", "https://groupssor.com/submit"),
