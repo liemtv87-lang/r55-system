@@ -1,0 +1,60 @@
+name: KQ247 35 stations isolated one-draw full position staging proof
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-3regions-one-draw-35station-stage.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Test all 35 MT/MN station one-draw engines plus MB without touching live site
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes \
+            deployment/lottery-vps-daily-staging/one-draw-all-positions-per-station-v1.mjs \
+            deployment/lottery-vps-daily-staging/mtmn-station-weekly-draw-days.json \
+            deployment/lottery-vps-daily-staging/mtmn-35-latest-each-station-one-draw-verified.json \
+            root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'docker run -i --rm --network none --read-only --cpus 1.6 --memory 500m -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module' <<'JS'
+          import fs from 'node:fs';
+          import {predictStationFromOneDraw} from '/stage/one-draw-all-positions-per-station-v1.mjs';
+          const data=JSON.parse(fs.readFileSync('/stage/mtmn-35-latest-each-station-one-draw-verified.json','utf8'));
+          const schedule=JSON.parse(fs.readFileSync('/stage/mtmn-station-weekly-draw-days.json','utf8')).stationWeekdays;
+          const history=JSON.parse(fs.readFileSync('/stage/xsmb-history-live.json','utf8'));
+          const mb=history.find(x=>x.draw_date==='2026-10-14'&&x.region==='mb'&&x.station==='XSMB');
+          if(!mb)throw Error('MISSING_XSMB_14_OCT');
+          const test=[mb,...data.draws];if(test.length!==36)throw Error('MISSING_STATIONS');
+          let totals={mb:0,mt:0,mn:0};const started=Date.now();
+          for(const x of test){
+            const t=Date.now(),pred=predictStationFromOneDraw(x,{weeklySchedule:schedule});
+            if(pred.region!==x.region||pred.station!==x.station||pred.sourceDate!==x.draw_date||
+              pred.sourceDraws!==1||pred.otherStationDataUsed!==false||
+              pred.backtest500Used!==false||pred.coverage.sourcePrizes!==(x.region==='mb'?27:18)||
+              pred.coverage.coveredPositions!==pred.coverage.digitPositions||
+              pred.coverage.totalBridgeEvaluations<1_000_000||
+              pred.lotto3.length!==3||pred.doubles.length!==2||
+              pred.de.dan50.length!==50||pred.de.dan60.length!==60||
+              pred.de.dan75.length!==75||pred.de.three_digit.length!==500||
+              pred.de.three_digit.some(c=>!pred.de.dan75.includes(c.slice(-2))))throw Error('INVALID_STATION_PROOF_'+x.station);
+            totals[x.region]++;
+            console.log('STATION_ONE_DRAW_FULL_POSITION_PASS',JSON.stringify({
+              region:x.region,station:x.station,source:x.draw_date,target:pred.predictionDate,
+              fullPrizes:pred.coverage.sourcePrizes,digitPositions:pred.coverage.digitPositions,
+              bridgeEvaluations:pred.coverage.totalBridgeEvaluations,lotto3:pred.lotto3,doubles:pred.doubles,
+              excludedHead:pred.de.hard_excluded_head,excludedHundred:pred.de.three_digit_hard_excluded_hundred,
+              ms:Date.now()-t
+            }));
+          }
+          if(totals.mb!==1||totals.mt!==14||totals.mn!==21)throw Error('NOT_ALL_STATIONS_TESTED');
+          console.log('ONE_DRAW_36_STATION_STAGING_PASS',JSON.stringify({totals,elapsedMs:Date.now()-started}));
+          JS
