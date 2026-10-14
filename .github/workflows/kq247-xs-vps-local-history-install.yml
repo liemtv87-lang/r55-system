@@ -1,0 +1,59 @@
+name: KQ247 XS VPS local 505-draw database install
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-local-history-install.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install isolated schema and verified 505 XSMB draws without touching old tables
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          base=/opt/kq247/lottery-daily-staging
+          python3 - <<'PY'
+          import csv,json,pathlib,datetime
+          base=pathlib.Path('/opt/kq247/lottery-daily-staging')
+          original=json.loads((base/'xsmb-505-actual-through-20261014.json').read_text())
+          if len(original)!=505:raise SystemExit('expected_505_actual_draws')
+          dates=set()
+          for row in original:
+            d=row.get('draw_date')
+            datetime.date.fromisoformat(d)
+            if d in dates:raise SystemExit('duplicate_history_date')
+            dates.add(d)
+            if row.get('region')!='mb' or row.get('station')!='XSMB':raise SystemExit('foreign_station_row')
+            nums=row.get('all2')
+            if not isinstance(nums,list) or len(nums)!=27 or any(not isinstance(n,str) or len(n)!=2 or not n.isdecimal() for n in nums):raise SystemExit('invalid_draw_length')
+          if max(dates)!='2026-10-14':raise SystemExit('stale_source_draw_date')
+          target=base/'xsmb-505-actual.csv'
+          with target.open('w',newline='') as f:
+            writer=csv.writer(f)
+            for x in original:
+              writer.writerow([x['region'],x['station'],x['draw_date'],json.dumps(x['all2'],ensure_ascii=False,separators=(',',':')),'',x.get('source','verified_archive'),''])
+          print('VPS_SOURCE_HISTORY_VALIDATED count=505 latest='+max(dates))
+          PY
+          echo VPS_SCHEMA_INSTALL_START
+          docker exec -i kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$base/schema.sql"
+          existing="$(docker exec kq247-r55-postgres sh -c 'psql -X -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT count(*) FROM kq247_xs_vps.actual_draws WHERE region=chr(109)||chr(98);"' | tr -d '[:space:]')"
+          echo VPS_XSMB_HISTORY_EXISTING_ROWS="$existing"
+          if [ "$existing" = 0 ]; then
+            docker exec -i kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\copy kq247_xs_vps.actual_draws(region,station,draw_date,all2,full_results,source,source_url) FROM STDIN WITH (FORMAT csv)"' < "$base/xsmb-505-actual.csv"
+          elif [ "$existing" != 505 ]; then
+            echo HISTORY_PARTIAL_OR_CONFLICT; exit 11
+          fi
+          docker exec kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*),min(draw_date),max(draw_date),count(*) FILTER (WHERE jsonb_array_length(all2) = 27) FROM kq247_xs_vps.actual_draws;"'
+          echo VPS_XSMB_LOCAL_POSTGRES_STAGED_OK
+          REMOTE
