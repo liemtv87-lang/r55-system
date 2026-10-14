@@ -136,7 +136,7 @@ async function run(){
   for(let i=0;i<records.length;i+=8){
     const batch=records.slice(i,i+8);
     const histories=await Promise.all(batch.map(async m=>{
-      try{return {m,h:await V.history(source.base,m.bongdaluId),err:null}}
+      try{return {m,h:await V.history(source.base,m.bongdaluId,m.ts),err:null}}
       catch(e){return {m,h:null,err:String(e?.message||e).slice(0,100)}}
     }));
     for(const {m,h,err} of histories){
