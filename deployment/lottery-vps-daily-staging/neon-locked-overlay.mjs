@@ -49,7 +49,7 @@ function check(r,region,day){
  if(!p.dan50.every(x=>p.dan60.includes(x))||!p.dan60.every(x=>p.dan75.includes(x))||
  p.three_digit.some(x=>!p.dan75.includes(x.slice(-2))||x[0]===p.hardExcludedHundred)||
  p.dan75.some(x=>x[0]===p.hardExcludedHead)||
- [...p.lotto3,...p.doubles].some(x=>(p.audit.excludedNumbers||[]).includes(x)))
+ [...p.lotto3,...p.doubles].some(x=>(p.audit?.excludedNumbers||[]).includes(x)))
  throw Error('INVALID_HARD_EXCLUSION_'+r.station);
  return p;
 }
