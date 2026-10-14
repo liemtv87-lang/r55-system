@@ -1,12 +1,11 @@
 {
-  "audited_utc": "2026-10-14T14:23:50.885454+00:00",
+  "audited_utc": "2026-10-14T14:26:35.511313+00:00",
   "discovery_worker_running": true,
   "opt_in_submitter_running": true,
   "discovery_code_sha256": "f9dfacd6fa0e499a5e6f06d1cc34824949662bb125120b8d3e81b63aa6fd6bcc",
-  "poster_code_sha256": "7c65f2dbabe10ebd866ae61c3505b99e8086d84abd67d598425aff714068319c",
+  "poster_code_sha256": "97bc93e4ee3ef69f281321f0ab24484f86bcef72818f456798fd45307ae6cda9",
   "discovery": {
     "updated_utc": "2026-10-14T14:18:44.091953+00:00",
-    "updated_at_utc": null,
     "url_records_actually_read_total": 0,
     "inventory_lines_read_total": 52,
     "inventory_files_count": 1,
@@ -19,25 +18,171 @@
       "no_form": 9,
       "unavailable": 16
     },
-    "counts": null,
-    "verified_new_public_links": null
+    "candidate_sites": [
+      "buyinoffer.com",
+      "groupmandi.com",
+      "groupssor.com",
+      "groupswa.com",
+      "search-t.me",
+      "spamfixer.ru",
+      "telegradia.com",
+      "telegram-group.com",
+      "telegramchannels.io",
+      "telegramgroup.arkservices.in",
+      "telegramhub.app",
+      "telegramhub.org",
+      "telekit.link",
+      "tgcompass.com",
+      "tgden.com",
+      "tgfind.net",
+      "tgfinder.net",
+      "togather.in",
+      "toptglinks.com"
+    ]
   },
   "submissions": {
     "updated_utc": null,
-    "updated_at_utc": "2026-10-14T14:23:31.825362+00:00",
-    "url_records_actually_read_total": null,
-    "inventory_lines_read_total": null,
-    "inventory_files_count": null,
-    "unique_hosts_discovered": null,
-    "http_hosts_checked_this_run": null,
-    "hosts_by_status": null,
+    "updated_at_utc": "2026-10-14T14:26:32.138033+00:00",
     "counts": {
-      "captcha": 1,
-      "no_eligible_form": 10,
+      "captcha": 2,
+      "no_eligible_form": 16,
+      "required_option_not_available": 2,
       "submitted_pending_review": 2,
       "unavailable": 4
     },
-    "verified_new_public_links": 0
+    "verified_new_public_links": 0,
+    "recent_attempts": [
+      {
+        "host": "togather.in",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "togather.in",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "tgcompass.com",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "tgcompass.com",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telekit.link",
+        "group": "lottery",
+        "status": "required_option_not_available"
+      },
+      {
+        "host": "telekit.link",
+        "group": "football",
+        "status": "required_option_not_available"
+      },
+      {
+        "host": "telegramhub.app",
+        "group": "lottery",
+        "status": "captcha"
+      },
+      {
+        "host": "telegramhub.app",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telegramgroup.arkservices.in",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telegramgroup.arkservices.in",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telegramchannels.io",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telegramchannels.io",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telegradia.com",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "telegradia.com",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "spamfixer.ru",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "spamfixer.ru",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "search-t.me",
+        "group": "lottery",
+        "status": "unavailable"
+      },
+      {
+        "host": "search-t.me",
+        "group": "football",
+        "status": "unavailable"
+      },
+      {
+        "host": "groupswa.com",
+        "group": "lottery",
+        "status": "submitted_pending_review"
+      },
+      {
+        "host": "groupswa.com",
+        "group": "football",
+        "status": "submitted_pending_review"
+      },
+      {
+        "host": "en.search-t.me",
+        "group": "lottery",
+        "status": "unavailable"
+      },
+      {
+        "host": "en.search-t.me",
+        "group": "football",
+        "status": "unavailable"
+      },
+      {
+        "host": "telegrmgrouplink.com",
+        "group": "lottery",
+        "status": "captcha"
+      },
+      {
+        "host": "telegrmgrouplink.com",
+        "group": "football",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "groupssor.com",
+        "group": "lottery",
+        "status": "no_eligible_form"
+      },
+      {
+        "host": "groupssor.com",
+        "group": "football",
+        "status": "no_eligible_form"
+      }
+    ]
   },
   "note": "Only actual public listings count as verified. No backlink total is inferred from scan count."
 }
