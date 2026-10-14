@@ -1,0 +1,24 @@
+name: KQ247 XSMB backfill all 27 prizes into VPS historical data
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-all27-history-stage-20261015.yml']
+permissions:
+  contents: read
+jobs:
+  verify-and-backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -qq -y sshpass
+      - name: Verify all 27 XSMB prizes and attach to private VPS staging history
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/xsmb-505-all27-prizes-20261014.json deployment/lottery-vps-daily-staging/attach-all27.py root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'python3 /opt/kq247/lottery-daily-staging/attach-all27.py'
