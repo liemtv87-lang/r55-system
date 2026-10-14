@@ -1,0 +1,47 @@
+name: R55 Inspect Bongdalu Team Profile Sources
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-team-profile-link-inspect-20261015.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Trace team-profile links without changing live R55
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from './lib/bongdaluR55.js';
+          const r=await resolveBongdaluBase();
+          const html=await getBongdaluText(r.base,'match/h2h-3102824','text/html',15000);
+          for(const pattern of ['openFbTeam','function openFbTeam','team/80597','80597','initMatchListShow']){
+           let ix=html.indexOf(pattern);console.log('R55_HTML_PATTERN',JSON.stringify({pattern,index:ix,context:ix>=0?html.slice(Math.max(0,ix-300),ix+380):null}));
+          }
+          const scripts=[...html.matchAll(/<script[^>]+src=['"]([^'"]+)['"]/gi)].map(x=>x[1]);
+          console.log('R55_PAGE_SCRIPT_SOURCES',JSON.stringify(scripts.slice(-40)));
+          for(const src of scripts.filter(x=>/team|h2h|match|common|global/i.test(x)).slice(-14)){
+            try{
+              const url=new URL(src,r.base);
+              if(url.hostname!==new URL(r.base).hostname)continue;
+              const path=url.pathname+url.search;
+              const js=await getBongdaluText(r.base,path,'*/*',7000);
+              const i=js.indexOf('openFbTeam');
+              if(i>=0)console.log('R55_TEAM_PROFILE_FUNCTION',JSON.stringify({script:src,near:js.slice(Math.max(0,i-180),i+800)}));
+            }catch(e){console.log('R55_SCRIPT_ERROR',JSON.stringify({script:src,error:String(e.message||e).slice(0,110)}))}
+          }
+          for(const path of ['team/80597','football/team/80597','team/summary-80597','team/80877']){
+            try{const html=await getBongdaluText(r.base,path,'text/html',7500);
+              console.log('R55_TEAM_URL',JSON.stringify({path,bytes:html.length,title:html.slice(html.indexOf('<title'),html.indexOf('</title>')+8).slice(0,170),
+                hasForm:html.includes('80597')||html.includes('80877'),hasHData:html.includes('h_data'),hasRows:html.includes('tr1_')}));
+            }catch(e){console.log('R55_TEAM_URL_ERROR',JSON.stringify({path,error:String(e.message||e).slice(0,100)}))}
+          }
+          JS
