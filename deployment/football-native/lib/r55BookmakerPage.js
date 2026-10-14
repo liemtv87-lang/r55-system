@@ -1,3 +1,11 @@
+// Bongdalu may return a 200 HTML security challenge for an odds page.
+// It is not source data and must never be counted as a successful scrape.
+export function isBongdaluSecurityChallenge(html){
+ const s=String(html||"");
+ return /<title[^>]*>\s*(?:Security Verification|Just a moment\.{0,3}|Access Denied)\s*<\/title>/i.test(s)||
+   /(?:cf-chl-|challenge-platform|verify you are human|security verification)/i.test(s.slice(0,15000))&&
+     !/<tr\b[^>]*\bid=["']tr_o_/i.test(s);
+}
 // A HTTP 200 can be a CDN/bot-protection challenge rather than Bongdalu odds.
 // Never report such a response as a successful odds-comparison collection.
 export function oddsComparisonPageState(html){
