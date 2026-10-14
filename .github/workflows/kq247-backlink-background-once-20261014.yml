@@ -51,15 +51,25 @@ jobs:
           done
           before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
           pid="$(cat "$base/worker.pid" 2>/dev/null || true)"
-          if test -n "$pid" && kill -0 "$pid" 2>/dev/null && \
-              tr '\\0' ' ' < "/proc/$pid/cmdline" | grep -Fq -- '--watch'; then
-            echo "KQ247_WATCH_ALREADY_RUNNING_PID=$pid"
+          current_sha="$(sha256sum "$base/kq247-backlink-background-discovery-20261014.py" | cut -d' ' -f1)"
+          active_sha="$(cat "$base/worker.sha256" 2>/dev/null || true)"
+          owned_running=0
+          if test -n "$pid" && test -r "/proc/$pid/cmdline" && kill -0 "$pid" 2>/dev/null; then
+            cmdline="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+            if echo "$cmdline" | grep -Fq "$base/kq247-backlink-background-discovery-20261014.py" && echo "$cmdline" | grep -Fq -- '--watch'; then
+              owned_running=1
+            fi
+          fi
+          if test "$owned_running" = 1 && test "$current_sha" = "$active_sha"; then
+            echo "KQ247_WATCH_ALREADY_CURRENT_PID=$pid"
           else
-            if test -n "$pid" && kill -0 "$pid" 2>/dev/null; then
-              cmdline="$(tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
-              if echo "$cmdline" | grep -Fq 'kq247-backlink-background-discovery'; then
-                kill "$pid" || true
-              fi
+            if test "$owned_running" = 1; then
+              echo "KQ247_REPLACING_ONLY_DEDICATED_DISCOVERY_PID=$pid"
+              kill "$pid"
+              for i in 1 2 3 4 5; do
+                kill -0 "$pid" 2>/dev/null || break
+                sleep 1
+              done
             fi
             cd "$base"
             nohup nice -n 15 python3 -u \
@@ -68,10 +78,11 @@ jobs:
             echo $! > "$base/worker.pid"
             sleep 4
             if ! kill -0 "$(cat "$base/worker.pid")" 2>/dev/null; then
-              echo "Worker failed; recent diagnostic log:"
+              echo "Discovery worker failed; recent log:"
               tail -n 60 "$base/worker.log" || true
               exit 1
             fi
+            printf '%s\n' "$current_sha" > "$base/worker.sha256"
             echo "KQ247_WATCH_STARTED_PID=$(cat "$base/worker.pid")"
           fi
           echo "KQ247_BACKGROUND_LOG_TAIL:"
