@@ -1,0 +1,38 @@
+name: KQ247 MT MN Historical Progress and Independent Assembly Preflight
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-mtmn-progress-audit.yml
+      - deployment/lottery-vps-daily-staging/mtmn-500-assemble-private.mjs
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Transfer private 500-history assembly and inspect importer with no public changes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node --check deployment/lottery-vps-daily-staging/mtmn-500-assemble-private.mjs
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/mtmn-500-assemble-private.mjs root@64.120.92.172:/tmp/kq247-mtmn-private-assemble.mjs
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          base=/opt/kq247/lottery-daily-staging
+          install -m 0644 /tmp/kq247-mtmn-private-assemble.mjs "$base/mtmn-500-assemble-private.mjs"
+          docker run --rm --network none -v "$base":/stage:ro node:22-alpine node --check /stage/mtmn-500-assemble-private.mjs
+          echo MTMN_REAL_ARCHIVE_VERIFIED_GROUPS="$(find "$base/mtmn-full18-history-verified" -maxdepth 1 -type f -name '*.json' | wc -l)"
+          echo MTMN_REAL_ARCHIVE_QUARANTINED_GROUPS="$(find "$base/mtmn-full18-history-quarantine" -maxdepth 1 -type f -name '*.json' | wc -l)"
+          docker inspect kq247-mtmn-full18-history --format 'MTMN_IMPORT_RUNNING={{.State.Running}} MTMN_IMPORT_STATUS={{.State.Status}}'
+          docker logs --tail 4 kq247-mtmn-full18-history || true
+          curl -fsS --max-time 10 'http://127.0.0.1:18080/xoso?region=xsmb' | grep -Fq '<span class="num">51</span>'
+          curl -fsS --max-time 10 'http://127.0.0.1:18080/xoso-khach?region=xsmb' | grep -Fq 'kq247_lottery_code'
+          echo MB_LOCKED_51_CUSTOMER_CODE_AND_EXISTING_URL=PASS
+          VPS
