@@ -43,6 +43,7 @@ jobs:
                   return {**{k:o.get(k) for k in (
                     'updated_utc','url_records_actually_read_total',
                     'inventory_lines_read_total','inventory_files_count',
+                    'public_feed_urls_examined_total','public_feed_hosts_added_total',
                     'unique_hosts_discovered','http_hosts_checked_this_run','hosts_by_status')},
                     'candidate_sites':[a.get('site') for a in o.get('candidate_forms',[])[:60]]}
               except (OSError,ValueError):
