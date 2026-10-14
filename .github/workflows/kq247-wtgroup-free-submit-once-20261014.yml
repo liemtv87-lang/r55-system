@@ -1,4 +1,4 @@
-name: KQ247 free directory WTGroups one-time VPS Playwright
+name: KQ247 free directory one-time VPS Playwright scout
 on:
   push:
     branches: [seo-wtgroup-oneoff-20261014]
@@ -7,16 +7,16 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: kq247-one-off-wtgroup-submission-20261014
+  group: kq247-directory-once-20261014
   cancel-in-progress: false
 jobs:
-  submit:
+  scout:
     runs-on: ubuntu-latest
-    timeout-minutes: 11
+    timeout-minutes: 9
     steps:
       - name: Install SSH client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Run isolated Playwright submissions on VinaHost once, no timers
+      - name: Scout five new free Telegram directories with isolated VPS Playwright
         shell: bash
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
@@ -29,103 +29,50 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          base=/opt/pwremote/seo-wtgroup-free-once-20261014
+          base=/opt/pwremote/seo-free-directory-batch-20261014
           install -d -m 0755 "$base"
-          install -d -m 0750 "$base/state"
-          uid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -u)"
-          gid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -g)"
-          chown "$uid:$gid" "$base/state"
-          cat > "$base/submit.py" <<'PY'
-          import json,datetime,pathlib,re,urllib.parse
+          cat > "$base/scout.py" <<'PY'
+          import json,re
           from playwright.sync_api import sync_playwright
-          OUT=pathlib.Path('/state/receipts.json')
-          SITE='https://wtgrouplinks.com/submit-your-telegram-groups/'
-          TARGETS=[
-           dict(key='football',url='https://t.me/keochuyengia79',name='KQ247 Bóng Đá Hôm Nay',category='Sports',tags='bóng đá,lich thi dau,nhan dinh,ket qua bong da',
-           description='Cộng đồng Việt Nam chia sẻ lịch thi đấu, kết quả và nhận định bóng đá để tham khảo, không cam kết kết quả.'),
-           dict(key='lottery',url='https://t.me/xsbm999',name='KQ247 Kết Quả Xổ Số Ba Miền',category='News',tags='xsmb,xsmt,xsmn,ket qua xo so,thong ke',
-           description='Cộng đồng tiếng Việt theo dõi kết quả xổ số XSMB, XSMT, XSMN, lịch quay và thống kê tham khảo.')
+          targets=[
+            'https://telegramgroups.co/submit',
+            'https://www.groupssor.com/',
+            'https://www.groupverse.co.in/',
+            'https://telegramlobby.com/en/',
+            'https://www.telegram-groups.com/',
           ]
-          def stamp(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
-          def save(d): OUT.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n')
-          if OUT.exists():
-           try: report=json.loads(OUT.read_text())
-           except: report={'created_at_utc':stamp(),'site':SITE,'groups':{}}
-          else: report={'created_at_utc':stamp(),'site':SITE,'groups':{}}
           with sync_playwright() as p:
-           browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
-           page=browser.new_page(viewport={'width':1320,'height':900})
-           for t in TARGETS:
-            if t['key'] in report['groups']:
-             print('ALREADY_ATTEMPTED_SKIP',t['key'],json.dumps(report['groups'][t['key']],ensure_ascii=False),flush=True)
-             continue
-            entry={'url':t['url'],'time_utc':stamp(),'state':'not_attempted'}
-            try:
-             resp=page.goto(SITE,wait_until='domcontentloaded',timeout=30000)
-             if not resp or resp.status!=200:
-              entry.update(state='page_http_error',http=resp.status if resp else None)
-             else:
-              page.wait_for_timeout(700)
-              form=page.locator('form:has(input[name="group_link"])')
-              if form.count()!=1:
-               entry.update(state='form_missing_or_ambiguous',count=form.count())
-              elif page.locator('iframe[src*="captcha"],.g-recaptcha,.h-captcha,[data-sitekey]').count()>0:
-               entry['state']='captcha_user_action_required'
-              else:
-               fields=['input[name="group_name"]','input[name="group_link"]','select[name="category"]','select[name="language"]','select[name="country"]']
-               if any(form.locator(q).count()!=1 for q in fields):
-                entry['state']='unexpected_form_schema'
-               else:
-                form.locator('input[name="group_name"]').fill(t['name'])
-                form.locator('input[name="group_link"]').fill(t['url'])
-                form.locator('select[name="category"]').select_option(label=t['category'])
-                form.locator('select[name="language"]').select_option(label='Vietnamese')
-                form.locator('select[name="country"]').select_option(label='Vietnam')
-                if form.locator('input[name="tags"]').count()==1:form.locator('input[name="tags"]').fill(t['tags'])
-                if form.locator('textarea[name="description"]').count()==1:form.locator('textarea[name="description"]').fill(t['description'])
-                required=form.locator('input[required],textarea[required],select[required]').evaluate_all('(els)=>els.map(x=>({name:x.name,valid:x.checkValidity()}))')
-                entry['required_valid']=required
-                if any(not x['valid'] for x in required):
-                 entry['state']='form_validation_failed'
-                else:
-                 entry['state']='submit_intent_recorded'
-                 report['groups'][t['key']]=entry
-                 save(report)
-                 button=form.locator('button[type="submit"],input[type="submit"]')
-                 if button.count()!=1:
-                  entry['state']='submit_control_ambiguous'
-                 else:
-                  button.click(timeout=16000)
-                  page.wait_for_timeout(3500)
-                  body=page.locator('body').inner_text(timeout=10000)
-                  entry['final_url']=page.url
-                  entry['excerpt']=body[-750:]
-                  if re.search(r'group submitted successfully|submission successful|thank you|pending review|awaiting approval|successfully submitted',body,re.I):
-                   entry['state']='submitted_pending_publication'
-                  elif re.search(r'error|failed|invalid|required|denied|blocked|not allowed',body[-900:],re.I):
-                   entry['state']='site_response_uncertain_or_rejected'
-                  else:entry['state']='submit_attempted_outcome_unverified'
-            except Exception as e:
-             entry.update(state='exception_or_uncertain_no_retry',error=type(e).__name__+': '+str(e)[:300])
-            report['groups'][t['key']]=entry
-            save(report)
-            print('KQ247_WTGROUP_RESULT',json.dumps({k:v for k,v in entry.items() if k!='excerpt'},ensure_ascii=False),flush=True)
-           browser.close()
-          print('KQ247_WTGROUP_FINAL',json.dumps(report,ensure_ascii=False),flush=True)
+            browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
+            for target in targets:
+              ctx=browser.new_context(viewport={'width':1300,'height':940})
+              page=ctx.new_page()
+              rec={'target':target}
+              try:
+                r=page.goto(target,wait_until='domcontentloaded',timeout=22000)
+                page.wait_for_timeout(1200)
+                rec['status']=r.status if r else None
+                rec['url']=page.url
+                rec['title']=page.title()
+                rec['links']=page.locator('a').evaluate_all("""xs => xs.filter(x=>/submit|add|list your|post your|publish/i.test(x.innerText||'') || /submit|add-group|add-channel|publish/i.test(x.href)).slice(0,12).map(x=>({text:x.innerText.trim().slice(0,60),href:x.href}))""")
+                rec['forms']=page.locator('form').evaluate_all("""xs => xs.slice(0,8).map(f=>({action:f.action,method:f.method,fields:[...f.querySelectorAll('input,select,textarea,button')].slice(0,35).map(x=>({tag:x.tagName.toLowerCase(),name:x.name,id:x.id,type:x.type,placeholder:x.placeholder,text:(x.innerText||'').slice(0,50),required:x.required,options:x.tagName==='SELECT'?[...x.options].map(o=>o.text).slice(0,35):undefined}))}))""")
+                rec['controls']=page.locator('input,select,textarea,button').evaluate_all("""xs => xs.slice(0,35).map(x=>({tag:x.tagName.toLowerCase(),name:x.name,id:x.id,type:x.type,placeholder:x.placeholder,text:(x.innerText||'').slice(0,50),required:x.required,options:x.tagName==='SELECT'?[...x.options].map(o=>o.text).slice(0,35):undefined}))""")
+                rec['body_excerpt']=page.locator('body').inner_text(timeout=4000)[:650].replace('\n',' ')
+              except Exception as e:
+                rec['error']=str(e)[:300]
+              print('KQ247_SCOUT_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
+              ctx.close()
+            browser.close()
           PY
-          chmod 0644 "$base/submit.py"
-          docker image inspect pwremote/playwright:1.56.0 >/dev/null
           before="$(docker ps -a --format '{{.Names}}' | grep '^kq247-' | sort || true)"
-          timeout 210s docker run --rm --init --name kq247-wtgroup-submit-once \
+          timeout 220s docker run --rm --init --name kq247-free-dir-scout-once \
             --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
             --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
             --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
             --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
-            --mount "type=bind,src=$base/submit.py,dst=/app/submit.py,readonly" \
-            --mount "type=bind,src=$base/state,dst=/state" \
-            pwremote/playwright:1.56.0 python3 /app/submit.py
+            --mount "type=bind,src=$base/scout.py,dst=/app/scout.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/scout.py
           after="$(docker ps -a --format '{{.Names}}' | grep '^kq247-' | sort || true)"
           test "$before" = "$after"
           echo 'PRODUCTION_CONTAINERS_UNCHANGED=YES'
-          echo 'ONE_TIME_ONLY_NO_SCHEDULE=YES'
+          echo 'NO_NEW_TIMERS=YES'
           VPS
