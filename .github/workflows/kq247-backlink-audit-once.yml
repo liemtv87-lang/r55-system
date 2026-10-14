@@ -33,11 +33,18 @@ jobs:
           def read_report(filename):
               try:
                   o=json.loads((root/filename).read_text())
-                  return {k:o.get(k) for k in (
-                    'updated_utc','updated_at_utc','url_records_actually_read_total',
+                  if filename=='bulk-posts.json':
+                      result = {k:o.get(k) for k in (
+                          'updated_utc','updated_at_utc','counts','verified_new_public_links')}
+                      result['recent_attempts'] = [
+                        {'host':a.get('host'),'group':a.get('group'),'status':a.get('status')}
+                        for a in o.get('attempts',[])[:60]]
+                      return result
+                  return {**{k:o.get(k) for k in (
+                    'updated_utc','url_records_actually_read_total',
                     'inventory_lines_read_total','inventory_files_count',
-                    'unique_hosts_discovered','http_hosts_checked_this_run',
-                    'hosts_by_status','counts','verified_new_public_links')}
+                    'unique_hosts_discovered','http_hosts_checked_this_run','hosts_by_status')},
+                    'candidate_sites':[a.get('site') for a in o.get('candidate_forms',[])[:60]]}
               except (OSError,ValueError):
                   return {'available':False}
           pidfile=root/'worker.pid'
