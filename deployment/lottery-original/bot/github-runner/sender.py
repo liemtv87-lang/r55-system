@@ -6,7 +6,7 @@ from existing published snapshot API; real draws come from Minh Ngoc.
 No Telegram send unless all validations pass and a durable claim commits.
 """
 import json, os, re, sys, time, subprocess, hashlib
-from datetime import datetime, time as dt_time
+from datetime import datetime, timedelta, time as dt_time
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
@@ -42,6 +42,45 @@ def get_html(url):
 
 def read_vps_locked_snapshot(day,region,index_path):
     """Read immutable station forecasts locally on VPS; no Neon and no guessed numbers."""
+    if region=="mb":
+        # Respect the pre-draw, independently locked XSMB full27 snapshot.
+        # The newer per-station 36-index has a different MB model and must
+        # not replace the original XSMB lock for this day.
+        file=Path(index_path).with_name("xsmb-"+day+".json")
+        o=json.loads(file.read_text(encoding="utf-8"))
+        p=o.get("prediction") or {}
+        de=p.get("de") or {}
+        audit=p.get("lottoAudit") or {}
+        prior=(datetime.strptime(day,"%Y-%m-%d").date()-timedelta(days=1)).isoformat()
+        if (p.get("predictionDate")!=day or p.get("sourceDate")!=prior or
+            o.get("sourceDate")!=prior or p.get("region")!="mb" or
+            p.get("station")!="XSMB" or p.get("sourceDraws")!=500 or
+            p.get("model")!="KQ247_XSMB_FULL27_BOTH_LOTTO_AND_DE_V3" or
+            p.get("publication")!="STAGING_UNPUBLISHED" or
+            p.get("previousForecastsUsed") is not False or
+            audit.get("coveredPositions")!=107 or audit.get("supportedRules",0)<1000 or
+            re.fullmatch("[a-f0-9]{64}",str(audit.get("inputHash",""))) is None or
+            de.get("method_counts")!={"de_single_pick":1000,"remove_head":1000,"remove_hundred":1000}):
+            raise ValueError("invalid original full27 locked MB snapshot provenance")
+        fields=[("lotto3",p.get("lotto3"),3,2),("doubles",p.get("doubles"),2,2),
+                ("dan50",de.get("dan50"),50,2),("dan60",de.get("dan60"),60,2),
+                ("dan75",de.get("dan75"),75,2),("three_digit",de.get("three_digit"),500,3)]
+        for key,vals,size,width in fields:
+            if (not isinstance(vals,list) or len(vals)!=size or len(set(vals))!=size or
+                any(not isinstance(v,str) or re.fullmatch("[0-9]{"+str(width)+"}",v) is None for v in vals)):
+                raise ValueError("invalid immutable MB pool "+key)
+        if (not set(de["dan50"]).issubset(de["dan60"]) or
+            not set(de["dan60"]).issubset(de["dan75"]) or
+            any(v[-2:] not in de["dan75"] or v[0]==de["three_digit_hard_excluded_hundred"] for v in de["three_digit"]) or
+            any(v[0]==de["hard_excluded_head"] for v in de["dan75"])):
+            raise ValueError("invalid immutable MB pools")
+        if day=="2026-10-15" and p["lotto3"]!=["51","52","91"]:
+            raise ValueError("refuse changing user-approved 15-Oct MB 51-52-91")
+        found={"XSMB":{"three_lotto":p["lotto3"],"doubles":p["doubles"],
+                       "de":{k:de[k] for k in ("dan50","dan60","dan75","three_digit")}}}
+        fp=hashlib.sha256(json.dumps(["mb",day,prior,audit["inputHash"],p["lotto3"],p["doubles"]],
+                                      ensure_ascii=False,separators=(",",":")).encode()).hexdigest()
+        return found,fp
     data=json.loads(Path(index_path).read_text(encoding="utf-8"))
     if data.get("type")!="READ_ONLY_LOCKED_STATION_PREDICTIONS":
         raise ValueError("invalid VPS locked index")
