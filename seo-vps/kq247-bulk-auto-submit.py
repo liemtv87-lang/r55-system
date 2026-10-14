@@ -40,8 +40,9 @@ WATCH = "--watch" in sys.argv
 POLL_SECONDS = max(60,min(1800,int(os.environ.get("KQ247_POST_POLL_S","120"))))
 # Retry only a proven pre-submit GET failure, never a sent form or unknown POST.
 RETRY_GET_AFTER_S = max(3600,int(os.environ.get("KQ247_RETRY_GET_AFTER_S","3600")))
-# Explicitly opt-in directories: never post merely because a URL looks like a form.
-OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org", "en.search-t.me"}
+# The crawler can add new form candidates dynamically. Each one must still pass
+# the on-page free/public/no-login/no-captcha/same-origin POST eligibility checks.
+# Never send merely because a site appears in the discovery database.
 # Explicit no-account, free Telegram listing page confirmed by the publisher.
 # An attempt still requires all on-page checks; one submission per group/domain.
 DIRECT_OPT_IN_ROUTES = {
@@ -62,7 +63,8 @@ PAT_COUNTRY=re.compile(r"(country|location)",re.I)
 PAT_EMAIL=re.compile(r"email|e-mail",re.I)
 TEXT_BLOCKS=("captcha","verify you are human","cloudflare challenge","login to submit",
  "sign in to submit","must be logged in","paid listing only","pay to submit",
- "payment required","no longer accepting","submissions closed","privacy policy required login")
+ "payment required","no longer accepting","submissions closed","privacy policy required login",
+ "automated submissions are prohibited","no automated submissions","bots are not allowed")
 ALLOWED_WORDS=("free", "miễn phí", "no fee", "free listing", "free submission")
 SUBMIT_WORDS=("submit","send","publish","add group","add channel","đăng","gửi")
 
@@ -97,8 +99,12 @@ def read_queue(con):
         rows=[]
     rows=list(rows)+list(DIRECT_OPT_IN_ROUTES.items())
     return list(dict.fromkeys(
-        (h,u) for h,u in rows if h in OPT_IN_HOSTS and h not in ALREADY_SENT_HOSTS
-            and h not in EXTERNAL_WORKFLOW_HOSTS and verified_submission_path(h,urlsplit(u).path)
+        (h,u) for h,u in rows if h not in ALREADY_SENT_HOSTS
+            and h not in EXTERNAL_WORKFLOW_HOSTS
+            and urlsplit(u).scheme == "https" and urlsplit(u).hostname in (h, "www." + h)
+            and (verified_submission_path(h,urlsplit(u).path) or
+                 con.execute("SELECT 1 FROM hosts WHERE host=? AND url=? AND status='form_candidate'",
+                             (h,u)).fetchone())
     ))
 
 def is_public_listing(page, expected):
@@ -134,11 +140,12 @@ def choose_option(sel, field, group):
                 return True
     return False if PAT_CATEGORY.search(k) else not field["required"]
 
-def check_eligible(page, url):
+def check_eligible(page, url, discovered_form=False):
     p=urlsplit(page.url)
     original=urlsplit(url)
     if p.scheme!="https" or p.hostname != original.hostname: return "redirected",None
-    if not verified_submission_path(original.hostname,original.path): return "not_submission_path",None
+    if not (verified_submission_path(original.hostname,original.path) or discovered_form):
+        return "not_submission_path",None
     text=page.locator("body").inner_text(timeout=5000).lower()[:12000]
     if any(w in text for w in TEXT_BLOCKS):return "not_open_or_requires_review",None
     if not any(w in text for w in ALLOWED_WORDS) and original.hostname != "en.search-t.me":return "free_not_verified",None
@@ -191,7 +198,11 @@ def attempt(page, con, host, url, group_key, group):
         if not resp or resp.status!=200:
             write_result(con,host,group_key,url,"unavailable",str(resp.status if resp else "no_response"));return
         page.wait_for_timeout(700)
-        status,forminfo=check_eligible(page,url)
+        discovered_form=bool(con.execute(
+            "SELECT 1 FROM hosts WHERE host=? AND url=? AND status='form_candidate'",
+            (host,url)).fetchone()) if con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='hosts'").fetchone() else False
+        status,forminfo=check_eligible(page,url,discovered_form)
         if status!="eligible":
             write_result(con,host,group_key,url,status);return
         form=page.locator("form").nth(forminfo["formIndex"])
