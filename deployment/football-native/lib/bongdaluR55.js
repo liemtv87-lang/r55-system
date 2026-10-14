@@ -2,6 +2,7 @@ import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
 import {primaryFormEvidence} from "lib/r55FormFirst.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
+import {isR55IgnoredFixture} from "lib/r55FixtureExclusions.js";
 import {parseBongdaluTeamSchedule,formSummary} from "lib/r55TeamSchedule.js";
 import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus} from "lib/r55BookmakerConsensus.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "lib/r55BookmakerPage.js";
@@ -137,7 +138,7 @@ const scoreLeague=l=>{
 // All Bongdalu priced fixtures are in the analysis universe, including
 // lower divisions, youth, reserve and friendly matches. Competition priority
 // controls ordering only. Evidence/release gates decide publication separately.
-const excluded=()=>false;
+const excluded=isR55IgnoredFixture;
 function strictMajorPriority(country,league,home,away){
  const c=String(country||"").toLowerCase(),l=String(league||"").toLowerCase();
  if(/(?:rfef|primera federaci[oó]n|primera division rfef|division 3|division 4|u19|u20|u21|u23|reserve|youth|women|ladies|tercera|regional|amateur|serie c|serie d|league two|2[.] bundesliga|bundesliga 2|la liga 2)/i.test(l))return 0;
@@ -296,7 +297,7 @@ function makeMarket(row,h,learned){
  // Do not drop a legitimately priced fixture solely because Bongdalu reports
  // zero form matches for one side. The evidence gate below keeps it research-only.
  // Neither H2H nor a fixed number of form matches is needed to model a fixture.
- if(!row?.market||!h?.home||!h?.away)return null;
+ if(excluded(row)||!row?.market||!h?.home||!h?.away)return null;
  // Merge every valid company shown on Bongdalu's comparison page, while keeping
  // the actual betting price tied to the separately verified XML bookmaker line.
  const extras=Array.isArray(h.oddscompCompanies)?h.oddscompCompanies:[];
@@ -373,9 +374,9 @@ function makeMarket(row,h,learned){
 }
 export async function inspectBongdaluHistoryProbe(futureWindowOnly=false){
  const rr=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,id,text:await get(rr.base,"gf/data/odds/en/goal"+id+".xml","text/xml",8500).catch(()=>"")})));
- const odds=parseOdds(xmls),records=parseFeed(rr.js,odds).filter(x=>x.market);
+ const odds=parseOdds(xmls),records=parseFeed(rr.js,odds).filter(x=>x.market&&!excluded(x));
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000;
- const eligible=futureWindowOnly?records.filter(x=>x.ts>=start&&x.ts<=end&&!excluded(x.league+" "+x.home+" "+x.away)):records;
+ const eligible=futureWindowOnly?records.filter(x=>x.ts>=start&&x.ts<=end&&!excluded(x)):records;
  const sorted=eligible.sort((a,b)=>b.priority-a.priority||a.ts-b.ts).slice(0,10);
  const rows=await Promise.all(sorted.map(async x=>({x,h:await history(rr.base,x.bongdaluId,x.ts)})));
  return {ok:true,source:"Bongdalu",tested:rows.length,ready:rows.filter(z=>z.h&&z.h.home.n>0&&z.h.away.n>0).length,
@@ -388,7 +389,7 @@ export async function inspectBongdalu(){
  const odds=parseOdds(xmls),all=parseFeed(r.js,odds);
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000,now=Date.now();
   const inWindow=all.filter(x=>x.ts>=Math.max(start,now-5*60000)&&x.ts<=end);
-  const eligible=inWindow.filter(x=>x.market&&!excluded(x.league+" "+x.home+" "+x.away));
+  const eligible=inWindow.filter(x=>x.market&&!excluded(x));
   return{base:r.base,fixtureCount:all.length,marketCount:all.filter(x=>x.market).length,windowFixtures:inWindow.length,windowWithMarket:inWindow.filter(x=>x.market).length,eligibleWindowMarket:eligible.length,oddsCount:odds.size,bookmakers:BOOKS.map(x=>x[0]),currentDay:day,examples:eligible.slice(0,3).map(x=>({id:x.id,league:x.league,home:x.home,away:x.away,kickoff:x.kickoff,market:x.market}))};
 }
 export async function previewBongdaluR55Bridge(){return buildBongdaluR55(false)}
@@ -418,7 +419,7 @@ async function buildBongdaluR55(publish,stage=false){
  const windowStart=Date.parse(day+"T06:00:00Z"),windowEnd=windowStart+24*3600000+5*60000,now=Date.now();
  // Take all eligible verified Bongdalu markets (up to 450 for bounded batch work).
   // Never choose a fixed 60 or stop simply because the first 35 picks succeeded.
-  const pool=all.filter(x=>x.ts>=Math.max(stage?now-5*60000:windowStart,now-5*60000)&&x.ts<=windowEnd&&!excluded(x.league+" "+x.home+" "+x.away)&&x.market)
+  const pool=all.filter(x=>x.ts>=Math.max(stage?now-5*60000:windowStart,now-5*60000)&&x.ts<=windowEnd&&!excluded(x)&&x.market)
    .sort((a,b)=>b.priority-a.priority||b.market.bookmakerCount-a.market.bookmakerCount||a.ts-b.ts);
  const learnedQ=await db.query("SELECT payload FROM football_compact_stats WHERE scope='r55_method_rank' LIMIT 1");
  const learned=(learnedQ.rows[0]?.payload?.methods||[]);
