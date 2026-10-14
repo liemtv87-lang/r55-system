@@ -1,0 +1,47 @@
+name: KQ247 XS independent full27 lotto positional audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-full27-lotto-audit-20261015.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -qq -y sshpass
+      - name: VPS verify 27 prizes every position and independent rules each prediction day
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/lotto-full27-independent-v1.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run -i --rm --network none --read-only --cpus 1.5 --memory=768m -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module' <<'JS'
+          import fs from 'node:fs';
+          import {predictLottoFull27} from '/stage/lotto-full27-independent-v1.mjs';
+          const all=JSON.parse(fs.readFileSync('/stage/xsmb-history-live.json','utf8'));
+          let previousHash='';
+          for(const day of ['2026-10-13','2026-10-14','2026-10-15']){
+           const draws=all.filter(x=>x.draw_date<day && x.region==='mb' && x.station==='XSMB')
+             .sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
+           const started=Date.now();
+           const result=predictLottoFull27({predictionDate:day,draws});
+           const a=result.audit;
+           if(a.lastActualPrizeDigitPositions!==107||a.coveredByCreatedRules!==107||a.coveredBySupportedIndependentRules!==107)throw Error('POSITION_NOT_FULLY_COVERED');
+           if(a.activeFamilyCount<6||a.supportedIndependentRules<100)throw Error('METHODS_NOT_INDEPENDENT_AND_SUPPORTED');
+           if(result.sourceLastDate!==new Date(Date.parse(day+'T12:00:00Z')-86400000).toISOString().slice(0,10))throw Error('YESTERDAY_MISMATCH');
+           if(previousHash===result.sourceInputHash)throw Error('REUSED_500_HISTORY');
+           previousHash=result.sourceInputHash;
+           if(result.picks.some(n=>a.excludedConsecutive.includes(n)||a.excludedGanOver10.includes(n))||result.doubles.some(n=>a.excludedConsecutive.includes(n)||a.excludedGanOver10.includes(n)))throw Error('HARD_EXCLUSION_FAILED');
+           console.log('FULL27_INDEPENDENT_LOTTO_PROOF',JSON.stringify({
+             day,sourceLastDate:result.sourceLastDate,picks:result.picks,doubles:result.doubles,
+             digitPositions:a.lastActualPrizeDigitPositions,positionsEvidence:a.coveredBySupportedIndependentRules,
+             rulesDefined:a.definedRules,rulesSupported:a.supportedIndependentRules,
+             families:a.activeFamilyCount,activeByFamily:a.familySupported,
+             inputHash:result.sourceInputHash,excludedConsecutive:a.excludedConsecutive,
+             excludedGanOver10:a.excludedGanOver10,elapsedMs:Date.now()-started
+           }));
+          }
+          JS
