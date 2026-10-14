@@ -1,0 +1,33 @@
+name: KQ247 XS original Neon layout structure audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-neon-layout-structure-audit.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect original HTML nodes only without changing pages
+        run: |
+          python3 -m pip -q install beautifulsoup4
+          python3 - <<'PY'
+          import urllib.request,re
+          from bs4 import BeautifulSoup
+          base='https://64-120-92-172.sslip.io/xoso?region='
+          for reg in ('xsmb','xsmt','xsmn'):
+           with urllib.request.urlopen(base+reg,timeout=20) as r:
+            html=r.read(850000).decode('utf8','replace')
+           soup=BeautifulSoup(html,'html.parser')
+           print('REGION',reg,'LENGTH',len(html),'TITLE',soup.title.get_text(' ',strip=True) if soup.title else None)
+           for e in soup.find_all(['header','main','h1','h2','h3','aside','article','section','nav','button','details','summary','div'],limit=450):
+            val=e.get_text(' ',strip=True)
+            if not any(k in val.upper() for k in ('DỰ ĐOÁN','LÔ BẠCH','LÔ KÉP','DÀN ĐỀ','3 CÀNG','KHÁNH HÒA','XỔ SỐ','TẢI LẠI','XSMB','CHỌN ĐÀI')):continue
+            if len(val)>2000 and e.name not in ('section','article','button','summary'):continue
+            attrs={k:v for k,v in e.attrs.items() if k in ('id','class','data-region','data-station','data-kind','role','onclick')}
+            print('DOM',e.name,str(attrs)[:300],re.sub(r'\\s+',' ',val)[:160])
+           for e in soup.find_all(class_=re.compile('num|pool|set|station|pick|date|snapshot|locked',re.I),limit=70):
+            attrs={k:v for k,v in e.attrs.items() if k in ('id','class','data-region','data-station','data-kind','role')}
+            print('CLASS',e.name,str(attrs)[:200],re.sub(r'\\s+',' ',e.get_text(' ',strip=True))[:70])
+          PY
