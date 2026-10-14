@@ -89,7 +89,7 @@ export function predictFromPreviousStationDraw({predictionDate,region,station,pr
  // Old-history check is not used in ANY bridge vote.
  const allowed=[...Array(100).keys()].filter(n=>!excluded.has(pad(n)));
  const doubled=allowed.filter(n=>n%11===0);
- if(allowed.length<76||doubled.length<2)throw Error('HARD_EXCLUSION_LEAVES_NO_VALID_SELECTION');
+ if(allowed.length<3||doubled.length<2)throw Error('HARD_EXCLUSION_LEAVES_NO_VALID_SELECTION');
  const lotto=top(rank([...allowed],catchLO,removeLO),3);
  const doubles=top(rank([...doubled],catchKEP,removeKEP),2);
  const removeHead=[...Array(10).keys()].sort((a,b)=>{
