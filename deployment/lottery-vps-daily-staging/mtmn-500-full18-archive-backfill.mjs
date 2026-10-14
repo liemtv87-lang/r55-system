@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {fetchAllOfficialDraws} from './minhngoc-all-stations.mjs';
 import {normalizedStationDraw} from './normalize-all-prizes.mjs';
 const root=process.env.KQ247_STAGE_ROOT||'/stage',input=join(root,'mtmn-500-actual-targets.json');
-const dest=join(root,'mtmn-full18-history-verified');
+const dest=join(root,'mtmn-full18-history-verified'),quarantine=join(root,'mtmn-full18-history-quarantine');
 const max=Number(process.argv.find(x=>x.startsWith('--max='))?.slice(6)||'35');
 if(!Number.isSafeInteger(max)||max<1||max>250)throw Error('MAX_BATCH_1_TO_250');
 const raw=JSON.parse(await readFile(input,'utf8'));
@@ -30,6 +30,7 @@ for(const row of raw){
 if(stations.size!==35||[...stations.values()].some(n=>n<500))
  throw Error('REQUIRE_500_HISTORICAL_DATES_PER_EACH_OF_35_STATIONS');
 await mkdir(dest,{recursive:true});
+await mkdir(quarantine,{recursive:true});
 const reversePrizeGroups=full=>{
  let i=0;
  const a=[1,1,3,1,7,2,1,1,1].map(len=>{const part=full.slice(i,i+len);i+=len;return part});
@@ -38,10 +39,10 @@ const reversePrizeGroups=full=>{
 };
 let complete=0,skipped=0,failed=0,attempted=0;
 const errors=[];
-for(const [group,expect] of [...groups].sort((a,b)=>b[0].localeCompare(a[0]))){
+for(const [group,expect] of [...groups].sort((a,b)=>b[0].split('|')[1].localeCompare(a[0].split('|')[1])||a[0].localeCompare(b[0]))){
  const [region,day]=group.split('|');
- const file=join(dest,region+'-'+day+'.json');
- if(existsSync(file)){skipped++;continue;}
+ const file=join(dest,region+'-'+day+'.json'),bad=join(quarantine,region+'-'+day+'.json');
+ if(existsSync(file)||existsSync(bad)){skipped++;continue;}
  if(attempted>=max)break;
  attempted++;
  let found;
@@ -49,7 +50,7 @@ for(const [group,expect] of [...groups].sort((a,b)=>b[0].localeCompare(a[0]))){
   try{found=await fetchAllOfficialDraws(day,region);break;}
   catch(e){if(tries===3)errors.push({group,reason:'source_'+String(e.message).slice(0,90)});else await new Promise(r=>setTimeout(r,tries*1700));}
  }
- if(!found){failed++;continue;}
+ if(!found){failed++;await writeFile(bad,JSON.stringify({group,error:errors.at(-1)?.reason||'FETCH_FAILED'})+'\n',{flag:'wx'});continue;}
  try{
   const record=[];
   for(const item of expect){
@@ -69,7 +70,7 @@ for(const [group,expect] of [...groups].sort((a,b)=>b[0].localeCompare(a[0]))){
   }
   const payload=JSON.stringify({type:'STATION_ARCHIVE_FULL18_VERIFIED_ONLY',group,records:record})+'\n';
   await writeFile(file,payload,{flag:'wx'});complete++;
- }catch(e){failed++;errors.push({group,reason:String(e.message).slice(0,100)});}
+ }catch(e){failed++;const reason=String(e.message).slice(0,100);errors.push({group,reason});await writeFile(bad,JSON.stringify({group,error:reason})+'\n',{flag:'wx'});}
  await new Promise(r=>setTimeout(r,1100));
 }
 console.log('MTMN_500_FULL18_ARCHIVE_PROGRESS',JSON.stringify({stations:stations.size,totalDrawRows:raw.length,
