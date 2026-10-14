@@ -46,11 +46,18 @@ export function evaluateR55EvidenceQuality(row,h,native){
 }
 function estimates(row,h,native){
  const mh=bounded(Number(native.model.xg_home),.2,4.3),ma=bounded(Number(native.model.xg_away),.2,4.3);
- const formH=bounded((Number(h.home.gf)+Number(h.away.ga))*.515,.2,4.3);
- const formA=bounded((Number(h.away.gf)+Number(h.home.ga))*.485,.2,4.3);
  const total=bounded((mh+ma)*.65+Number(row.market.ouLine)*.35,.6,7);
  const diff=bounded((mh-ma)*.65-Number(row.market.homeLine)*.35,-3,3);
  const anchorH=bounded((total+diff)/2,.2,4.3),anchorA=bounded((total-diff)/2,.2,4.3);
+ // A missing team's n=0 and gf=ga=0 do NOT mean it concedes or scores
+ // zero goals. Avoid manufacturing a gigantic form edge from absent evidence.
+ // The quality gate separately enforces 15 per team for a releasable pick.
+ if(Number(h.home?.n||0)<1||Number(h.away?.n||0)<1){
+  return [[mh,ma],[anchorH,anchorA],[
+   bounded((mh+anchorH)/2,.2,4.3),bounded((ma+anchorA)/2,.2,4.3)]];
+ }
+ const formH=bounded((Number(h.home.gf)+Number(h.away.ga))*.515,.2,4.3);
+ const formA=bounded((Number(h.away.gf)+Number(h.home.ga))*.485,.2,4.3);
  return [[mh,ma],[formH,formA],[anchorH,anchorA]];
 }
 import {bookmakerSideAgreement} from "./r55BookmakerConsensus.js";
