@@ -126,7 +126,10 @@ async function run(){
   const markets=V.parseOdds(xmls),records=V.parseFeed(source.js,markets);
   const now=Date.now(),day=V.vnDay();
   const end=Date.parse(day+'T06:00:00Z')+86400000+300000;
-  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&m.market&&!V.excluded(m.league+' '+m.home+' '+m.away));
+  // User denominator: ALL divisions with genuinely priced AH/O-U, never only majors.
+  const priced=k=>k&&["homePrice","awayPrice","overPrice","underPrice"].every(n=>
+    Number.isFinite(Number(k[n]))&&Number(k[n])>1.05&&Number(k[n])<=4);
+  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&priced(m.market));
   const eligibleIds=new Set(eligible.map(m=>m.id));
   const matches=[],exceptions=[],missingHistory=[];
   let attempted=0,historyReady=0,full20Both=0,partial20=0,h2hAvailable=0,modelAttempted=0;
