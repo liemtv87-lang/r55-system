@@ -1,0 +1,33 @@
+name: KQ247 XS VPS local source audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-local-source-audit-20261015.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SSH tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect VPS lottery source without changes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          echo VPS_LOTTERY_SERVICE
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -E 'lottery|postgres|staging' || true
+          echo VPS_LOTTERY_CODE
+          ls -la /opt/kq247/deployment/lottery-original/ || true
+          echo VPS_DB_NAMES
+          docker exec kq247-r55-postgres sh -c 'psql -U postgres -d postgres -Atc "SELECT datname FROM pg_database WHERE datistemplate = false;"' 2>&1 | head -20 || true
+          echo VPS_STATUS_CHECK
+          curl --max-time 8 -fsS http://127.0.0.1:18084/healthz || true
+          REMOTE
