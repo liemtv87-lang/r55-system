@@ -40,7 +40,7 @@ export function parseBongdaluTeamSchedule(payload,teamId,before){
     if(!matchId||seen.has(matchId)||hg===null||ag===null||
        hg<0||ag<0||hg>30||ag>30)continue;
     let ts=null;
-    for(const field of ["E8Date","DateFormat","MatchTime","StartTime","Date"]){
+    for(const field of ["Time","E8Date","DateFormat","MatchTime","StartTime","Date"]){
       ts=scheduleTime(m[field]);if(ts!==null)break;
     }
     if(ts===null||ts>=cutoff||ts>Date.now()+60000)continue;
