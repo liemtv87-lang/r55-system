@@ -30,7 +30,9 @@ test("never attributes H2H bookmaker odds to an embedded score that does not mat
  assert.equal(h.homeRows.length,20);
  assert.equal(h.homeRows[0].matchId,null);
  assert.equal(h.homeRows[0].quotes.length,0);
- assert.equal(h.sourceCoverage.bookmakerCount,0);
+ // The independently rendered H2H row remains valid and keeps its own prices.
+ assert.equal(h.h2hRows[0].quotes.length,2);
+ assert.equal(h.sourceCoverage.bookmakerCount,2);
 });
 test("retains AH/OU bookmaker prices when rendered and embedded score identity agrees",()=>{
  // The first visible row has the same identity, score and team side as h_data[0].
