@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {extractRichBongdaluHistory} from "../lib/r55RichHistory.js";
-import {collectBongdaluPageBookmakers} from "../lib/r55BookmakerPage.js";
+import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "../lib/r55BookmakerPage.js";
 import {releaseDecision} from "../../football-original/lib/r55ReleaseGate.js";
 
 const rows = n=>Array.from({length:n},(_,i)=>[101,300+i,i%4,i%2]);
@@ -102,4 +102,20 @@ test("bookmaker consensus counts real decimal prices, not Hong Kong raw quotes",
  assert.equal(c.AH.lineVotes,2);
  assert.equal(c.OU.availableBookmakers,2);
  assert.equal(c.OU.lineVotes,2);
+});
+
+test("does not mistake a 200 HTTP security challenge for odds-company data",()=>{
+ const challenge='<html><head><title>Security Verification</title></head><body>'+('x'.repeat(18000))+'</body></html>';
+ assert.equal(oddsComparisonPageState(challenge),"security_challenge");
+ assert.deepEqual(collectBongdaluPageBookmakers(challenge),[]);
+ assert.equal(oddsComparisonPageState(null),"fetch_failed");
+ assert.equal(oddsComparisonPageState("<html><title>Odds</title></html>"),"unrecognized_layout");
+});
+
+test("recognizes a real, parsed Bongdalu odds row separately from challenge pages",()=>{
+ const html='<table><tr id="tr_o_2_8"><td>Bet365</td><td>Live</td>'+
+ '<td>0.90</td><td>0/0.5</td><td>0.91</td><td>0.90</td>'+
+ '<td>2.5</td><td>0.92</td></tr></table>';
+ assert.equal(oddsComparisonPageState(html),"genuine_odds_rows");
+ assert.equal(collectBongdaluPageBookmakers(html).length,1);
 });
