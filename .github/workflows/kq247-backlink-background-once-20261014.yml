@@ -1,0 +1,84 @@
+name: KQ247 Background Backlink Discovery (one shot)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-backlink-background-once-20261014.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-backlink-background-once
+  cancel-in-progress: false
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate background scanner
+        env:
+          KQ247_BASE: /tmp/kq247-test
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/kq247-backlink-background-discovery-20261014.py
+          python3 scripts/kq247-backlink-background-discovery-20261014.py --self-test
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Start one VPS background scan without touching production
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS" || { echo 'VPS_ROOT_PASSWORD missing'; exit 1; }
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'install -d -m 0700 /opt/pwremote/kq247-backlink-background'
+          tar -czf - -C scripts kq247-backlink-background-discovery-20261014.py |
+            $REMOTE 'tar -xzf - -C /opt/pwremote/kq247-backlink-background'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/kq247-backlink-background
+          chmod 0644 "$base/kq247-backlink-background-discovery-20261014.py"
+          python3 -m py_compile "$base/kq247-backlink-background-discovery-20261014.py"
+          python3 "$base/kq247-backlink-background-discovery-20261014.py" --self-test
+          echo "INVENTORY_FILES:"
+          for f in "$base/url-inventory.txt" /opt/pwremote/kq247-domain-first/url-inventory.txt; do
+            test ! -f "$f" || ls -lh "$f"
+          done
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          if test -s "$base/worker.pid" && kill -0 "$(cat "$base/worker.pid")" 2>/dev/null; then
+            echo "KQ247_BACKGROUND_ALREADY_RUNNING_PID=$(cat "$base/worker.pid")"
+          else
+            cd "$base"
+            nohup timeout -k 10s 10800s nice -n 15 python3 -u \
+              "$base/kq247-backlink-background-discovery-20261014.py" \
+              >>"$base/worker.log" 2>&1 </dev/null &
+            echo $! > "$base/worker.pid"
+            sleep 4
+            if ! kill -0 "$(cat "$base/worker.pid")" 2>/dev/null && test ! -s "$base/latest.json"; then
+              echo "Worker failed before report:"
+              tail -n 60 "$base/worker.log" || true
+              exit 1
+            fi
+          fi
+          echo "KQ247_BACKGROUND_LOG_TAIL:"
+          tail -n 12 "$base/worker.log" || true
+          if test -f "$base/latest.json"; then
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('/opt/pwremote/kq247-backlink-background/latest.json').read_text())
+          print('KQ247_BG_REPORT',json.dumps({k:r.get(k) for k in (
+            'url_records_actually_read_total','unique_hosts_discovered',
+            'http_hosts_checked_this_run','hosts_by_status',
+            'public_backlinks_created_by_scanner','source_inventory_exists')},ensure_ascii=False))
+          PY
+          fi
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          test "$before" = "$after"
+          echo "KQ247_PRODUCTION_CONTAINERS_UNCHANGED=YES"
+          VPS
