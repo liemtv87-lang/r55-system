@@ -12,7 +12,7 @@ import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseF
 // Validated Bongdalu entrypoints. Legacy domains are discovery pointers only,
 // never alternative data providers. All newly found hosts must pass feed verification.
 const BASES=["https://www.bongdalu812.com/","https://www.bongdalu.com/","https://www.bongdalu802.com/","https://www.bongdalu811.com/","https://www.bongdalu628.com/","https://www.bongdalu800.com/","https://www.bongdalu128.com/","https://www.bongdalu618.com/"];
-const VALID_BONG_HOST=/^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$|^(?:www\.)?bongdalu\.com\.vn$|^football\\.bongdalu812\\.com$/i;
+const VALID_BONG_HOST=/^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$|^(?:www\.)?bongdalu\.com\.vn$|^football\.bongdalu812\.com$/i;
 const BOOKS=BONGDALU_BOOKMAKERS;
 const MAX_SOURCE_BYTES=1800000,DAY_MS=86400000;
 const qn=(x)=>Number.isFinite(Number(x))?Number(x):NaN;
