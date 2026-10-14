@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {forecastOneDrawAnd500Backtest,calibrateStation500,predictFromLastDrawWithCalibration} from './one-draw-500-method-selector.mjs';
+const raw=JSON.parse(readFileSync(new URL('./xsmb-505-all27-prizes-20261014.json',import.meta.url),'utf8'));
+const history=Object.entries(raw).sort(([a],[b])=>b.localeCompare(a)).slice(0,500).map(([date,prizes])=>({
+ region:'mb',station:'XSMB',draw_date:date,full_results:prizes,all2:prizes.map(x=>x.slice(-2)),special:prizes[0]
+}));
+const target='2026-10-15';
+const p=calibrateStation500({history,region:'mb',station:'XSMB',predictionDate:target});
+assert.equal(p.backtest.realCompleteDraws,500);
+assert.equal(p.backtest.candidateMethodsPerTask,1000);
+const x=predictFromLastDrawWithCalibration({previousDraw:history[0],history,calibration:p,predictionDate:target});
+assert.equal(x.sourcePrizes,27);
+assert.equal(x.digitPositions,107);
+assert.equal(x.audit.bridgeSourceDrawCount,1);
+for(const [key,n] of [['lotto3',3],['doubles',2],['dan50',50],['dan60',60],['dan75',75],['three_digit',500]])assert.equal(x[key].length,n,key);
+assert(x.dan50.every(s=>x.dan60.includes(s))&&x.dan60.every(s=>x.dan75.includes(s)));
+assert(x.three_digit.every(s=>x.dan75.includes(s.slice(-2))));
+const modified=structuredClone(history);
+modified[100].full_results[0]='99999';
+modified[100].special='99999';
+modified[100].all2[0]='99';
+const y=predictFromLastDrawWithCalibration({previousDraw:history[0],history:modified,calibration:p,predictionDate:target});
+for(const key of ['lotto3','doubles','dan50','dan60','dan75','three_digit'])assert.deepEqual(x[key],y[key],key);
+const archive=JSON.parse(readFileSync(new URL('./mtmn-35stations-prior-draw-samples.json',import.meta.url),'utf8')).stations;
+const sample=archive.filter(x=>x.region==='mn'&&x.station==='An Giang');
+assert.equal(sample.length,11);
+assert.throws(()=>forecastOneDrawAnd500Backtest({history:sample,region:'mn',station:'An Giang',predictionDate:target}),/REQUIRE_500_COMPLETE_DRAW_RESULTS_SAME_STATION/);
+assert.throws(()=>calibrateStation500({history,region:'mn',station:'An Giang',predictionDate:target}),/CROSS_STATION_OR_FUTURE_TRAINING/);
+console.log('XS_ONE_DRAW_500_MB_REAL_FULL_RESULTS=PASS');
+console.log('XS_HISTORICAL_DRAW_NEVER_ENTERS_TODAY_POSITION_VOTES=PASS');
+console.log('XS_NO_FAKE_MT_MN_500_BACKTEST=PASS');
+console.log('XS_BACKTEST_TRANSITIONS',p.backtest.trainTransitions,p.backtest.heldoutTransitions);
+console.log('XS_MB_PRIVATE_CANDIDATE_NOT_PUBLISHED',x.lotto3.join(','));
