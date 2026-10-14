@@ -3,6 +3,7 @@ import {db,closePool} from 'hatchable';
 import {publicHandler} from './publicApi.mjs';
 import {inspectBongdalu,inspectBongdaluHistoryProbe,resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from 'lib/bongdaluR55.js';
 import {processBongdaluChunk} from 'lib/r55ChunkedBuild.js';
+import {isR55IgnoredFixture} from 'lib/r55FixtureExclusions.js';
 import {gradeAndLearn} from 'lib/r55Ops.js';
 
 const PORT=3001,DELAY=60_000;
@@ -129,7 +130,7 @@ async function run(){
   // User denominator: ALL divisions with genuinely priced AH/O-U, never only majors.
   const priced=k=>k&&["homePrice","awayPrice","overPrice","underPrice"].every(n=>
     Number.isFinite(Number(k[n]))&&Number(k[n])>1.05&&Number(k[n])<=4);
-  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&priced(m.market));
+  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&priced(m.market)&&!isR55IgnoredFixture(m));
   const eligibleIds=new Set(eligible.map(m=>m.id));
   const matches=[],exceptions=[],missingHistory=[];
   let attempted=0,historyReady=0,full20Both=0,partial20=0,h2hAvailable=0,modelAttempted=0;
