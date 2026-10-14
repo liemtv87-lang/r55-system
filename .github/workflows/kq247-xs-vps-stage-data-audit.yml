@@ -1,0 +1,50 @@
+name: KQ247 XS VPS stage history and worker audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-stage-data-audit.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only VPS data and worker integrity
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'python3 -' <<'PY'
+          import pathlib,hashlib,json,re,subprocess
+          base=pathlib.Path('/opt/kq247/lottery-daily-staging')
+          for fn in ('daily-worker.mjs','minhngoc-draw.mjs','run-history.mjs','independent500.mjs','schema.sql'):
+            p=base/fn
+            if not p.exists():continue
+            s=p.read_text()
+            print('SOURCE_FILE',fn,'bytes',len(s),'sha256',hashlib.sha256(s.encode()).hexdigest())
+            if fn!='independent500.mjs':
+              clean=re.sub(r'(?i)(password|token|secret|postgresql://)[^\n]{0,100}','[REDACTED]',s)
+              print('SOURCE_CONTENT_BEGIN',fn)
+              print(clean[:8200])
+              print('SOURCE_CONTENT_END',fn)
+          for fn in ('xsmb-505-actual-through-20261014.json','xsmb-2026-10-15-staging.json'):
+            p=base/fn
+            if not p.exists():continue
+            v=json.loads(p.read_text())
+            print('DATA_FILE',fn,'sha256',hashlib.sha256(p.read_bytes()).hexdigest(),'type',type(v).__name__)
+            if isinstance(v,list):
+              print('DATA_SUMMARY',fn,'count',len(v),'first_type',type(v[0]).__name__,'last_type',type(v[-1]).__name__)
+              for row in v[:1]+v[-2:]:
+                if isinstance(row,dict):
+                  print('DATA_ROW_META',{k:(len(val) if isinstance(val,list) else val) for k,val in row.items() if k in ('draw_date','date','region','station','all2','special','source')})
+            elif isinstance(v,dict):
+              print('DATA_SUMMARY',fn,{k:(val if k not in ('history','draws','data') else '<array>') for k,val in v.items() if k not in ('password','token','secret')})
+          cmd=['docker','exec','kq247-r55-postgres','sh','-c','psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT nspname FROM pg_namespace WHERE nspname LIKE chr(107)||chr(113)||chr(50)||chr(52)||chr(55)||chr(95)||chr(120)||chr(115)||chr(95)||chr(118)||chr(112)||chr(115);"']
+          p=subprocess.run(cmd,capture_output=True,text=True,timeout=12)
+          print('XS_LOCAL_SCHEMA_EXIT',p.returncode,'schema',p.stdout.strip(),'stderr',p.stderr[:300])
+          PY
