@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {extractRichBongdaluHistory} from "../lib/r55RichHistory.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "../lib/r55BookmakerPage.js";
 import {releaseDecision} from "../../football-original/lib/r55ReleaseGate.js";
-import {evaluateR55EvidenceQuality} from "../lib/r55EnsembleV3.js";
+import {evaluateR55EvidenceQuality,chooseR55Ensemble} from "../lib/r55EnsembleV3.js";
 
 const rows = n=>Array.from({length:n},(_,i)=>[101,300+i,i%4,i%2]);
 const tr = (table,n)=>Array.from({length:n},(_,i)=>
@@ -134,4 +134,37 @@ test("zero H2H must NOT make a first-time UEFA or World Cup fixture thin/low qua
  assert.deepEqual(unseen.reasons,known.reasons);
  assert.equal(unseen.nH2H,0);
  assert.equal(known.nH2H,8);
+});
+
+test("missing one team form may yield ONLY a research-only candidate; never fake 0-goal form",()=>{
+ const row={league:"Myanmar League 2",priority:0,market:{
+  homeLine:-.5,awayLine:.5,ouLine:2.5,bookmakerCount:2,
+  homePrice:1.87,awayPrice:1.96,overPrice:1.9,underPrice:1.9,
+  ahLineSpread:0,ouLineSpread:0,bookmakerQuotes:[]
+ }};
+ const h={home:{n:20,gf:1.3,ga:1.1},away:{n:0,gf:0,ga:0},
+  h2h:{n:0},individualHistory:{home:[],away:[]}};
+ const native={model:{xg_home:1.5,xg_away:1.2},market_risk:{},
+  ah:{pick:"HOME",signal_score:65},ou:{pick:"UNDER",signal_score:70}};
+ const p=chooseR55Ensemble(row,h,native);
+ assert.ok(p,"valid Bongdalu AH/OU markets should remain modelable");
+ assert.equal(p.researchOnly,true);
+ assert.equal(p.reason,"form_samples_under_15");
+ assert.equal(p.sample.away,0);
+ assert.ok(["AH","OU"].includes(p.type));
+ assert.ok(Number.isFinite(p.ev));
+});
+test("no form for either team is not silently upgraded to quality-accepted",()=>{
+ const row={league:"Calcutta Football League",priority:0,market:{
+  homeLine:0,awayLine:0,ouLine:2.25,bookmakerCount:2,
+  homePrice:1.95,awayPrice:1.85,overPrice:1.85,underPrice:1.95
+ }};
+ const h={home:{n:0,gf:0,ga:0},away:{n:0,gf:0,ga:0},h2h:{n:0}};
+ const native={model:{xg_home:1.3,xg_away:1.1},market_risk:{},
+  ah:{pick:"AWAY",signal_score:65},ou:{pick:"UNDER",signal_score:70}};
+ const p=chooseR55Ensemble(row,h,native);
+ assert.ok(p);
+ assert.equal(p.researchOnly,true);
+ assert.equal(p.sample.home,0);
+ assert.equal(p.sample.away,0);
 });
