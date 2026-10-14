@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {extractRichBongdaluHistory} from "../lib/r55RichHistory.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "../lib/r55BookmakerPage.js";
 import {releaseDecision} from "../../football-original/lib/r55ReleaseGate.js";
+import {evaluateR55EvidenceQuality} from "../lib/r55EnsembleV3.js";
 
 const rows = n=>Array.from({length:n},(_,i)=>[101,300+i,i%4,i%2]);
 const tr = (table,n)=>Array.from({length:n},(_,i)=>
@@ -118,4 +119,19 @@ test("recognizes a real, parsed Bongdalu odds row separately from challenge page
  '<td>2.5</td><td>0.92</td></tr></table>';
  assert.equal(oddsComparisonPageState(html),"genuine_odds_rows");
  assert.equal(collectBongdaluPageBookmakers(html).length,1);
+});
+
+test("zero H2H must NOT make a first-time UEFA or World Cup fixture thin/low quality",()=>{
+ const row={league:"UEFA Champions League",priority:300,market:{
+  homeLine:-.5,awayLine:.5,ouLine:2.5,bookmakerCount:6,ahLineSpread:.1,ouLineSpread:.1
+ }};
+ const base={home:{n:20,gf:1.9,ga:1.0},away:{n:20,gf:1.2,ga:1.1}};
+ const model={model:{xg_home:1.7,xg_away:1.2},market_risk:{}};
+ const unseen=evaluateR55EvidenceQuality(row,{...base,h2h:{n:0}},model);
+ const known=evaluateR55EvidenceQuality(row,{...base,h2h:{n:8}},model);
+ assert.equal(unseen.ok,true);
+ assert.equal(known.ok,true);
+ assert.deepEqual(unseen.reasons,known.reasons);
+ assert.equal(unseen.nH2H,0);
+ assert.equal(known.nH2H,8);
 });
