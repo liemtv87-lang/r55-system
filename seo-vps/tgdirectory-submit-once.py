@@ -45,11 +45,16 @@ def go(page, k, data):
   elif any("vietnamese" in s or "tiếng việt" in s for s in vals) and "language" in missing:
    match=next(x for x in pool if "vietnamese" in x["t"].lower() or "tiếng việt" in x["t"].lower())
    sl.select_option(value=match["v"]);missing.discard("language")
+  elif any(s in ("other","other languages","other language") for s in vals) and "language" in missing:
+   match=next(x for x in pool if x["t"].lower() in ("other","other languages","other language"))
+   sl.select_option(value=match["v"]);missing.discard("language");r["language"]="Other (Vietnamese not offered)"
   elif "category" in missing:
    match=next((x for key in g["topic"] for x in pool if x["t"].lower()==key.lower()),None)
    if match:sl.select_option(value=match["v"]);missing.discard("category");r["category"]=match["t"]
  r["missing_choices"]=sorted(missing)
- if missing:return dict(r,status="missing_matching_select_choices",excerpt=snippet(page))
+ if missing:
+  options=page.locator("select").evaluate_all('(xs)=>xs.map(x=>({name:x.name,options:[...x.options].map(o=>o.textContent.trim())}))')
+  return dict(r,status="missing_matching_select_choices",select_options=options,excerpt=snippet(page))
  if risk(page):return dict(r,status="captcha_requires_owner")
  submit=vis(page.get_by_role("button",name=re.compile("Submit for review",re.I)))
  if not submit:return dict(r,status="submit_button_missing",excerpt=snippet(page))
@@ -72,8 +77,13 @@ def main():
   page=browser.new_page(viewport={"width":1260,"height":850})
   for k in GROUPS:
    if k in d["groups"]:
-    print("SKIPPED_PREVIOUS",k,d["groups"][k].get("status"),flush=True)
-    continue
+    prev=d["groups"][k]
+    if prev.get("status")=="missing_matching_select_choices" and not prev.get("retried_pre_submit_once"):
+     prev["retried_pre_submit_once"]=True
+     save(d)
+    else:
+     print("SKIPPED_PREVIOUS",k,prev.get("status"),flush=True)
+     continue
    try:r=go(page,k,d)
    except Exception as e:r={"group":k,"target":GROUPS[k]["link"],"status":"error_or_uncertain_no_retry","error":type(e).__name__+":"+str(e)[:180]}
    d["groups"][k]=r;save(d)
