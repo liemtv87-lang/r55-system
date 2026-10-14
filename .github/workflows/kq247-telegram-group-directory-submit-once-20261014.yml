@@ -1,0 +1,147 @@
+name: KQ247 Submit Two Communities to Telegram-Group Directory Once
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-telegram-group-directory-submit-once-20261014.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-telegram-group-com-once
+  cancel-in-progress: false
+jobs:
+  submit_once:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Prepare secure SSH transport
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Submit two truthful public groups once from isolated VinaHost Playwright
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/seo-telegram-group-directory-once
+          mkdir -p "$base/state"
+          cat > "$base/submit.py" <<'PY'
+          import datetime,json,pathlib,re
+          from urllib.parse import urlparse,urljoin
+          from playwright.sync_api import sync_playwright
+          FORM="https://telegram-group.com/en/publish/"
+          STATE=pathlib.Path("/state/receipts.json")
+          GROUPS=[
+            {"id":"football","url":"https://t.me/keochuyengia79","name":"KQ247 - Bóng đá, lịch thi đấu và phân tích kèo",
+             "description":"Cộng đồng Telegram KQ247 miễn phí chia sẻ lịch trận, kết quả bóng đá, nhận định trước trận và kèo châu Á/Tài Xỉu để tham khảo. Không bảo đảm dự đoán thắng.",
+             "categories":["sport","Fans"]},
+            {"id":"lottery","url":"https://t.me/xsbm999","name":"DỰ ĐOÁN XỔ SỐ 3 MIỀN - KQ247",
+             "description":"Nhóm Telegram KQ247 miễn phí về kết quả và lịch mở thưởng XSMB, XSMT, XSMN theo từng đài, thống kê và dự đoán tham khảo. Không bảo đảm trúng thưởng.",
+             "categories":["news"]},
+          ]
+          def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+          def save(d):
+              tmp=STATE.with_suffix(".tmp")
+              tmp.write_text(json.dumps(d,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
+              tmp.replace(STATE)
+          def excerpt(page):
+              try:return page.locator("body").inner_text(timeout=5000)[-1000:]
+              except Exception:return ""
+          def is_blocked(page):
+              return page.locator('iframe[src*="captcha"],[data-sitekey],.g-recaptcha,.h-captcha,.cf-turnstile').count()>0
+          try:report=json.loads(STATE.read_text(encoding="utf8"))
+          except (OSError,ValueError):report={"directory":FORM,"groups":{},"updated_at":now()}
+          if not isinstance(report.get("groups"),dict):raise RuntimeError("bad persisted state")
+          with sync_playwright() as pw:
+              browser=pw.chromium.launch(headless=True,args=["--no-sandbox"])
+              page=browser.new_page(viewport={"width":1270,"height":900})
+              for group in GROUPS:
+                  gid=group["id"]
+                  if gid in report["groups"]:
+                      print("PREVIOUS_ATTEMPT_NOT_REPEATED",gid,report["groups"][gid].get("status"),flush=True)
+                      continue
+                  receipt={"target":group["url"],"time_utc":now(),"status":"inspection"}
+                  try:
+                      r=page.goto(FORM,wait_until="domcontentloaded",timeout=30000)
+                      if not r or r.status!=200:
+                          receipt.update(status="unavailable",http=r.status if r else None)
+                      elif is_blocked(page):
+                          receipt["status"]="human_verification_required"
+                      else:
+                          form=page.locator("div.wpcf7 form").first
+                          if not form.count():
+                              receipt.update(status="form_changed",excerpt=excerpt(page))
+                          else:
+                              fields=["name","message","groupUrl"]
+                              if not all(form.locator('[name="'+name+'"]').count() for name in fields):
+                                  receipt.update(status="form_changed",fields=fields,excerpt=excerpt(page))
+                              else:
+                                  form.locator('[name="name"]').fill(group["name"])
+                                  form.locator('[name="message"]').fill(group["description"])
+                                  form.locator('[name="groupUrl"]').fill(group["url"])
+                                  select=form.locator('select[name="plugin-list[]"]')
+                                  options=select.locator("option").evaluate_all('(xs)=>xs.map(x=>({value:x.value,label:x.textContent.trim()}))') if select.count() else []
+                                  wanted=next((o for option in group["categories"] for o in options
+                                               if o["value"] and o["label"].strip().lower()==option.lower()),None)
+                                  if not wanted:
+                                      receipt.update(status="category_unavailable",available_categories=[x["label"] for x in options])
+                                  else:
+                                      select.select_option(value=[wanted["value"]])
+                                      receipt["category"]=wanted["label"]
+                                      submit=form.locator('input[type="submit"],button[type="submit"]').first
+                                      if not submit.count() or is_blocked(page):
+                                          receipt.update(status="submission_blocked_or_button_missing")
+                                      else:
+                                          # Write before potential POST, so uncertain outcomes never get repeated.
+                                          receipt["status"]="attempted_no_retry"
+                                          receipt["attempted_at"]=now()
+                                          report["groups"][gid]=receipt
+                                          save(report)
+                                          submit.click(timeout=16000)
+                                          page.wait_for_timeout(2800)
+                                          feedback=form.locator(".wpcf7-response-output")
+                                          message=feedback.inner_text(timeout=4000) if feedback.count() else ""
+                                          status=form.get_attribute("data-status") or ""
+                                          receipt.update(form_status=status,feedback=message[:1200],final_url=page.url)
+                                          if status=="sent" or re.search("thank you|successfully|has been sent|תודה",message,re.I):
+                                              receipt["status"]="submitted_pending_publication"
+                                          elif status in ("invalid","spam","failed","aborted"):
+                                              receipt["status"]="declined_or_validation_failed"
+                                          else:receipt["status"]="outcome_uncertain_no_retry"
+                  except Exception as e:
+                      receipt.update(status="error_or_uncertain_no_retry",
+                                     error=type(e).__name__+": "+str(e)[:250])
+                  report["groups"][gid]=receipt
+                  report["updated_at"]=now()
+                  save(report)
+                  print("DIRECTORY_ONCE_RESULT",gid,json.dumps(receipt,ensure_ascii=False),flush=True)
+              browser.close()
+          print("DIRECTORY_ONCE_REPORT="+json.dumps(report,ensure_ascii=False),flush=True)
+          PY
+          chmod 0644 "$base/submit.py"
+          docker image inspect pwremote/playwright:1.56.0 >/dev/null
+          uid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -u)"
+          gid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -g)"
+          chown -R "$uid:$gid" "$base/state"
+          original="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          timeout 240s docker run --rm --init --name kq247-telegram-group-directory-once \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/submit.py,dst=/app/submit.py,readonly" \
+            --mount "type=bind,src=$base/state,dst=/state" \
+            pwremote/playwright:1.56.0 python3 /app/submit.py
+          final="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          test "$original" = "$final"
+          echo 'KQ247_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          echo 'PERSISTED_RECEIPT_JSON:'
+          cat "$base/state/receipts.json"
+          VPS
