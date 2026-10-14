@@ -55,6 +55,7 @@ def predict(t,R,P,C,head_freq,tail_freq,prefix):
     var=np.maximum(prob*(1-prob),.012)
     corr=np.clip(cc/np.sqrt(np.outer(var,var)),-.9,.9)
     np.fill_diagonal(corr,0)
+    corr=corr.astype(np.float16)
     allowed=~((C[t-1]>0)&(C[t-2]>0))
     sc=np.where(allowed,sc,-1e7)
     nums=np.arange(100)
