@@ -2,7 +2,7 @@
 // Fail closed on missing actual result; no previous forecasts are used.
 import {readFile,writeFile,rename,open,unlink} from 'node:fs/promises';
 import {join} from 'node:path';
-import {predictIndependentDaily} from './independent500.mjs';
+import {predictLottoFull27} from './lotto-full27-independent-v1.mjs';
 import {predictDe27Daily} from './de-all27-pos-v2.mjs';
 import {getXsDraws} from './minhngoc-draw.mjs';
 const ROOT='/stage', HISTORY=join(ROOT,'xsmb-history-live.json');
@@ -38,13 +38,13 @@ try{
  }
  const past=rows.filter(x=>x.region==='mb'&&x.station==='XSMB'&&x.draw_date<target).sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
  if(past.length!==500||past[0].draw_date!==today||past.some(x=>!/^\d{5}$/.test(x.special||'')||!Array.isArray(x.full_results)||x.full_results.length!==27))throw Error('HISTORY_NOT_FRESH_OR_NO_SPECIAL');
- const lotto=predictIndependentDaily({predictionDate:target,region:'mb',station:'XSMB',draws:past,ganDaysLimit:10});
+ const lotto=predictLottoFull27({predictionDate:target,region:'mb',station:'XSMB',draws:past,ganLimit:10});
  const de=predictDe27Daily({predictionDate:target,draws:past});
  if(de.sourceDate!==lotto.sourceLastDate)throw Error('DE_LOTTO_SOURCE_DAY_CONFLICT');
  const full={predictionDate:target,region:'mb',station:'XSMB',lotto3:lotto.picks,doubles:lotto.doubles,
-  de,sourceDate:today,sourceDraws:500,model:'KQ247_500_DAILY_LOTTO_PLUS_ALL27_POS_V2',
+  de,sourceDate:today,sourceDraws:500,lottoAudit:{coveredPositions:lotto.audit.coveredBySupportedIndependentRules,supportedRules:lotto.audit.supportedIndependentRules,independentFamilies:lotto.audit.activeFamilyCount,inputHash:lotto.sourceInputHash},model:'KQ247_XSMB_FULL27_BOTH_LOTTO_AND_DE_V3',
   publication:'STAGING_UNPUBLISHED',previousForecastsUsed:false,generatedAt:now.toISOString()};
- const file=join(ROOT,'xsmb-'+target+'-full27-staging.json');
+ const file=join(ROOT,'xsmb-'+target+'-full27pos-v3-staging.json');
  try{await writeFile(file,JSON.stringify(full),{flag:'wx'});}
  catch(e){
   if(e.code!=='EEXIST')throw e;
