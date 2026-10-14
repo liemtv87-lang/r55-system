@@ -29,6 +29,9 @@ MAX_SECONDS = max(60, min(14400, int(os.environ.get("KQ247_MAX_SECONDS", "10800"
 MAX_HTTP_HOSTS = max(25, min(150000, int(os.environ.get("KQ247_MAX_HTTP_HOSTS", "20000"))))
 MAX_URL_LINES = max(1000, min(2000000000, int(os.environ.get("KQ247_MAX_URL_LINES", "2000000000"))))
 BATCH = 25000
+WATCH = ("--watch" in sys.argv)
+IDLE_SECONDS = max(60, min(1800, int(os.environ.get("KQ247_IDLE_SECONDS", "600"))))
+STALE_DAYS = max(7, min(90, int(os.environ.get("KQ247_STALE_DAYS", "30"))))
 PATH_RE = re.compile(r"submit|publish|add[-_/]?(?:group|channel|link|listing)|suggest|directory|register|addgroup|dang[-_/]?(?:tin|bai)|them[-_/]?nhom", re.I)
 DOMAIN_RE = re.compile(r"(telegram|telegr|tg(?:find|hub|link|mania|dir|group|radar|box)|group|directory|link|forum|listing|submit|community)", re.I)
 URL_RE = re.compile(r"https?://[^\s\"'<>\\]+", re.I)
@@ -82,6 +85,9 @@ SEED = [
 "https://tgcompass.com",
 "https://open.tg",
 "https://search-t.me",
+"https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/",
+"https://www.telegram-groups.com/dashboard/submit/",
+"https://www.groupssor.com/submit/",
 ]
 
 def host_url(raw):
@@ -296,14 +302,30 @@ def main():
         con.commit()
         src = source_file()
         scanned = 0
-        while time.monotonic()-started < MAX_SECONDS and scanned < MAX_HTTP_HOSTS:
-            # Continue incremental streaming without restarting from byte zero.
+        while WATCH or (time.monotonic()-started < MAX_SECONDS and scanned < MAX_HTTP_HOSTS):
+            # Incrementally load new URL records. Never reset the cursor to inflate counts.
             if src and int(state_get(con,"urls_read")) < MAX_URL_LINES:
                 ingest(con,src,min(100000, MAX_URL_LINES-int(state_get(con,"urls_read"))))
+            if WATCH and scanned >= MAX_HTTP_HOSTS:
+                # Budget per scan window, not an attempt to fetch unlimited hosts at once.
+                time.sleep(IDLE_SECONDS)
+                scanned = 0
             remaining = MAX_HTTP_HOSTS-scanned
             entries=con.execute("SELECT host,url FROM hosts WHERE status='pending' LIMIT ?", (min(WORKERS*5,remaining),)).fetchall()
             if not entries:
-                break
+                write_report(con,started,scanned,src)
+                if not WATCH:
+                    break
+                # Periodically requalify previously unavailable sources, not submissions.
+                cutoff=(datetime.datetime.now(datetime.timezone.utc)-
+                        datetime.timedelta(days=STALE_DAYS)).isoformat()
+                con.execute("UPDATE hosts SET status='pending' WHERE status IN ('unavailable','no_form') AND checked != '' AND checked < ?",(cutoff,))
+                con.commit()
+                print("KQ247_BG_IDLE="+json.dumps({"sleep_s":IDLE_SECONDS,
+                    "source_inventory_exists":bool(src),"new_hosts_pending":0}),flush=True)
+                time.sleep(IDLE_SECONDS)
+                src = source_file()
+                continue
             with futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
                 responses = list(pool.map(inspect, entries))
             for host, final, status, reason, suggestions in responses:
