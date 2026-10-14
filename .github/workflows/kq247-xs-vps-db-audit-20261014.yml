@@ -1,0 +1,38 @@
+name: KQ247 XS VPS isolated DB audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-db-audit-20261014.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect VPS local PostgreSQL and lottery services read only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          printf 'AUDIT_UTC='; date -u +%FT%TZ
+          printf 'LOTTERY_STAGING_FILES\n'
+          ls -l /opt/kq247/lottery-daily-staging/independent500.mjs /opt/kq247/lottery-daily-staging/schema.sql
+          printf 'LOCAL_DB_LIST\n'
+          docker exec -i kq247-r55-postgres sh -c 'psql -X -q -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -At' <<'SQL'
+          SELECT 'DATABASE='||current_database()||' USER='||current_user;
+          SELECT 'SCHEMA='||nspname FROM pg_namespace WHERE nspname IN ('public','kq247_xs_vps');
+          SELECT 'TABLE='||table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema,table_name LIMIT 70;
+          SQL
+          printf 'SERVICE_HEALTH\n'
+          curl -fSs --max-time 10 http://127.0.0.1:18084/healthz
+          printf '\nRUNNING_SERVICES\n'
+          docker ps --format '{{.Names}} {{.Status}}' | grep -E 'kq247-lottery|kq247-r55-postgres|kq247-vietlott|kq247-football' | head -18 || true
+          REMOTE
