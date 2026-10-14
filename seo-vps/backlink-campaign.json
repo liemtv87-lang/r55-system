@@ -457,5 +457,26 @@
     "do not modify existing lottery, football and customer systems"
   ],
   "goal_updated_utc": "2026-10-14",
-  "goal_note": "Targets only; verified counts require public listing URL evidence."
+  "goal_note": "Targets only; verified counts require public listing URL evidence.",
+  "pending_submissions": [
+    {
+      "directory": "telegram-group.com",
+      "group": "football",
+      "target": "https://t.me/keochuyengia79",
+      "submitted_at_utc": "2026-10-14T10:06:37Z",
+      "status": "submitted_pending_publication",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38547208216",
+      "public_listing_url": null
+    }
+  ],
+  "failed_submissions": [
+    {
+      "directory": "telegram-group.com",
+      "group": "lottery",
+      "target": "https://t.me/xsbm999",
+      "attempted_at_utc": "2026-10-14T10:06:42Z",
+      "status": "validation_failed_not_published",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38547208216"
+    }
+  ]
 }
