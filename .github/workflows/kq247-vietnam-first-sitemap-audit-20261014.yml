@@ -6,6 +6,8 @@ on:
       - .github/workflows/kq247-vietnam-first-sitemap-audit-20261014.yml
       - seo-vps/vietnam-first-scout-20261014.py
   workflow_dispatch:
+  schedule:
+    - cron: '31 * * * *'
 permissions:
   contents: read
 jobs:
