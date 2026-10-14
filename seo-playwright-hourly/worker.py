@@ -45,6 +45,12 @@ DIRECTORIES = [
     ("TelXplorer", "https://telxplorer.com/en/create_group"),
     ("TeleVerse", "https://televerse.click/submit"),
     ("Togather", "https://www.togather.in/submit"),
+    ("Groupswa", "https://groupswa.com/submit-group-links/"),
+    ("WT Group Links", "https://wtgrouplinks.com/submit-your-telegram-groups/"),
+    ("Telegram Group", "https://telegram-group.com/en/publish/"),
+    ("Telegram Group Org", "https://telegram-group.org/SubmitGroup.php"),
+    ("Telekit", "https://telekit.link/addgroup"),
+    ("TelegrmGroupLink", "https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/"),
     ("World Telegram Directory", "https://sites.google.com/view/telegramdirectory/home"),
 ]
 # The entries below were already submitted earlier. Never repeat them.
