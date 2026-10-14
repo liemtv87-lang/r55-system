@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {join} from 'node:path';
 import {predictFromPreviousStationDraw} from './previous-station-draw-only.mjs';
 import {fetchAllOfficialDraws} from './minhngoc-all-stations.mjs';
+import {normalizedStationDraw} from './normalize-all-prizes.mjs';
 const ROOT='/stage',archive=JSON.parse(await readFile(join(ROOT,'mtmn-35stations-prior-draw-samples.json'),'utf8'));
 const samples=archive.stations;
 const mb=JSON.parse(await readFile(join(ROOT,'xsmb-history-live.json'),'utf8'))
@@ -39,6 +40,7 @@ if(!offline){
  const queries=[];
  for(let delta=7;delta>=0;delta--)for(const region of ['mt','mn'])
   queries.push({day:dateShift(completedDate,-delta),region});
+ for(let delta=2;delta>=0;delta--)queries.push({day:dateShift(completedDate,-delta),region:'mb'});
  for(let i=0;i<queries.length;i+=4){
   const jobs=await Promise.allSettled(queries.slice(i,i+4).map(async q=>{
    const result=await fetchAllOfficialDraws(q.day,q.region);
@@ -51,9 +53,12 @@ if(!offline){
     if(!id){console.error('UNKNOWN_LIVE_STATION',fresh.region,fresh.source_station);continue;}
     const old=stations.get(id),matching=old.find(r=>r.draw_date===fresh.draw_date);
     if(matching){
-     if(matching.all2.length!==fresh.all2.length||matching.all2.some((v,n)=>v!==fresh.all2[n]))
+     // Some original provider archives are DB-first; canonicalize before comparison.
+     const oldCanon=normalizedStationDraw(matching);
+     const newCanon=normalizedStationDraw({...fresh,station:id.split('|')[1]});
+     if(oldCanon.all2.some((v,n)=>v!==newCanon.all2[n])||oldCanon.special!==newCanon.special)
       throw Error('PRIZE_SOURCE_CONFLICT_'+id+'_'+fresh.draw_date);
-     if(!matching.full_results)matching.full_results=fresh.full_results;
+     matching.full_results=fresh.full_results;
     }else{
      old.push({...fresh,station:id.split('|')[1]});
      affected.add(id);
