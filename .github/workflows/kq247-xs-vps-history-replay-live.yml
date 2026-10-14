@@ -1,0 +1,27 @@
+name: KQ247 XS staging history replay and source verification
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-history-replay-live.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Replay 11 and 15 Oct from local 505-draw history
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          docker run --rm --network none --read-only -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node /stage/run-history.mjs /stage/xsmb-505-actual-through-20261014.json
+          echo XSMB_WALKFORWARD_REPLAY_PASS
+          docker run --rm --network bridge --read-only -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module -e "import {getXsDraws} from '/stage/minhngoc-draw.mjs'; const d=await getXsDraws('2026-10-14','xsmb',['XSMB']);const r=d.XSMB;if(r.special!=='28259'||r.all2.length!==27)throw Error('result_mismatch');console.log('XSMB_LIVE_DRAW_SOURCE_PASS',r.special,r.all2.length)" 
+          VPS
