@@ -56,9 +56,20 @@ def main():
         page=browser.new_page(viewport={"width":1250,"height":950})
         for g in GROUPS:
             key=g["id"]
-            if key in state["groups"]:
-                print("GROUPSSOR_SKIP_PREVIOUS_ATTEMPT",key,state["groups"][key].get("state"),flush=True)
-                continue
+            previous=state["groups"].get(key)
+            if previous:
+                # The previous attempt never reached Submit: radio action timed out.
+                # Only this provably pre-submit state can be retried.
+                safe_retry=(previous.get("state")=="error_or_uncertain_no_retry"
+                            and "Locator.check" in previous.get("error","")
+                            and "response_excerpt" not in previous)
+                if safe_retry:
+                    print("GROUPSSOR_RETRY_PRE_SUBMIT_RADIO",key,flush=True)
+                    del state["groups"][key]
+                    save(state)
+                else:
+                    print("GROUPSSOR_SKIP_PREVIOUS_ATTEMPT",key,previous.get("state"),flush=True)
+                    continue
             receipt={"group":key,"target":g["url"],"time_utc":now(),"state":"inspection_started"}
             try:
                 response=page.goto(FORM,wait_until="domcontentloaded",timeout=27000)
@@ -71,7 +82,12 @@ def main():
                     state["groups"][key]=receipt;save(state);continue
                 radios=visible(page.locator("input[type=radio]"))
                 radios=[r for r in radios if "telegram" in (r.get_attribute("value") or "").lower()]
-                if radios:radios[0].check()
+                if radios:
+                    # Input uses visually hidden sr-only CSS, click the actual radio
+                    # programmatically to trigger React's normal change event.
+                    radios[0].evaluate("(el) => el.click()")
+                    if not radios[0].is_checked():
+                        raise RuntimeError("telegram_radio_not_selected")
                 else:
                     labels=visible(page.get_by_label("Telegram",exact=True))
                     if labels:labels[0].check()
