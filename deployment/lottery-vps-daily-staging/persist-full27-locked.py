@@ -42,11 +42,9 @@ source=sql_str(sourceDate.isoformat())
 payload=jsonb(obj)
 sql=f"""BEGIN;
 INSERT INTO kq247_xs_vps.locked_daily_snapshots
-(prediction_date,region,station,model,lotto3,doubles,de,source_last_date,source_draws,fingerprint,diagnostics,lock_payload)
+(prediction_date,region,station,model,lotto3,doubles,de,source_last_date,source_draws,lock_payload)
 SELECT {datestr}::date,'mb','XSMB',{sql_str(obj['model'])},{jsonb(obj['lotto3'])},
-       {jsonb(obj['doubles'])},{jsonb(de)},{source}::date,500,
-       {sql_str(hashlib.sha256(json.dumps(past,sort_keys=True).encode()).hexdigest())},
-       {jsonb({'lottoAudit':audit,'DEmethods':de['method_counts']})},{payload}
+       {jsonb(obj['doubles'])},{jsonb(de)},{source}::date,500,{payload}
 WHERE NOT EXISTS (SELECT 1 FROM kq247_xs_vps.locked_daily_snapshots WHERE prediction_date={datestr}::date AND region='mb' AND station='XSMB');
 DO $check$
 BEGIN
