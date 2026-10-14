@@ -1,38 +1,55 @@
-name: KQ247 MT MN refresh own latest 18 prizes without 500 backtest
+name: KQ247 MT MN refresh each station full actual prizes safe stage
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/kq247-mtmn-refresh-one-draw-20261015.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Retrieve exact most recent draw for MT and MN station on VPS
+      - name: Replace broken reader import; validate 35 separate MT/MN real latests
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
         run: |
           set -euo pipefail
+          test -n "${SSHPASS:-}"
           install -d -m 700 "$HOME/.ssh"
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
-          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/refresh-station-last-draw.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          ROOT=/opt/kq247/lottery-daily-staging
+          sshpass -e scp -o StrictHostKeyChecking=yes \
+            deployment/lottery-vps-daily-staging/minhngoc-all-stations.mjs \
+            deployment/lottery-vps-daily-staging/normalize-all-prizes.mjs \
+            deployment/lottery-vps-daily-staging/refresh-station-last-draw.mjs \
+            deployment/lottery-vps-daily-staging/mtmn-station-weekly-draw-days.json \
+            root@64.120.92.172:$ROOT/
           sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           ROOT=/opt/kq247/lottery-daily-staging
-          docker run --rm --network bridge -v "$ROOT":/stage node:22-alpine node /stage/refresh-station-last-draw.mjs
+          for f in minhngoc-all-stations.mjs normalize-all-prizes.mjs refresh-station-last-draw.mjs; do
+            docker run --rm --network none --read-only -v "$ROOT":/stage:ro node:22-alpine node --check "/stage/$f"
+          done
+          docker run --rm --network bridge --cpus 2 --memory 700m -v "$ROOT":/stage node:22-alpine node /stage/refresh-station-last-draw.mjs
           python3 - <<'PY'
-          import json,pathlib
-          d=json.loads(pathlib.Path('/opt/kq247/lottery-daily-staging/mtmn-one-draw-actual-latest.json').read_text())['draws']
-          assert len(d)==35 and len({(r['region'],r['station']) for r in d})==35
-          assert all(len(r['full_results'])==18 and all(a[-2:]==b for a,b in zip(r['full_results'],r['all2'])) for r in d)
-          for name in ['Cần Thơ','Sóc Trăng','Đồng Nai','Khánh Hòa','Đà Nẵng']:
-           r=next(x for x in d if x['station']==name)
-           assert r['draw_date']=='2026-10-14',(name,r['draw_date'])
-          print('MT_MN_35_STATIONS_LAST_OWN_ACTUAL_FRESH_PASS')
+          import pathlib,json,datetime
+          root=pathlib.Path('/opt/kq247/lottery-daily-staging')
+          data=json.loads((root/'mtmn-one-draw-actual-latest.json').read_text())
+          draws=data['draws']
+          assert len(draws)==35 and len({(r['region'],r['station']) for r in draws})==35
+          for r in draws:
+           assert len(r['full_results'])==18 and len(r['all2'])==18
+           assert all(p[-2:]==v for p,v in zip(r['full_results'],r['all2']))
+           assert len(r['special'])==6
+          for station in ['Cần Thơ','Sóc Trăng','Đồng Nai','Khánh Hòa','Đà Nẵng']:
+           r=next(x for x in draws if x['station']==station)
+           assert r['draw_date']>='2026-10-14',(station,r['draw_date'])
+          print('XS_ALL_35_ACTUAL_STATIONS_REFRESH_OK',data.get('updatedAt'),len(draws))
           PY
           VPS
