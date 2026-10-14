@@ -52,6 +52,43 @@ function estimates(row,h,native){
  const anchorH=bounded((total+diff)/2,.2,4.3),anchorA=bounded((total-diff)/2,.2,4.3);
  return [[mh,ma],[formH,formA],[anchorH,anchorA]];
 }
+// Historical AH/OU evidence is measured from the individual matches and every
+// bookmaker's published line, with each past match weighted only once.
+function historicalEvidence(history,option){
+ const collection=option.type==="AH"?
+  (option.pick==="HOME"?history?.individualHistory?.home:history?.individualHistory?.away):
+  [...(history?.individualHistory?.home||[]),...(history?.individualHistory?.away||[])];
+ if(!Array.isArray(collection))return {matches:0,bookmakerQuotes:0,score:null};
+ let total=0,seen=0,quotes=0;
+ for(const row of collection){
+  const published=(row?.quotes||[]).filter(q=>Number.isFinite(Number(option.type==="AH"?q.ahClosing:q.ouClosing)));
+  if(!published.length)continue;
+  const values=[];
+  for(const q of published){
+   const raw=Number(option.type==="AH"?q.ahClosing:q.ouClosing);
+   if(option.type==="OU"&&(raw<.5||raw>8))continue;
+   if(option.type==="AH"&&Math.abs(raw)>6)continue;
+   const actual=option.type==="AH"?
+    Number(row.teamGoals)-Number(row.conceded):
+    Number(row.homeGoals)+Number(row.awayGoals);
+   const line=option.type==="AH"?(row.teamIsHome?-raw:raw):raw;
+   if(!Number.isFinite(actual)||!Number.isFinite(line))continue;
+   const legs=Math.abs(Math.round(line*4))%2===1?[line-.25,line+.25]:[line];
+   const outcome=legs.reduce((s,l)=>{const delta=option.type==="AH"?actual+l:
+     (option.pick==="OVER"?actual-l:l-actual);
+    const signed=option.type==="AH"?delta:
+      delta;
+    return s+(signed>1e-8?1:signed< -1e-8?-1:0);
+   },0)/legs.length;
+   values.push(outcome);
+  }
+  if(!values.length)continue;
+  let matchScore=values.reduce((s,x)=>s+x,0)/values.length;
+  if(option.type==="AH"&&option.pick==="AWAY")matchScore=matchScore;
+  total+=matchScore;seen++;quotes+=values.length;
+ }
+ return {matches:seen,bookmakerQuotes:quotes,score:seen?round(total/seen,3):null};
+}
 function nativeSide(row,native,type){
  const raw=String(type==="AH"?native?.ah?.pick:native?.ou?.pick).trim().toUpperCase();
  if(!raw)return null;
@@ -92,17 +129,19 @@ export function chooseR55Ensemble(row,h,native){
   // Model-only edges above 24% and very deep Asian lines caused the
   // unverified 12-Oct losses. For shadow picks, prefer less fragile markets
   // rather than chasing exaggerated expected returns. This is NOT a win guarantee.
+  const hist=historicalEvidence(h,x);
+  const historyConflict=hist.matches>=12&&hist.score<-.35;
   const fragile=(x.type==="AH"&&Math.abs(x.line)>1.25?10:0)+
    (ev>.24?6:0)+(worst<-.05?4:0)+(best-worst>.25?3:0)+
-   (x.type==="OU"&&x.line>=4?4:0)+(risk?10:0);
+   (x.type==="OU"&&x.line>=4?4:0)+(risk?10:0)+(historyConflict?3:0);
   return {...x,ev:round(ev,4),worstEV:round(worst,4),spreadEV:round(best-worst,4),
-   fragility:fragile,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
+   fragility:fragile,historicalSupport:hist,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
    researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":Number(row.priority)<175?"competition_below_priority_floor":!modelStable?"ensemble_edge_not_robust":
       x.type==="AH"&&Math.abs(x.line)>1.25?"deep_ah":x.type==="OU"&&x.line>=4?"extreme_total":"accepted"};
  });
  if(!scored.length)return null;
  scored.sort((a,b)=>Number(a.researchOnly)-Number(b.researchOnly)||
-    a.fragility-b.fragility||Number(b.nativeAligned===true)-Number(a.nativeAligned===true)||
+    a.fragility-b.fragility||Number(b.historicalSupport?.score||0)-Number(a.historicalSupport?.score||0)||Number(b.nativeAligned===true)-Number(a.nativeAligned===true)||
     b.worstEV-a.worstEV||b.ev-a.ev);
  const chosen=scored[0];
  const method="r55_ensemble_v4_"+chosen.type.toLowerCase();
@@ -111,6 +150,6 @@ export function chooseR55Ensemble(row,h,native){
   researchOnly:chosen.researchOnly,reason:chosen.reason,bookmakers:q.books,
   evidence:chosen.nativeSignal,modelVersion:"ensemble_poisson_three_scenarios_v4_native_agreement",
   sample:{home:q.nh,away:q.na,h2h:q.nH2H},
-  candidateCount:scored.length,confidence:null};
+  candidateCount:scored.length,historicalSupport:chosen.historicalSupport,confidence:null};
 }
 export {expectedReturn};
