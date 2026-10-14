@@ -1,0 +1,52 @@
+name: KQ247 MT MN Full18 History Backfill Staging Batch
+on:
+  push:
+    paths:
+      - deployment/lottery-vps-daily-staging/mtmn-500-full18-archive-backfill.mjs
+      - .github/workflows/kq247-mtmn-500-full18-backfill-batch.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-mtmn-history-source-import
+  cancel-in-progress: false
+jobs:
+  readonly_acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read historical station/date records, verify original source and write only isolated archive
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          node --check deployment/lottery-vps-daily-staging/mtmn-500-full18-archive-backfill.mjs
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/mtmn-500-full18-archive-backfill.mjs root@64.120.92.172:/tmp/kq247-mtmn-full18-backfill.mjs
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          base=/opt/kq247/lottery-daily-staging
+          install -m 0644 /tmp/kq247-mtmn-full18-backfill.mjs "$base/mtmn-500-full18-archive-backfill.mjs"
+          test -s "$base/minhngoc-all-stations.mjs"
+          test -s "$base/normalize-all-prizes.mjs"
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS' > "$base/mtmn-500-actual-targets.json"
+          import pg from 'pg';
+          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:15000});
+          try {
+            const q=await db.query("SELECT region,station,draw_date::text AS draw_date,all2 FROM public.kq247_draw_history WHERE region IN ('mt','mn') ORDER BY region,station,draw_date DESC");
+            if(q.rows.length<15000)throw Error('INCOMPLETE_ARCHIVE_HISTORIES');
+            console.log(JSON.stringify(q.rows));
+          } finally {await db.end();}
+          JS
+          test "$(wc -c < "$base/mtmn-500-actual-targets.json")" -gt 1000000
+          docker run --rm --init --network bridge --cpus 1.0 --memory 700m \
+            -v "$base":/stage node:22-alpine \
+            node /stage/mtmn-500-full18-archive-backfill.mjs --max=6
+          test -s "$base/public-locked/xsmb-2026-10-15.json"
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-original
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-bot
+          echo KQ247_MT_MN_500_REAL_ARCHIVE_BACKFILL_READONLY_BATCH=PASS
+          VPS
