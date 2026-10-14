@@ -1,0 +1,25 @@
+name: KQ247 XS MT-MN source repair full18 proof
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/kq247-xs-source-repair-proof-20261015.yml'
+      - 'deployment/lottery-vps-daily-staging/minhngoc-all-stations.mjs'
+      - 'deployment/lottery-vps-daily-staging/refresh-station-last-draw.mjs'
+      - 'deployment/lottery-vps-daily-staging/test-minhngoc-live.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify no parse errors
+        run: |
+          node --check deployment/lottery-vps-daily-staging/minhngoc-all-stations.mjs
+          node --check deployment/lottery-vps-daily-staging/normalize-all-prizes.mjs
+          node --check deployment/lottery-vps-daily-staging/refresh-station-last-draw.mjs
+      - name: Compare all original 18 prizes with independently verified stations
+        run: node deployment/lottery-vps-daily-staging/test-minhngoc-live.mjs
