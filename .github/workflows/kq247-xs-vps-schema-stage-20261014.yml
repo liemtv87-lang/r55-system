@@ -1,0 +1,42 @@
+name: KQ247 XS VPS local schema staging
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-schema-stage-20261014.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Create isolated lottery schema and check historical source
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          test -s /opt/kq247/lottery-daily-staging/schema.sql
+          docker exec -i kq247-r55-postgres sh -c 'exec psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' < /opt/kq247/lottery-daily-staging/schema.sql
+          echo 'LOCAL_DB_SCHEMA:'
+          docker exec -i kq247-r55-postgres sh -c 'exec psql -X -qAt -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' <<'SQL'
+          SELECT 'TABLE='||table_schema||'.'||table_name FROM information_schema.tables WHERE table_schema='kq247_xs_vps' ORDER BY table_name;
+          SELECT 'SNAPSHOT_ROWS='||count(*) FROM kq247_xs_vps.locked_daily_snapshots;
+          SQL
+          echo 'NEON_ARCHIVE_READONLY:'
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import pg from 'pg';
+          const pool=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:15000});
+          try {
+           const q=await pool.query("SELECT region,station,count(*)::int AS n,max(draw_date)::text AS last FROM public.kq247_draw_history GROUP BY region,station ORDER BY region,station");
+           console.log(JSON.stringify({stations:q.rows.length,mb:q.rows.find(x=>x.region==='mb'&&x.station==='XSMB'),count_min:Math.min(...q.rows.map(x=>x.n))}));
+          } finally {await pool.end()}
+          JS
+          echo 'VPS_XS_SCHEMA_STAGE_PASS'
+          REMOTE
