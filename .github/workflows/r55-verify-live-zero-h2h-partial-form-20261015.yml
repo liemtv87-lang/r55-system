@@ -32,9 +32,9 @@ jobs:
           for (const id of ids){
             const m=all.find(x=>x.bongdaluId===id);
             if (!m){proof.push({id,notInLatestFeed:true});continue}
-            const h=await V.history(source.base,id);
+            const h=await V.history(source.base,id,m.ts);
             const pick=h?V.makeMarket(m,h,[]):null;
-            proof.push({id,league:m.league,home:m.home,away:m.away,formHome:h?.home?.n||0,formAway:h?.away?.n||0,h2h:h?.h2h?.n||0,hasOdds:!!m.market,modeled:!!pick,researchOnly:pick?.market?.researchOnly,reason:pick?.market?.filterReason,market:pick?.market?.type,pick:pick?.market?.pick});
+            proof.push({id,league:m.league,home:m.home,away:m.away,formHome:h?.home?.n||0,formAway:h?.away?.n||0,h2h:h?.h2h?.n||0,hasOdds:!!m.market,recovery:h?.sourceCoverage?.teamScheduleRecovery||{},modeled:!!pick,researchOnly:pick?.market?.researchOnly,reason:pick?.market?.filterReason,market:pick?.market?.type,pick:pick?.market?.pick});
           }
           const day=V.vnDay();
           const q=await db.query('SELECT scope,updated_at,payload->\'scanProgress\' AS progress FROM football_compact_stats WHERE scope=$1',['r55_native_preview_'+day]);
