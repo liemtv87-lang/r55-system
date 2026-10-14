@@ -70,3 +70,15 @@ test('client always queries exact canonical main prediction API and reports sing
  assert.ok(customer.includes("'&mode=' + encodeURIComponent(mode)"));
  assert.ok(customer.includes("'✅ Đã copy trận '"));
 });
+
+test('default main and native endpoints use current-day native preview instead of yesterday locked data',()=>{
+ assert.match(api,/r55_native_preview_["']?\+calendarDay/);
+ assert.ok(api.includes('const latest=verifiedSnapshots.find(x=>x.day===calendarDay)'));
+ assert.ok(api.includes('const fresh=latest?null:'));
+ assert.ok(api.includes('date:displayDay'));
+ const native=read('deployment/football-native/publicApi.mjs');
+ assert.ok(native.includes('today_prediction_not_ready'));
+ assert.ok(native.includes('r55_native_preview_'+String.fromCharCode(34)+'+currentDay'));
+ assert.ok(native.includes('source_detail:\x27native_live_preview_unlocked\x27'));
+ assert.ok(!native.includes('legacy_locked_snapshot_fallback'));
+});

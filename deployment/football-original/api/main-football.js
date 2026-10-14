@@ -53,26 +53,33 @@ export default async function(req,res){
  const qs=req.query||{};
  const mode=String(qs.mode||"all");
  const limit=Math.min(5000,Math.max(1,Number(qs.limit)||30));
- const [snapshots,results,compact,learned,draft]=await Promise.all([
+ const [snapshots,results,compact,learned,draft,nativePreview]=await Promise.all([
   db.query("SELECT day::text,payload,source,locked_at FROM football_snapshots WHERE day BETWEEN ($1::date - interval '64 days') AND $1::date ORDER BY day DESC LIMIT 65",[day]),
   db.query("SELECT fixture_id::text AS id,home_score,away_score,fixture_status FROM football_final_results WHERE source='bongdalu-ft-verified' AND fixture_status='FT'"),
   getCompactR55(),
   db.query("SELECT payload FROM football_compact_stats WHERE scope='r55_method_rank' LIMIT 1"),
-  db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_provisional_"+calendarDay])
+  db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_provisional_"+calendarDay]),
+  db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_native_preview_"+calendarDay])
  ]);
  const final=new Map(results.rows.map(x=>[x.id,x]));
  // Only a frozen snapshot built from Bongdalu input may be advertised as today's R55 picks.
  const verifiedSnapshots=snapshots.rows.filter(x=>x.source==="bongdalu-r55");
  const legacyLocked=snapshots.rows.some(x=>x.day===day&&x.source!=="bongdalu-r55");
- const latest=verifiedSnapshots.find(x=>x.day===day);
- // Preserve the latest provisional view while 13:00's full-source refresh is processing;
- // replace it with the immutable locked snapshot only after that write succeeds.
- const hasDraft=Array.isArray(draft.rows[0]?.payload?.matches)&&draft.rows[0].payload.matches.length>0;
- // Before 13:00, the window day is yesterday; today's provisional predictions override it.
- // From 13:00 until the official snapshot finishes, keep showing the provisional list.
- // As soon as today's locked snapshot exists, it becomes authoritative.
- const preRelease=hasDraft&&(day!==calendarDay||!latest);
- const payload=preRelease?draft.rows[0].payload:(latest?.payload||{});
+ // Today's verified locked snapshot wins once the 13:00 source refresh finishes.
+ // Until then, the newest COMPLETE same-day Bongdalu preview is shown directly
+ // on the existing main and customer links, never yesterday's stored forecast.
+ // Historical snapshots stay immutable and continue to feed settlement only.
+ const latest=verifiedSnapshots.find(x=>x.day===calendarDay);
+ const provisionalCandidates=[
+  ...draft.rows.filter(r=>r.payload?.scanProgress?.complete===true&&Array.isArray(r.payload?.matches)&&r.payload.matches.length>0).map(r=>({...r,kind:"provisional"})),
+  ...nativePreview.rows.filter(r=>r.payload?.preview===true&&r.payload?.locked===false&&r.payload?.date===calendarDay&&
+    Number(r.payload?.scanProgress?.marketPool)>0&&Array.isArray(r.payload?.matches)&&r.payload.matches.length>0).map(r=>({...r,kind:"native_live_preview"}))
+ ].sort((a,b)=>Date.parse(b.updated_at)-Date.parse(a.updated_at));
+ const fresh=latest?null:(provisionalCandidates[0]||null);
+ const preRelease=!!fresh;
+ const payload=latest?.payload||(fresh?.payload||{});
+ const displayDay=latest?.day||(fresh?calendarDay:calendarDay);
+ const sourceState=latest?"official_locked":fresh?.kind||"today_not_ready";
  const picks=Array.isArray(payload.matches)?payload.matches:[];
  // Keep snapshots immutable; live output includes strictly future kickoff times only.
  // Filter before limit so 20/30 means 20/30 upcoming games, not slots occupied by started games.
@@ -180,8 +187,8 @@ export default async function(req,res){
    ou_selected:x.type==="OU"&&x.eligible===true,
    coverage_gate:x.eligible===true,historical:true});
  }
- return res.json({ok:true,locked:!preRelease&&!!latest,found:preRelease||!!latest,provisional:preRelease,model:payload.model||"R55 - đang chờ snapshot",
-  date:preRelease?calendarDay:day,updated_at:preRelease?draft.rows[0].updated_at:(latest?.locked_at||null),total:upcoming.length,validated_upcoming:releasedUpcoming.length,research_only_upcoming:upcoming.length-releasedUpcoming.length,prediction_coverage_pct:Number(payload.scanProgress?.marketPool)>0?Number((100*picks.length/Number(payload.scanProgress.marketPool)).toFixed(2)):null,prediction_coverage_target_pct:80,snapshot_total:picks.length,hidden_started:startedCount,hidden_lower_tier:picks.length-startedCount-upcoming.length,scan_progress:payload.scanProgress||null,predictions:shown,
+ return res.json({ok:true,locked:!!latest,found:!!latest||preRelease,provisional:preRelease,preview:preRelease,source_state:sourceState,model:payload.model||"R55 - đang chờ dự đoán mới",
+  date:displayDay,updated_at:fresh?.updated_at||latest?.locked_at||null,total:upcoming.length,validated_upcoming:releasedUpcoming.length,research_only_upcoming:upcoming.length-releasedUpcoming.length,prediction_coverage_pct:Number(payload.scanProgress?.marketPool)>0?Number((100*picks.length/Number(payload.scanProgress.marketPool)).toFixed(2)):null,prediction_coverage_target_pct:80,snapshot_total:picks.length,hidden_started:startedCount,hidden_lower_tier:picks.length-startedCount-upcoming.length,scan_progress:payload.scanProgress||null,predictions:shown,
   daily_stats:historyStats,method_performance:[...totalMethods.values()],
   learning_ready:Array.isArray(learned.rows[0]?.payload?.methods)&&learned.rows[0].payload.methods.some(x=>x.eligible===true),stats_restored:false,source:"bongdalu_verified_only",
   note:legacyLocked?"Snapshot cũ không đạt xác minh nguồn Bongdalu.":releasedUpcoming.length===0&&upcoming.length>0?"DỰ BÁO THAM KHẢO: hiện chưa có phương pháp AH/OU vượt chuẩn hồi kiểm; các trận vẫn hiển thị để theo dõi và chấm kết quả thật. Không có tỷ lệ thắng được bảo đảm.":"Dự báo dùng dữ liệu Bongdalu. Chỉ nhãn 'Đủ dữ liệu' mới biểu thị phương pháp qua kiểm định; không có dự đoán nào bảo đảm thắng."});
