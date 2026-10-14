@@ -1,0 +1,29 @@
+name: XSMB Fixed 316 Six Disjoint 500-Day Stability Replay
+on:
+  push:
+    branches: [main]
+    paths:
+      - research/xsmb_316_multiblock_20261014.py
+      - .github/workflows/xsmb-316-multiblock-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - name: Fixed rule replay over six disjoint 500 day windows
+        run: |
+          python3 -m py_compile research/xsmb_316_multiblock_20261014.py
+          python3 research/xsmb_316_multiblock_20261014.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-316-six-block-stability
+          path: research/results/xsmb_316_multiblock_20261014.json
+          retention-days: 30
