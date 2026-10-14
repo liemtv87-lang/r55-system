@@ -132,7 +132,6 @@ def main(args):
     M=np.asarray([x["mode_id"] for x in methods],np.uint8)
     D=np.asarray([x["penalty"] for x in methods],np.float32)
     experts=choose_for_batch(scores(A["X"],W),A["eligible"],M,D)
-    experts=experts.transpose(1,0,2)
     picks,names=assemble_options(base,experts)
     numbers=np.arange(1000)[:,None,None]
     full_hits=counts[START+numbers,picks].sum(axis=2).astype(np.uint8)
