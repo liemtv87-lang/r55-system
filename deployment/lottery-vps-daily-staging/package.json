@@ -1,0 +1,7 @@
+{
+  "name":"kq247-xs-vps-daily-staging",
+  "private":true,
+  "type":"module",
+  "scripts":{"test":"node --test test.mjs pipeline.test.mjs"},
+  "dependencies":{"pg":"8.16.3"}
+}
