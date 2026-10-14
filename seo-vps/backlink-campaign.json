@@ -476,6 +476,24 @@
       "status": "submitted_pending_publication",
       "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38547660386",
       "public_listing_url": null
+    },
+    {
+      "directory": "telegramhub.org",
+      "group": "football",
+      "target": "https://t.me/keochuyengia79",
+      "submitted_at_utc": "2026-10-14T10:21:40Z",
+      "status": "submitted_pending_review",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38548970205",
+      "public_listing_url": null
+    },
+    {
+      "directory": "telegramhub.org",
+      "group": "lottery",
+      "target": "https://t.me/xsbm999",
+      "submitted_at_utc": "2026-10-14T10:21:42Z",
+      "status": "submitted_pending_review",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38548970205",
+      "public_listing_url": null
     }
   ],
   "failed_submissions": [
