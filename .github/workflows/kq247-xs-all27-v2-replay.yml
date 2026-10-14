@@ -1,0 +1,35 @@
+name: KQ247 XSMB 27-prize daily DE positional replay
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-all27-v2-replay.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -qq -y sshpass
+      - name: Test all 27 prize positions on VPS without altering live page
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/de-all27-pos-v2.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run -i --rm --network none --read-only --memory=1000m --cpus=1.5 -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module' <<'JS'
+          import fs from 'node:fs';
+          import {calculateDeDaily} from '/stage/de-1000-consensus.mjs';
+          import {predictDe27Daily} from '/stage/de-all27-pos-v2.mjs';
+          const draws=JSON.parse(fs.readFileSync('/stage/xsmb-history-live.json','utf8'));
+          for(const day of ['2026-10-14','2026-10-15']){
+           const rows=draws.filter(x=>x.region==='mb'&&x.station==='XSMB'&&x.draw_date<day).sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
+           const started=Date.now();
+           const d=predictDe27Daily({predictionDate:day,draws:rows});
+           if(d.sourceDate!==(day==='2026-10-15'?'2026-10-14':'2026-10-13'))throw Error('SOURCE_NOT_YESTERDAY');
+           if(d.dan50.length!==50||d.dan60.length!==60||d.dan75.length!==75||d.three_digit.length!==500)throw Error('BAD_DAN_SIZES');
+           if(d.three_digit.some(x=>!d.dan75.includes(x.slice(-2))))throw Error('BAD_3C_SUBSET');
+           console.log('XSMB_DE_FULL_27_PRIZES_REPLAY',JSON.stringify({day,sourceDate:d.sourceDate,positionFamilies:d.method_design,excludedHead:d.hard_excluded_head,excludedHundred:d.three_digit_hard_excluded_hundred,daysUsed:d.sourceDraws,pools:[d.dan50.length,d.dan60.length,d.dan75.length,d.three_digit.length],elapsedMs:Date.now()-started}));
+          }
+          JS
