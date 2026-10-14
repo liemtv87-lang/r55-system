@@ -1,6 +1,7 @@
 import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
+import {collectBongdaluPageBookmakers} from "lib/r55BookmakerPage.js";
 import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseFormTable as nativeParseFormTable,parseH2HTable as nativeParseH2HTable,parseAsianHistory as nativeParseAsianHistory,parseBongOdds as nativeParseBongOdds,parseBongFeed as nativeParseBongFeed,parseBongLeagueMeta as nativeParseBongLeagueMeta,discoverBongdaluRoots as nativeDiscoverBongdaluRoots,bongNeighborRoots as nativeBongNeighborRoots} from "lib/original-bongdalu/r55-core-verbatim-transpiled.js";
 // Port of the production football-all-refresh-v3 Bongdalu ingestion/model layer.
 // No Goaloo/NowGoal, ESPN, Livescore or synthetic odds may contribute market input.
@@ -205,7 +206,12 @@ async function history(base,id){
    const parsed=parseHistoryHtml(html);
    if(parsed){
     result={...parsed,fetchAttempts:attempt,sourcePage:"match/h2h-"+id};
-    if(Number(parsed.home?.n)>0&&Number(parsed.away?.n)>0)return result;
+    if(Number(parsed.home?.n)>0&&Number(parsed.away?.n)>0){
+     // Independent official odds-comparison page; absence is reported, not guessed.
+     const oddsPage=await get(base,"oddscomp/"+encodeURIComponent(id),"text/html",10000).catch(()=>null);
+     return {...result,oddsComparisonFetched:!!oddsPage,
+       oddscompCompanies:oddsPage?collectBongdaluPageBookmakers(oddsPage):[]};
+    }
    }
   }catch(e){if(attempt===3&&result)return {...result,fetchAttempts:attempt};}
   if(attempt<3)await new Promise(resolve=>setTimeout(resolve,400*attempt));
@@ -215,7 +221,27 @@ async function history(base,id){
  return result;
 }
 function makeMarket(row,h,learned){
- const mk=row.market;if(!mk||!h||h.home.n<1||h.away.n<1)return null;
+ if(!row?.market||!h||h.home.n<1||h.away.n<1)return null;
+ // Merge every valid company shown on Bongdalu's comparison page, while keeping
+ // the actual betting price tied to the separately verified XML bookmaker line.
+ const extras=Array.isArray(h.oddscompCompanies)?h.oddscompCompanies:[];
+ const baseline=Array.isArray(row.market.bookmakerQuotes)?row.market.bookmakerQuotes:[];
+ const evidence=new Map(baseline.map(q=>[String(q.bookmaker).toLowerCase(),{
+  name:q.bookmaker,homeLine:Number(q.homeLine),ouLine:Number(q.ouLine)}]));
+ for(const q of extras){
+  if(!Number.isFinite(Number(q.homeLine))||!Number.isFinite(Number(q.ouLine)))continue;
+  evidence.set(String(q.name).toLowerCase(),{name:q.name,homeLine:Number(q.homeLine),ouLine:Number(q.ouLine)});
+ }
+ const allQuotes=[...evidence.values()],lineSpread=field=>
+  allQuotes.length?round(Math.max(...allQuotes.map(x=>x[field]))-Math.min(...allQuotes.map(x=>x[field])),3):0;
+ const mk={...row.market,
+   bookmakerCount:Math.max(Number(row.market.bookmakerCount||0),allQuotes.length),
+   bookmakerNames:allQuotes.length?allQuotes.map(q=>q.name):row.market.bookmakerNames,
+   ahLineSpread:allQuotes.length?lineSpread("homeLine"):row.market.ahLineSpread,
+   ouLineSpread:allQuotes.length?lineSpread("ouLine"):row.market.ouLineSpread,
+   sourceOddsComparisonFetched:!!h.oddsComparisonFetched,
+   extraOddsBookmakerCount:extras.length};
+ row={...row,market:mk};
  // Call the production R55 native bongMarket algorithm from the original
  // football-all-refresh-v3 source. No locally invented market prediction.
  const originalMatch={live_id:"bongdalu:"+row.bongdaluId,ts:row.ts,home:row.home,away:row.away,
@@ -229,6 +255,7 @@ function makeMarket(row,h,learned){
  if(!selected)return null;
  return {...row,market:{type:selected.type,pick:selected.pick,line:selected.line,odds:round(selected.odds),
     confidence:null,bookmaker:mk.bookmakerNames?.[0]||"Bongdalu",bookmakers:mk.bookmakerCount,
+    bookmakerNames:mk.bookmakerNames||[],
     method:selected.method,evidence:selected.evidence,source:"bongdalu_verified_three_scenario_ensemble",
     expectedEV:selected.ev,worstEV:selected.worstEV,modelSpread:selected.modelSpread,
     modelAgreement:selected.agree,researchOnly:selected.researchOnly,filterReason:selected.reason,
@@ -239,6 +266,7 @@ function makeMarket(row,h,learned){
       homeAsianGames:h.home_asian?.closing?.n||0,awayAsianGames:h.away_asian?.closing?.n||0,
       historicalPriceRows:Number(h.sourceCoverage?.historicalPriceRows||0),
       historicalBookmakerCount:Number(h.sourceCoverage?.bookmakerCount||0),
+      currentOddsPageCompanies:extras.length,oddsComparisonFetched:!!h.oddsComparisonFetched,
       sourceDataVerified:Number(h.home?.n)>0&&Number(h.away?.n)>0,
       homeGF:Number(h.home.gf||0),homeGA:Number(h.home.ga||0),
       awayGF:Number(h.away.gf||0),awayGA:Number(h.away.ga||0)},
