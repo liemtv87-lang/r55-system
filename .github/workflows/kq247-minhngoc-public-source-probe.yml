@@ -1,0 +1,19 @@
+name: KQ247 dated MinhNgoc source integrity probe
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-minhngoc-public-source-probe.yml
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check published draw results against 5 independent full-prize fixtures
+        run: node deployment/lottery-vps-daily-staging/test-minhngoc-live.mjs
