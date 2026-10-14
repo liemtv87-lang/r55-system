@@ -233,3 +233,15 @@ test("official team schedule rejects scores after kickoff, unfinished or unverif
  assert.equal(parseBongdaluTeamSchedule(payload,team,null).length,0);
  assert.equal(parseBongdaluTeamSchedule({MatchList:[]},team,cutoff).length,0);
 });
+
+test("real Bongdalu Time field respects Vietnam clock and excludes future games",()=>{
+ const before=Date.parse("2026-10-15T10:00:00Z");
+ const one={ID:"1234567",SclassID:"16",Time:"2026/10/14 17:00:00",
+  HomeID:"234",AwayID:"55",HomeScore:"2",AwayScore:"1",State:"-1"};
+ const next={...one,ID:"1234568",Time:"2026/10/16 17:00:00"};
+ const pending={...one,ID:"1234569",State:"0"};
+ const res=parseBongdaluTeamSchedule({MatchList:[one,next,pending]},234,before);
+ assert.equal(res.length,1);
+ assert.equal(res[0].matchId,"1234567");
+ assert.equal(res[0].teamGoals,2);
+});
