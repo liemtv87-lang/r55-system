@@ -33,3 +33,25 @@ This is a factual handoff of repository state, not permission to change URLs/UI.
 5. Verify actual external pages and Telegram source after rollout. Do not mark "fully synced" without these proofs.
 
 This file is a continuation checkpoint. Do not restart investigation from the beginning on subsequent chat turns.
+
+## Live release and verified customer / sales bot sync (15/10/2026 VN ~03:20)
+- **DEPLOYED LIVE** via isolated workflow [KQ247 XS Original UI Locked Safe Cutover run 38630821805](https://github.com/liemtv87-lang/r55-system/actions/runs/38630821805), commit `684bdce97e5618d37d441585ee59ccdf87be15fb`.
+- Server source for exact original interface with immutable VPS data: `xs-release/original-ui-locked-server.mjs`; per-station validated overlay: `xs-release/neon-locked-overlay.mjs`; isolated Docker build: `xs-release/Dockerfile`. All tracked in main.
+- Live Docker service `kq247-lottery-original` replaced in-place with `kq247/xs-ui-original-locked:20261015-v1` using the temporary Compose override `/opt/kq247/xs-release/compose-overlay.yml`. **Caddy and URLs unchanged; no unrelated containers restarted.**
+- Rollback image retained as `kq247/xs-ui-original-precutover:20261015-v1` with `/opt/kq247/xs-release/compose-rollback.yml`.
+- Real VPS canary proof before promotion: XSMB 51/52/91 and doubles 33/77 from 14/10 full27 immutable file, correct 3 MT and 3 MN station nav, original CSS byte-identical, all per-station three-lotto, 50/60/75 and 3-cang, copy handler, footer, and customer license page HTML byte-identical.
+- VPS live proof after promotion: existing `/xoso?region=xsmb|xsmt|xsmn` and `/xoso-khach` returned valid pages, healthz confirms `VPS_POSTGRES_IMMUTABLE_LOCKED`. Check CI logs of run 38630821805 for `XS_ORIGINAL_UI_VPS_IMMUTABLE_PUBLIC_CUTOVER=SUCCESS`.
+- The XS Telegram bot read-only test confirmed MB 51/52/91 and three station-specific records in each MT/MN; no test Telegram messages sent.
+
+## Post-release audit of sales bot and all existing links
+- [Read-only KQ247 XS and Sales Bot Live Sync Audit run 38631141856](https://github.com/liemtv87-lang/r55-system/actions/runs/38631141856) returned **SUCCESS**, with `XS_SALES_BOT_FULL_READONLY_SYNC_AUDIT=PASS`.
+- `kq247-sales-bot-primary` is active on VPS and polls Telegram; configured credentials, database connectivity, recent lastPoll and no lastError verified.
+- Live Neon `sales_plans`: all three products football/lottery/vietlott have Free 10 days (0 VND) and 30 days (1,500,000 VND), five active plans per product.
+- `sales_config` active URLs match `sales_link_history` is_current entries: lottery `https://64-120-92-172.sslip.io/xoso-khach?region=xsmb`, football `https://64-120-92-172.sslip.io/client.html`, Vietlott `https://vietlott.64-120-92-172.sslip.io/client.html`.
+- There were **84** database `sales_licenses` records at the audit; no codes, fingerprints, activation dates, prices or PayOS orders changed.
+- The sales bot's `/app/worker.mjs` syntax check passed, and its implementation supports `MÃ CỦA TÔI`, copy code and latest customer links. A real personal-device activation/recovery flow was **not** tested with a customer's credentials.
+- Historical link records remain in Neon. **Automatic redirects on legacy third-party Render/Neon/AppDeploy URL origins were not verified**; they cannot be truthfully marked complete without testing/control of each original origin.
+
+## Important durability caution / next release gate
+- This cutover is deployed through an isolated Docker Compose override stored on VPS, and release source and deploy workflow are committed in GitHub. **A later unrelated blanket `docker compose up --build -d` from `deployment/football-staging/deploy.sh` without the overlay may replace the original XS service with the old Neon read-through image.** Before the next standard R55 deployment, permanently integrate the immutable source into the canonical Compose/Dockerfile/server or ensure the isolated Compose override is applied after deploy, while preserving bot, sales, football and customers. Do not claim this persistence across blanket rebuilds is already fixed.
+- Do not send bot Telegram messages, reissue licenses, or delete older hosts unless separately verified.
