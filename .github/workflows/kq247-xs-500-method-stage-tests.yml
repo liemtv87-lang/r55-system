@@ -1,0 +1,24 @@
+name: KQ247 XS 500-method selector isolated stage test
+on:
+  push:
+    branches: [xs-500-method-stage-20261015]
+    paths:
+      - 'deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs'
+      - 'deployment/lottery-vps-daily-staging/test-500-method-contract-20261015.mjs'
+      - '.github/workflows/kq247-xs-500-method-stage-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pure offline contract checks - no VPS or bot changes
+        run: |
+          node --check deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs
+          node deployment/lottery-vps-daily-staging/test-500-method-contract-20261015.mjs
