@@ -1,6 +1,7 @@
 import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
 import {primaryFormEvidence} from "lib/r55FormFirst.js";
+import {recoverOfficialBongdaluTeamForm,formSummary} from "lib/r55TeamScheduleFallback.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
 import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus} from "lib/r55BookmakerConsensus.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "lib/r55BookmakerPage.js";
@@ -213,6 +214,27 @@ async function history(base,id){
    const html=await get(base,"match/h2h-"+encodeURIComponent(id),"text/html",16000);
    const parsed=parseHistoryHtml(html);
    if(parsed){
+    // Every 20-match shortfall triggers a verified independent Bongdalu team
+    // history check. Empty H2H-page arrays are not proof of absent team form.
+    const ids={
+      home:Number((html.match(/var\\s+h2h_home\\s*=\\s*(\\d+)/i)||[])[1]),
+      away:Number((html.match(/var\\s+h2h_away\\s*=\\s*(\\d+)/i)||[])[1])};
+    const recovered={};
+    for(const side of ["home","away"]){
+      if(Number(parsed[side]?.n)>=20||!Number.isInteger(ids[side])||ids[side]<=0)continue;
+      const list=await recoverOfficialBongdaluTeamForm(base,ids[side]);
+      if(list.length>Number(parsed[side]?.n||0)){
+        parsed[side]=formSummary(list);
+        parsed.individualHistory[side]=list;
+        parsed.sourceCoverage[side==="home"?"homeMatches":"awayMatches"]=list.length;
+        recovered[side]={via:"bongdalu_team_schedule",matches:list.length};
+      }
+    }
+    parsed.history_games=Math.min(20,Number(parsed.home?.n||0),Number(parsed.away?.n||0));
+    parsed.history_home_games=Number(parsed.home?.n||0);
+    parsed.history_away_games=Number(parsed.away?.n||0);
+    parsed.partial_history=!parsed.history_home_games||!parsed.history_away_games;
+    parsed.sourceCoverage.teamScheduleRecovery=recovered;
     result={...parsed,fetchAttempts:attempt,sourcePage:"match/h2h-"+id};
     if(Number(parsed.home?.n)>0&&Number(parsed.away?.n)>0){
      // Independent official odds-comparison page; absence is reported, not guessed.
