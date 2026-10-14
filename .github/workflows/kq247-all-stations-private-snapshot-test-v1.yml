@@ -31,8 +31,8 @@ jobs:
            docker run --rm --network none --read-only -v "$ROOT":/stage:ro node:22-alpine node --check "/stage/$f"
           done
           echo ALL_POS_SOURCE_CHECK_PASS
-          docker run --rm --network none --cpus 1.5 --memory 600m -v "$ROOT":/stage node:22-alpine node /stage/station-previous-draw-runner.mjs --offline
-          echo SNAPSHOT_SAMPLE_COUNTS
+          docker run --rm --network none --cpus 1.5 --memory 600m -v "$ROOT":/stage node:22-alpine node /stage/station-previous-draw-runner.mjs --local-verified
+          echo VPS_VERIFIED_SOURCE_SNAPSHOT_COUNTS
           python3 - <<'PY'
           import pathlib,json
           base=pathlib.Path('/opt/kq247/lottery-daily-staging/station-next-private')
@@ -47,6 +47,9 @@ jobs:
            assert len(x['dan50'])==50 and len(x['dan60'])==60 and len(x['dan75'])==75 and len(x['three_digit'])==500
            assert all(c[-2:] in x['dan75'] for c in x['three_digit'])
           assert len(d)==36,('expected_36_stations',len(d),list(d))
+          for name in ['Cần Thơ','Sóc Trăng','Đồng Nai','Khánh Hòa','Đà Nẵng']:
+           matching=[json.loads(p.read_text()) for p in files if json.loads(p.read_text()).get('station')==name]
+           assert matching and max(x['sourceDate'] for x in matching)=='2026-10-14',('station_source_not_latest',name)
           print('ALL_36_STATIONS_PRIVATE_SNAPSHOTS_PASS',len(d),len(files))
           PY
           VPS
