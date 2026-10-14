@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import sys
 import time
 from urllib.parse import urlsplit
 
@@ -35,6 +36,10 @@ EXTERNAL_WORKFLOW_HOSTS={"buyinoffer.com","tgden.com","vi.tgdio.com"}
 BATCH_LIMIT=min(400,max(1,int(os.environ.get("KQ247_SUBMIT_MAX", "120"))))
 TIME_LIMIT=min(7200,max(60,int(os.environ.get("KQ247_SUBMIT_SECONDS","2400"))))
 PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
+WATCH = "--watch" in sys.argv
+POLL_SECONDS = max(60,min(3600,int(os.environ.get("KQ247_POST_POLL_S","600"))))
+# Explicitly opt-in directories: never post merely because a URL looks like a form.
+OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org"}
 PAT_SUBMIT=re.compile(r"(submit|add[-_/]?(?:group|channel|link|listing)|publish|suggest|dang[-_/]?(?:tin|bai)|them[-_/]?nhom)", re.I)
 PAT_LINK=re.compile(r"(telegram|group.?link|channel.?link|invite.?link|telegram.?url|(?:^|[_-])url(?:$|[_-])|(?:^|[_-])link(?:$|[_-]))",re.I)
 PAT_TITLE=re.compile(r"(title|group.?name|channel.?name|name.?group)",re.I)
@@ -68,7 +73,7 @@ def read_queue(con):
             ORDER BY host""").fetchall()
     except sqlite3.OperationalError:
         return []
-    return [(h,u) for h,u in rows if h not in ALREADY_SENT_HOSTS
+    return [(h,u) for h,u in rows if h in OPT_IN_HOSTS and h not in ALREADY_SENT_HOSTS
             and h not in EXTERNAL_WORKFLOW_HOSTS and PAT_SUBMIT.search(urlsplit(u).path)]
 
 def is_public_listing(page, expected):
@@ -219,21 +224,30 @@ def main():
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
         context=browser.new_context(viewport={"width":1200,"height":900})
         page=context.new_page()
-        while posted<BATCH_LIMIT and time.monotonic()<deadline:
+        while WATCH or (posted<BATCH_LIMIT and time.monotonic()<deadline):
             queue=read_queue(con)
             available=[(h,u) for h,u in queue if any(not con.execute(
               "SELECT 1 FROM submissions WHERE host=? AND grp=?",(h,k)).fetchone() for k in GROUPS)]
             if not available:
+                if WATCH:
+                    print("KQ247_POSTER_IDLE="+json.dumps({"poll_seconds":POLL_SECONDS,
+                        "submissions_performed_this_process":posted}),flush=True)
+                    time.sleep(POLL_SECONDS)
+                    continue
                 time.sleep(min(30,max(0,deadline-time.monotonic())))
                 continue
             for host,url in available:
-                if posted>=BATCH_LIMIT or time.monotonic()>=deadline:break
+                if not WATCH and (posted>=BATCH_LIMIT or time.monotonic()>=deadline):break
                 for key,group in GROUPS.items():
-                    if posted>=BATCH_LIMIT or time.monotonic()>=deadline:break
+                    if not WATCH and (posted>=BATCH_LIMIT or time.monotonic()>=deadline):break
                     if con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",(host,key)).fetchone():continue
                     attempt(page,con,host,url,key,group)
                     posted+=1
                     time.sleep(PAUSE)
+                    if WATCH and posted >= BATCH_LIMIT:
+                        print("KQ247_POSTER_WINDOW_LIMIT="+str(posted),flush=True)
+                        time.sleep(POLL_SECONDS)
+                        posted=0
         context.close()
         browser.close()
     print("KQ247_BULK_SUBMIT_DONE="+json.dumps({"attempts":posted,
