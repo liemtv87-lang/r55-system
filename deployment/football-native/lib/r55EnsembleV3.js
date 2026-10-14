@@ -139,7 +139,7 @@ export function chooseR55Ensemble(row,h,native){
   return {...x,ev:round(ev,4),worstEV:round(worst,4),spreadEV:round(best-worst,4),
    fragility:fragile,bookmakerSideAgreement:bookAgreement,historicalSupport:hist,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
    researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":bookAgreement.strongOpposition?"bookmaker_price_lean_conflict":Number(row.priority)<175?"competition_below_priority_floor":!modelStable?"ensemble_edge_not_robust":
-      x.type==="AH"&&Math.abs(x.line)>1.25?"deep_ah":x.type==="OU"&&x.line>=4?"extreme_total":"accepted"};
+      x.type==="AH"&&Math.abs(x.line)>1.25?"deep_ah":x.type==="OU"&&x.line>=4?"extreme_total":accept?"accepted":"quality_guard_not_met"};
  });
  if(!scored.length)return null;
  scored.sort((a,b)=>Number(a.researchOnly)-Number(b.researchOnly)||
