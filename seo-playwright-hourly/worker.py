@@ -122,7 +122,7 @@ def discover(page, name, url):
             loginRequired: /sign in to submit|login required|register to submit/i.test(
                 document.body.innerText.slice(0,1200))
         })""")
-        if name in ("TGMania", "TGDirectory", "Groupsor", "TelXplorer"):
+        if name in ("TGMania", "TGDirectory", "Groupsor", "TelXplorer", "Groupswa", "WT Group Links", "Telegram Group", "Telegram Group Org", "Telekit", "TelegrmGroupLink"):
             info["controls"] = page.evaluate("""() => [...document.querySelectorAll('input,select,textarea,button')].filter(e => e.getBoundingClientRect().width > 0).slice(0,35).map(e => ({
               tag:e.tagName.toLowerCase(),name:e.name || '',type:e.type || '',
               placeholder:e.placeholder || '',text:(e.innerText||'').trim().slice(0,70),
@@ -344,7 +344,7 @@ def main():
                         state["sent"]["TGMania"].append(group)
                 atomic_json(STATE,state)
         for item in discoveries:
-            if item["name"] in ("TGMania", "TGDirectory", "Groupsor", "TelXplorer"):
+            if item["name"] in ("TGMania", "TGDirectory", "Groupsor", "TelXplorer", "Groupswa", "WT Group Links", "Telegram Group", "Telegram Group Org", "Telekit", "TelegrmGroupLink"):
                 print("FORM_AUDIT=" + json.dumps(item, ensure_ascii=False)[:5000], flush=True)
         context.close()
         browser.close()
