@@ -1,0 +1,39 @@
+name: KQ247 XSMB full27 lotto and DE end-to-end staged check
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-full27-both-engines-check.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Deploy isolated full daily worker and run full27 staged validation
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/full27-daily-worker.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'docker run --rm --network bridge -v /opt/kq247/lottery-daily-staging:/stage --cpus 1.5 --memory=700m node:22-alpine node /stage/full27-daily-worker.mjs'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'python3 -' <<'PY'
+          import json,pathlib
+          base=pathlib.Path('/opt/kq247/lottery-daily-staging')
+          p=base/'xsmb-2026-10-15-full27pos-v3-staging.json'
+          x=json.loads(p.read_text())
+          assert x['predictionDate']=='2026-10-15' and x['sourceDate']=='2026-10-14'
+          assert x['lotto3']==['51','52','91'] and x['doubles']==['33','77']
+          assert x['lottoAudit']['coveredPositions']==107
+          assert x['lottoAudit']['supportedRules']>=1000
+          d=x['de']
+          assert len(d['dan50'])==50 and len(d['dan60'])==60 and len(d['dan75'])==75 and len(d['three_digit'])==500
+          assert all(c[1:] in d['dan75'] for c in d['three_digit'])
+          assert x['publication']=='STAGING_UNPUBLISHED' and x['previousForecastsUsed'] is False
+          print('FULL27_XSMB_SOURCE_DAY_AND_BOTH_MODELS_PASS', {'picks':x['lotto3'],'doubles':x['doubles'],'positions':x['lottoAudit']['coveredPositions'],'rules':x['lottoAudit']['supportedRules'],'de':[len(d[t]) for t in ('dan50','dan60','dan75','three_digit')]})
+          PY
