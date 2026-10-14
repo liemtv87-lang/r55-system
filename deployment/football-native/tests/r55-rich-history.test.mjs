@@ -209,3 +209,27 @@ test("official team schedule recovery accepts only verified finished matches",()
  assert.equal(form.n,2);
  assert.equal(form.ppg,3);
 });
+
+import {parseBongdaluTeamSchedule,formSummary} from "../lib/r55TeamSchedule.js";
+test("official team schedule rejects scores after kickoff, unfinished or unverified matches",()=>{
+ const cutoff=Date.parse("2026-10-15T07:00:00Z"),team=80597;
+ const payload={MatchList:[
+  {ID:1,HomeID:80597,AwayID:200,HomeScore:2,AwayScore:1,State:-1,E8Date:"2026-10-13 20:00"},
+  {ID:2,HomeID:300,AwayID:80597,HomeScore:1,AwayScore:1,State:-1,E8Date:"2026-10-14 18:00"},
+  {ID:3,HomeID:80597,AwayID:400,HomeScore:3,AwayScore:1,State:-1,E8Date:"2026-10-16 18:00"},
+  {ID:4,HomeID:80597,AwayID:500,HomeScore:0,AwayScore:0,State:0,E8Date:"2026-10-12 16:00"},
+  {ID:5,HomeID:80597,AwayID:700,HomeScore:0,AwayScore:0,State:-1},
+  {ID:6,HomeID:900,AwayID:800,HomeScore:0,AwayScore:0,State:-1,E8Date:"2026-10-12 16:00"},
+  {ID:7,HomeID:80597,AwayID:600,HomeScore:"",AwayScore:1,State:-1,E8Date:"2026-10-10 16:00"},
+  {ID:1,HomeID:80597,AwayID:200,HomeScore:2,AwayScore:1,State:-1,E8Date:"2026-10-13 20:00"}
+ ]};
+ const x=parseBongdaluTeamSchedule(payload,team,cutoff);
+ assert.equal(x.length,2);
+ assert.deepEqual(x.map(m=>m.matchId),["2","1"]);
+ assert.equal(x[0].teamIsHome,false);
+ assert.equal(x[0].teamGoals,1);
+ assert.equal(x[1].quotes.length,0);
+ assert.deepEqual(formSummary(x),{n:2,ppg:2,gf:1.5,ga:1});
+ assert.equal(parseBongdaluTeamSchedule(payload,team,null).length,0);
+ assert.equal(parseBongdaluTeamSchedule({MatchList:[]},team,cutoff).length,0);
+});
