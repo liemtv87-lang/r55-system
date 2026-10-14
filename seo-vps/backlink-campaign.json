@@ -506,5 +506,23 @@
       "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38547208216",
       "resolution_receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38547660386"
     }
+  ],
+  "blocked_submissions": [
+    {
+      "directory": "telegramchannels.io",
+      "group": "football",
+      "status": "vietnamese_language_not_available",
+      "attempted_pre_submit_at_utc": "2026-10-14T10:25:15Z",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38549392143",
+      "public_listing_url": null
+    },
+    {
+      "directory": "telegramchannels.io",
+      "group": "lottery",
+      "status": "vietnamese_language_not_available",
+      "attempted_pre_submit_at_utc": "2026-10-14T10:25:15Z",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38549392143",
+      "public_listing_url": null
+    }
   ]
 }
