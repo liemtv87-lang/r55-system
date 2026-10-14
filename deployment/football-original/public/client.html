@@ -1036,7 +1036,7 @@
                 '</h3><div><span class="badge ' +
                 (x.trusted_pick ? 'good' : '') +
                 '">' +
-                (x.trusted_pick ? '✅ Kèo đủ dữ liệu' : '⚠️ Dữ liệu mỏng') +
+                (x.trusted_pick ? '✅ Kèo đã qua kiểm định' : '⚠️ Kèo chưa qua kiểm định') +
                 '</span> <span class="badge">' +
                 esc(bookText(x)) +
                 '</span></div><div class="picks"><div class="pick"><b>KÈO SÁNG NHẤT • ' +
@@ -1049,6 +1049,14 @@
                 esc(x.formHome || x.home_form || '-') +
                 ' / ' +
                 esc(x.formAway || x.away_form || '-') +
+                '</div><div class="small">Lịch sử Bongdalu: Chủ ' +
+                esc(x.history_home_games ?? '-') +
+                '/20 • Khách ' +
+                esc(x.history_away_games ?? '-') +
+                '/20 • Đối đầu ' +
+                esc(x.history_h2h_games ?? '-') +
+                ' • Bản ghi kèo AH/TX: ' +
+                esc(x.history_price_rows ?? '-') +
                 '</div><div class="small">PP: ' +
                 esc(methods(x)) +
                 '</div><div class="actions"><button class="btn copy" onclick="copyMatch(' +
