@@ -1,0 +1,27 @@
+name: R55 Public Bongdalu Team Fixtures Probe
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-public-team-fixtures-probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check official team schedule API without VPS secrets
+        run: |
+          node --input-type=module <<'JS'
+          const root='https://football.bongdalu812.com';
+          for(const id of [80597,80877,234]){
+            for(const pageNo of [1,2]){
+              const url=root+'/ajax/getteamschedulebypageno?id='+id+'&pageNo='+pageNo+'&sclassId=0&init='+(pageNo===1?1:0);
+              try{
+                const r=await fetch(url,{headers:{'user-agent':'Mozilla/5.0',accept:'application/json'},signal:AbortSignal.timeout(12000)});
+                const t=await r.text();let j=null;try{j=JSON.parse(t)}catch{}
+                console.log('BONGDALU_TEAM_SCHEDULE_DIRECT',JSON.stringify({id,pageNo,status:r.status,len:t.length,keys:j?Object.keys(j):[],totalPages:j?.TotalPages,matchCount:j?.MatchList?.length,first:j?.MatchList?.slice(0,2),sample:t.slice(0,120)}).slice(0,9000));
+              }catch(e){console.log('BONGDALU_TEAM_SCHEDULE_ERROR',JSON.stringify({id,pageNo,error:String(e.message||e).slice(0,150)}))}
+            }
+          }
+          JS
