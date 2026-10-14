@@ -37,7 +37,9 @@ BATCH_LIMIT=min(400,max(1,int(os.environ.get("KQ247_SUBMIT_MAX", "120"))))
 TIME_LIMIT=min(7200,max(60,int(os.environ.get("KQ247_SUBMIT_SECONDS","2400"))))
 PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
 WATCH = "--watch" in sys.argv
-POLL_SECONDS = max(60,min(120,int(os.environ.get("KQ247_POST_POLL_S","120"))))
+POLL_SECONDS = max(60,min(1800,int(os.environ.get("KQ247_POST_POLL_S","120"))))
+# Retry only a proven pre-submit GET failure, never a sent form or unknown POST.
+RETRY_GET_AFTER_S = max(3600,int(os.environ.get("KQ247_RETRY_GET_AFTER_S","3600")))
 # Explicitly opt-in directories: never post merely because a URL looks like a form.
 OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org", "en.search-t.me"}
 # Explicit no-account, free Telegram listing page confirmed by the publisher.
@@ -76,14 +78,24 @@ def prepare_db():
     con.commit()
     return con
 
+def pair_ready(con, host, grp):
+    row=con.execute("SELECT state,at_utc FROM submissions WHERE host=? AND grp=?", (host,grp)).fetchone()
+    if not row: return True
+    state, timestamp=row
+    if state != "unavailable": return False
+    try:
+        last=datetime.datetime.fromisoformat(timestamp)
+        if last.tzinfo is None: return False
+        return (datetime.datetime.now(datetime.timezone.utc)-last).total_seconds()>=RETRY_GET_AFTER_S
+    except (ValueError, TypeError):
+        return False
+
 def read_queue(con):
     try:
-        rows=con.execute("""SELECT host,url FROM hosts WHERE status='form_candidate'
-            AND host NOT IN (SELECT host FROM submissions GROUP BY host HAVING COUNT(*)>=2)
-            ORDER BY host""").fetchall()
+        rows=con.execute("SELECT host,url FROM hosts WHERE status='form_candidate' ORDER BY host").fetchall()
     except sqlite3.OperationalError:
-        rows = []
-    rows = list(rows) + list(DIRECT_OPT_IN_ROUTES.items())
+        rows=[]
+    rows=list(rows)+list(DIRECT_OPT_IN_ROUTES.items())
     return list(dict.fromkeys(
         (h,u) for h,u in rows if h in OPT_IN_HOSTS and h not in ALREADY_SENT_HOSTS
             and h not in EXTERNAL_WORKFLOW_HOSTS and verified_submission_path(h,urlsplit(u).path)
@@ -155,7 +167,7 @@ def check_eligible(page, url):
     return "no_eligible_form",None
 
 def write_result(con,host,grp,url,status,receipt=""):
-    con.execute("INSERT INTO submissions(host,grp,url,state,at_utc,receipt) VALUES(?,?,?,?,?,?) ON CONFLICT(host,grp) DO UPDATE SET state=excluded.state,receipt=excluded.receipt",
+    con.execute("INSERT INTO submissions(host,grp,url,state,at_utc,receipt) VALUES(?,?,?,?,?,?) ON CONFLICT(host,grp) DO UPDATE SET state=excluded.state,at_utc=excluded.at_utc,receipt=excluded.receipt",
       (host,grp,url,status,now(),str(receipt)[:1500]))
     con.commit()
     report={"updated_at_utc":now(),
@@ -170,7 +182,7 @@ def write_result(con,host,grp,url,status,receipt=""):
     print("KQ247_BULK_SUBMIT="+json.dumps({"host":host,"group":grp,"status":status,"verified_total":report["verified_new_public_links"]},ensure_ascii=False),flush=True)
 
 def attempt(page, con, host, url, group_key, group):
-    if con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",(host,group_key)).fetchone():
+    if not pair_ready(con,host,group_key):
         return
     # Intent is persisted before any network interaction: uncertain results are never retried.
     write_result(con,host,group_key,url,"inspection_started")
@@ -260,11 +272,9 @@ def main():
         while WATCH or (posted<BATCH_LIMIT and time.monotonic()<deadline):
             queue=read_queue(con)
             print("KQ247_QUEUE="+json.dumps({"candidate_hosts":len(queue),
-                "new_pairs":sum(not con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",
-                  (h,k)).fetchone() for h,_ in queue for k in GROUPS),
+                "new_pairs":sum(pair_ready(con,h,k) for h,_ in queue for k in GROUPS),
                 "hosts":[h for h,_ in queue][:20]}),flush=True)
-            available=[(h,u) for h,u in queue if any(not con.execute(
-              "SELECT 1 FROM submissions WHERE host=? AND grp=?",(h,k)).fetchone() for k in GROUPS)]
+            available=[(h,u) for h,u in queue if any(pair_ready(con,h,k) for k in GROUPS)]
             if not available:
                 if WATCH:
                     print("KQ247_POSTER_IDLE="+json.dumps({"poll_seconds":POLL_SECONDS,
@@ -277,7 +287,7 @@ def main():
                 if not WATCH and (posted>=BATCH_LIMIT or time.monotonic()>=deadline):break
                 for key,group in GROUPS.items():
                     if not WATCH and (posted>=BATCH_LIMIT or time.monotonic()>=deadline):break
-                    if con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",(host,key)).fetchone():continue
+                    if not pair_ready(con,host,key):continue
                     attempt(page,con,host,url,key,group)
                     posted+=1
                     time.sleep(PAUSE)
