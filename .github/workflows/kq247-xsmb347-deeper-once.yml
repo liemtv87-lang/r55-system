@@ -1,0 +1,83 @@
+name: KQ247 XS 347 deeper VPS recovery once
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb347-deeper-once.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect VPS, backups and Docker read only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          command -v sshpass >/dev/null || (sudo apt-get update -qq && sudo apt-get install -qq -y sshpass)
+          mkdir -p "$HOME/.ssh" research/lottery
+          chmod 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'nice -n 15 python3 -' > research/lottery/xsmb347-vps-deeper-audit.json <<'PY'
+          import os,json,re,pathlib,hashlib,datetime,subprocess,time
+          st=time.monotonic()
+          roots=['/root','/opt','/srv','/home','/mnt','/tmp','/var/backups','/var/lib/docker/volumes']
+          ignore=re.compile(r'(secret|token|credential|password|private.?key|\.env|payment|license)',re.I)
+          suffix={'.sql','.py','.js','.mjs','.cjs','.ts','.json','.md','.sh','.txt','.yaml','.yml'}
+          exclude={'.git','node_modules','.cache','.venv','venv','__pycache__','site-packages','logs'}
+          found=[];archives=[];count=0
+          for root in roots:
+            if not os.path.isdir(root):continue
+            for dr,dirs,files in os.walk(root,followlinks=False):
+              dirs[:]=[d for d in dirs if d not in exclude and not ignore.search(d) and not d.startswith('.')]
+              for fn in files:
+                if count>=40000 or time.monotonic()-st>100:break
+                path=pathlib.Path(dr)/fn
+                if ignore.search(str(path)) or fn.startswith('.'):continue
+                try:
+                  size=path.stat().st_size
+                  if re.search(r'\.(zip|tar|tgz|tar\.gz)$',fn,re.I):
+                    archives.append({'path':str(path),'bytes':size})
+                  if path.suffix.lower() not in suffix or size>3000000 or size<100:continue
+                  count+=1
+                  data=path.read_bytes()
+                  match347=bool(re.search(rb'347[/_ -]?500|strategy347|347_RECONSTRUCTED',data,re.I))
+                  switch=bool(re.search(rb'switch.{0,50}(miss|streak|hit)|(miss|streak|hit).{0,50}switch',data,re.I))
+                  if match347 or switch:
+                    found.append({'path':str(path),'bytes':size,'sha256':hashlib.sha256(data).hexdigest(),
+                                  'marker347':match347,'markerSwitch':switch})
+                except (OSError,ValueError):pass
+              if count>=40000 or time.monotonic()-st>100:break
+            if count>=40000 or time.monotonic()-st>100:break
+          def cmd(a,cwd=None):
+            try:return subprocess.run(a,cwd=cwd,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,timeout=8).stdout.splitlines()[:70]
+            except Exception:return []
+          repos={}
+          for dr in ['/opt/kq247','/opt/pwremote','/srv/kq247']:
+            if os.path.isdir(dr+'/.git'):
+              repos[dr]=cmd(['git','log','--all','--since=2026-10-09','--until=2026-10-12','--format=%h %as %s'],dr)
+          print(json.dumps({'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'read_only':True,'files_scanned':count,'roots':roots,
+            'source_candidates':found[:150],'archive_files':archives[:100],
+            'git_history':repos,'docker_containers':cmd(['docker','ps','-a','--format','{{.Names}}|{{.Image}}|{{.Status}}']),
+            'docker_images':cmd(['docker','images','--format','{{.Repository}}:{{.Tag}}|{{.ID}}']),
+            'note':'Metadata and hashes only; do not mistake snapshot or marker for original algorithm.'},
+            ensure_ascii=False,indent=2))
+          PY
+          python3 -m json.tool research/lottery/xsmb347-vps-deeper-audit.json >/dev/null
+      - name: Commit evidence only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/lottery/xsmb347-vps-deeper-audit.json
+          if ! git diff --cached --quiet; then
+            git commit -m "audit: deep search historical 347 VPS backups and Docker"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
