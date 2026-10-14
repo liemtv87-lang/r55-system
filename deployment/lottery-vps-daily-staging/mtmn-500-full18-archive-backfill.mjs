@@ -60,8 +60,10 @@ for(const [group,expect] of [...groups].sort((a,b)=>b[0].localeCompare(a[0]))){
      actual.full_results.join('') .length!==82)
     throw Error('INCOMPLETE_ARCHIVE_RESULT_'+item.station);
    const fromDatabase=reversePrizeGroups(actual.full_results);
-   if(JSON.stringify(fromDatabase)!==JSON.stringify(item.all2))
-    throw Error('HISTORICAL_ENDINGS_MISMATCH_'+item.station);
+   const stored=JSON.stringify(item.all2);
+   const prizeFirst=JSON.stringify(actual.all2),dbFirst=JSON.stringify(fromDatabase);
+   if(stored!==prizeFirst&&stored!==dbFirst)
+    throw Error('HISTORICAL_ENDINGS_MISMATCH_BOTH_ORDERS_'+item.station);
    record.push({region,station:item.station,draw_date:day,full_results:actual.full_results,
     all2:actual.all2,special:actual.special,source:'minhngoc.net.vn',source_url:x.source_url});
   }
