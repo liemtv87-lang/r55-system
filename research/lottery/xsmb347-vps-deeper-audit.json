@@ -1,0 +1,89 @@
+{
+  "utc": "2026-10-14T15:17:30.553908+00:00",
+  "read_only": true,
+  "files_scanned": 620,
+  "roots": [
+    "/root",
+    "/opt",
+    "/srv",
+    "/home",
+    "/mnt",
+    "/tmp",
+    "/var/backups",
+    "/var/lib/docker/volumes"
+  ],
+  "source_candidates": [
+    {
+      "path": "/opt/kq247/vietlott-r33-primary/public/reduced-pool-mega645.json",
+      "bytes": 2944613,
+      "sha256": "ac977d40bae9f212eccd5742a16e6d6f4042cae8623489ce30b874a46ebf550a",
+      "marker347": true,
+      "markerSwitch": false
+    },
+    {
+      "path": "/opt/kq247/vietlott-r33-stage/repair-backup-20261013025155/public/reduced-pool-mega645.json",
+      "bytes": 2938452,
+      "sha256": "f24507992418ec246944078b204bc2524c2d34cce2e51f3a5aa34321f0421be8",
+      "marker347": true,
+      "markerSwitch": false
+    },
+    {
+      "path": "/opt/kq247/vietlott-r33-stage/public/reduced-pool-mega645.json",
+      "bytes": 2938452,
+      "sha256": "8d4d406e666de7275350590da8f9b47001af3b2505167c7d2b0c7502ad1221c5",
+      "marker347": true,
+      "markerSwitch": false
+    }
+  ],
+  "archive_files": [
+    {
+      "path": "/tmp/kq247-r55-stage.tgz",
+      "bytes": 580177
+    }
+  ],
+  "git_history": {},
+  "docker_containers": [
+    "seo-kq247-opt-in-directory|pwremote/playwright:1.56.0|Up 44 minutes",
+    "kq247-football-staging|caddy:2.10-alpine|Up 23 hours",
+    "kq247-football-preview|kq247/r55-native:local|Up 23 hours",
+    "kq247-lottery-bot|kq247/lottery-original-telegram:local|Up 23 hours",
+    "kq247-football-native|kq247/r55-native:local|Up 23 hours",
+    "kq247-football-cache|kq247/r55-public-cache:local|Up 23 hours",
+    "kq247-football-original|kq247/r55-original:local|Up 23 hours",
+    "kq247-r55-group-bot|kq247/r55-group-bot:local|Up 23 hours",
+    "kq247-sales-vps|kq247/sales-vps:staging|Up 23 hours",
+    "kq247-lottery-original|kq247/lottery-original-ui:local|Up 23 hours",
+    "kq247-vietlott-vps|kq247-vietlott-r33-candidate:r33-metadata-parity-20261013|Up 36 hours",
+    "kq247-vietlott-r33-candidate|kq247-vietlott-r33-candidate:20261013|Up 37 hours",
+    "kq247-sales-bot-primary|kq247/sales-bot-bridge:local|Up 42 hours",
+    "kq247-sales-bot-stage|kq247/sales-bot-stage:latest|Up 42 hours",
+    "kq247-vietlott-vps-rollback-20261013025705|kq247-vietlott-vps:20261013|Exited (137) 36 hours ago",
+    "kq247-sales-bot-primary-backup-20261012182832|kq247/sales-bot-primary:local|Exited (137) 45 hours ago",
+    "kq247-r55-postgres|postgres:17-alpine|Up 44 hours (healthy)"
+  ],
+  "docker_images": [
+    "pwremote/playwright:1.56.0|9602d0667591",
+    "kq247/r55-native:local|7625c26a588e",
+    "kq247/r55-original:local|72fe79ccf5e0",
+    "kq247/r55-group-bot:local|760d9d3e6b8e",
+    "kq247/lottery-original-telegram:local|3be69652c253",
+    "kq247/lottery-original-ui:local|5ee83cf522a2",
+    "kq247-vietlott-r33-candidate:r33-metadata-parity-20261013|5461bd3da24f",
+    "kq247-vietlott-r33-candidate:20261013|e5c740f0f85b",
+    "kq247-vietlott-vps:r40-stats-no-restart|6c22d6f813bb",
+    "kq247-vietlott-vps:r39-24shards|54d8a718e61c",
+    "kq247/sales-bot-bridge:local|57718f4d0127",
+    "kq247/sales-bot-stage:latest|57718f4d0127",
+    "kq247-vietlott-vps:20261013|c171e55084be",
+    "kq247/sales-bot-primary:local|2e5b0481e5a1",
+    "kq247/sales-vps:staging|5c7c5c084ec1",
+    "kq247/r55-public-cache:local|2cbdb88bb320",
+    "node:22-bookworm-slim|c3de60bf2f9d",
+    "node:22-alpine|0a7108bf6c7b",
+    "postgres:17-alpine|b0f9560a2de0",
+    "caddy:2.10-alpine|4c6e91c6ed0e",
+    "mcr.microsoft.com/playwright/python:v1.56.0-noble|a7f6cf3ae520",
+    "mcr.microsoft.com/playwright:v1.56.1-noble|f1e7e01021ef"
+  ],
+  "note": "Metadata and hashes only; do not mistake snapshot or marker for original algorithm."
+}
