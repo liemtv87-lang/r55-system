@@ -247,9 +247,9 @@ test("real Bongdalu Time field respects Vietnam clock and excludes future games"
  assert.equal(res[0].teamGoals,2);
 });
 
-test("exclude ONLY two user-rejected low-tier fixtures",()=>{
- assert.equal(isR55IgnoredFixture({id:"BDL_3102824",league:"Calcutta Football League"}),true);
- assert.equal(isR55IgnoredFixture({bongdaluId:"3102993",league:"Myanmar League 2"}),true);
+test("no priced fixtures excluded without explicit instruction",()=>{
+ assert.equal(isR55IgnoredFixture({id:"BDL_3102824",league:"Calcutta Football League"}),false);
+ assert.equal(isR55IgnoredFixture({bongdaluId:"3102993",league:"Myanmar League 2"}),false);
  assert.equal(isR55IgnoredFixture({id:"BDL_3102994",league:"Myanmar League 2"}),false);
  assert.equal(isR55IgnoredFixture({id:"BDL_3102825",league:"Calcutta Football League"}),false);
  assert.equal(isR55IgnoredFixture({id:"BDL_3073740",league:"Europa League"}),false);
