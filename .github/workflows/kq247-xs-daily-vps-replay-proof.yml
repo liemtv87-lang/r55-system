@@ -1,0 +1,26 @@
+name: KQ247 XS daily replay on VPS
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-daily-vps-replay-proof.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Stage and independently replay 11 and 15 October on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/run-history.mjs deployment/lottery-vps-daily-staging/history/xsmb-505-actual-through-20261014.json root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node /stage/run-history.mjs /stage/xsmb-505-actual-through-20261014.json'
+          echo KQ247_VPS_DAILY_REPLAY_COMPLETED
