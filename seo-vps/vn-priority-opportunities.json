@@ -1,0 +1,91 @@
+{
+  "updated_at_utc": "2026-10-14",
+  "priority_policy": "Vietnam-owned or Vietnamese-language sites first; Vietnam-audience directory pages next; international generic directories only after no VN-suitable route",
+  "fields_explanation": {
+    "known_form": "Evidence of a submission route, not proof of eligibility or publication",
+    "verified_external_backlinks": "Only count HTML public listing with direct group href"
+  },
+  "entries": [
+    {
+      "name": "TgDio Vietnamese Directory",
+      "website": "https://vi.tgdio.com/groups",
+      "audience": "vietnamese_ui",
+      "type": "telegram_directory",
+      "submission_method": "requires account login via Add Media",
+      "free_claim": true,
+      "status": "requires_user_authenticated_access",
+      "evidence_url": "https://vi.tgdio.com/groups",
+      "targets": [
+        "football",
+        "lottery"
+      ],
+      "published_urls": []
+    },
+    {
+      "name": "Telegram Directory — Vietnamese search",
+      "website": "https://tdirectory.me/search/vietnamese",
+      "audience": "vietnamese_language_search",
+      "type": "telegram_directory",
+      "submission_method": "Submit Now",
+      "free_claim": null,
+      "status": "unverified_form_and_terms",
+      "evidence_url": "https://tdirectory.me/search/vietnamese",
+      "targets": [
+        "football",
+        "lottery"
+      ],
+      "published_urls": []
+    },
+    {
+      "name": "BongDa.com.vn editorial",
+      "website": "https://bongda.com.vn/quy-dinh-gui-bai-cong-tac-cho-bongdacomvn-va-tinthethaocomvn-d417963.html",
+      "audience": "vietnam_football",
+      "type": "editorial_contribution",
+      "submission_method": "original Vietnamese article to editorial team, real author details; publication editorially decided",
+      "free_claim": null,
+      "status": "editorial_pitch_only_no_guaranteed_link",
+      "evidence_url": "https://bongda.com.vn/quy-dinh-gui-bai-cong-tac-cho-bongdacomvn-va-tinthethaocomvn-d417963.html",
+      "targets": [
+        "football"
+      ],
+      "published_urls": []
+    },
+    {
+      "name": "Groupsor",
+      "website": "https://www.groupssor.com/submit/",
+      "audience": "international",
+      "type": "telegram_directory",
+      "submission_method": "public form",
+      "free_claim": true,
+      "status": "ineligible_country_field_no_vietnam",
+      "evidence_url": "https://github.com/liemtv87-lang/r55-system/actions/runs/38531214890",
+      "targets": [
+        "football",
+        "lottery"
+      ],
+      "published_urls": []
+    },
+    {
+      "name": "TelegramGroups.co",
+      "website": "https://telegramgroups.co/submit",
+      "audience": "international",
+      "type": "telegram_directory",
+      "submission_method": "free public form",
+      "free_claim": true,
+      "status": "site_temporarily_paused_2026_10_14",
+      "evidence_url": "https://github.com/liemtv87-lang/r55-system/actions/runs/38527407358",
+      "targets": [
+        "football",
+        "lottery"
+      ],
+      "published_urls": []
+    }
+  ],
+  "rules": [
+    "No unrelated comments/classified posts.",
+    "No unauthorized mass submissions.",
+    "No fabricated Vietnam address or identity.",
+    "One truthful submission per group per independent site, only if permitted.",
+    "Public link verification required before backlink count."
+  ]
+}
