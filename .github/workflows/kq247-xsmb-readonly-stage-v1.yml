@@ -1,0 +1,49 @@
+name: KQ247 XSMB immutable snapshot reader stage VPS
+on:
+  push:
+    paths: ['.github/workflows/kq247-xsmb-readonly-stage-v1.yml']
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Copy locked export and start isolated read-only XSMB viewer, no public routing changes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/export-locked-snapshot.py deployment/lottery-vps-daily-staging/run-full27-1930.sh deployment/lottery-vps-daily-staging/snapshot-reader.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          BASE=/opt/kq247/lottery-daily-staging
+          python3 -m py_compile "$BASE/export-locked-snapshot.py"
+          bash -n "$BASE/run-full27-1930.sh"
+          chmod 0755 "$BASE/run-full27-1930.sh"
+          docker run --rm --network none --read-only -v "$BASE/snapshot-reader.mjs":/app/server.mjs:ro node:22-alpine node --check /app/server.mjs
+          python3 "$BASE/export-locked-snapshot.py"
+          if ! docker ps --format '{{.Names}}' | grep -Fxq kq247-xsmb-snapshot-reader; then
+           docker run -d --name kq247-xsmb-snapshot-reader --restart unless-stopped \
+             --network football-staging_default --read-only \
+             --security-opt no-new-privileges --cap-drop ALL --pids-limit 80 \
+             --cpus 0.5 --memory 128m \
+             -v "$BASE/snapshot-reader.mjs":/app/server.mjs:ro \
+             -v "$BASE/public-locked":/locked:ro \
+             node:22-alpine node /app/server.mjs
+          fi
+          docker run --rm --network football-staging_default node:22-alpine node --input-type=module -e '
+          const h=await fetch("http://kq247-xsmb-snapshot-reader:3018/healthz");
+          const j=await h.json();if(!j.ok||!j.readOnly||!j.hasCurrentLockedSnapshot)throw Error("SNAPSHOT_READER_HEALTH_FAILED "+JSON.stringify(j));
+          const r=await fetch("http://kq247-xsmb-snapshot-reader:3018/xoso?region=xsmb");
+          const s=await r.text();
+          if(r.status!==200||!s.includes("51 – 52 – 91")||!s.includes("33 – 77")||!s.includes("DÀN 3 CÀNG")||s.includes("Neon"))throw Error("READER_HTML_VALIDATION_FAILED "+r.status);
+          console.log("XSMB_VPS_LOCKED_READER_READY",{health:j,htmlBytes:s.length});
+          '
+          echo PUBLIC_CADDY_UNCHANGED_STAGING_ONLY
+          VPS
