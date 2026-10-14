@@ -38,6 +38,8 @@ DIRECTORIES = [
     # Prioritize Vietnam-facing sources before the generic international pool.
     # These are discovery checks; submissions are never made without validation.
     ("TeleGroups Vietnam", "https://telegroups.org/submit"),
+    ("TGStat Vietnam candidate", "https://tgstat.com/add/channel"),
+    ("TelegramDirectory Vietnamese", "https://tdirectory.me/search/vietnamese"),
     ("TgDio Vietnamese", "https://vi.tgdio.com/groups"),
     ("TgramLink Vietnam", "https://tgramlink.com/vi"),
     ("Telegram Groups Vietnam", "https://www.telegram-groups.com/dashboard/submit/"),
