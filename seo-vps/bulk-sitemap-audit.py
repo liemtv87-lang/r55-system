@@ -176,11 +176,92 @@ def scan_one_domain(base):
             "sitemaps_fetched_or_attempted": requests, "candidate_urls": matches,
             "errors": errors, "sitemap_limit_reached": bool(stack)}
 
+
+# Read-only first-party submission route discovery. A sitemap URL is not a submission form.
+SUBMIT_ROUTES = {
+    "groupssor.com": "https://www.groupssor.com/submit/",
+    "telegroups.org": "https://telegroups.org/submit",
+    "tgmania.com": "https://tgmania.com/submit",
+    "telegramhub.org": "https://telegramhub.org/submit",
+    "telegramgroups.co": "https://telegramgroups.co/submit",
+    "telegram-group.com": "https://telegram-group.com/en/publish/",
+    "tg-hub.com": "https://tg-hub.com/submit-telegram-channel-and-group-links/",
+    "telegram-group.org": "https://telegram-group.org/SubmitGroup.php",
+    "tgden.com": "https://tgden.com/en/suggest",
+    "telegramchannels.io": "https://telegramchannels.io/submit-channel",
+    "groupsgyani.org": "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+    "groupverse.co.in": "https://groupverse.co.in/submit-your-group.html",
+    "telekit.link": "https://telekit.link/addgroup",
+    "tgcamp.com": "https://tgcamp.com/auth/register",
+    "tgfind.io": "https://tgfind.io/en/inclusion-link",
+    "toptglinks.com": "https://toptglinks.com/submit",
+    "telxplorer.com": "https://telxplorer.com/en/create_group",
+    "telegramgroup.arkservices.in": "https://telegramgroup.arkservices.in/submit",
+    "televerse.click": "https://televerse.click/submit",
+    "togather.in": "https://www.togather.in/submit",
+    "groupswa.com": "https://groupswa.com/submit-group-links/",
+}
+class FormLinks(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.hrefs = []
+        self.forms = 0
+        self.fields = 0
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "a" and a.get("href"):
+            self.hrefs.append(a["href"])
+        if tag == "form":
+            self.forms += 1
+        if tag in ("input", "textarea", "select"):
+            self.fields += 1
+
+def audit_submit_entries(base):
+    """Scan root and actual same-host submit entrypoints, with no POST requests."""
+    result = {"domain": base, "candidates": [], "root_error": None}
+    routes = []
+    root = "https://" + base + "/"
+    try:
+        raw, final = read_url(root, 500000)
+        parser = FormLinks()
+        parser.feed(raw.decode("utf8", "replace"))
+        for href in parser.hrefs:
+            link = urllib.parse.urljoin(final, href)
+            if is_domain_allowed(link, base) and re.search(
+                r"submit|add[-_]?group|add[-_]?channel|publish|suggest|inclusion|add[-_]?media",
+                urllib.parse.urlsplit(link).path, re.I
+            ):
+                routes.append(link)
+    except Exception as exc:
+        result["root_error"] = type(exc).__name__ + ": " + str(exc)[:110]
+    if base in SUBMIT_ROUTES:
+        routes.insert(0, SUBMIT_ROUTES[base])
+    for url in list(dict.fromkeys(routes))[:3]:
+        rec = {"url": url}
+        try:
+            raw, final = read_url(url, 500000)
+            if not is_domain_allowed(final, base):
+                rec["status"] = "cross_domain_redirect"
+            else:
+                html = raw.decode("utf8", "replace")
+                doc = FormLinks()
+                doc.feed(html)
+                rec.update(status="http_200", forms=doc.forms, inputs_selects=doc.fields,
+                    possible_captcha=bool(re.search(r"captcha|turnstile|data-sitekey", html, re.I)),
+                    possible_login=bool(re.search(r"sign in to submit|login to submit|register to submit", html, re.I)),
+                    possible_payment=bool(re.search(r"listing fee|pay .{0,40}to submit|\$\s*(9|29|49)", html, re.I)))
+        except Exception as exc:
+            rec["status"] = type(exc).__name__ + ": " + str(exc)[:95]
+        result["candidates"].append(rec)
+    return result
+
+
 def main():
     started = time.monotonic()
     with futures.ThreadPoolExecutor(max_workers=8) as executor:
         rs = list(executor.map(scan_one_domain, DOMAINS))
         checks = list(executor.map(verify_listing, KNOWN_LISTINGS))
+        entry_audits = list(executor.map(audit_submit_entries, DOMAINS))
     total = sum(x["url_records_scanned"] for x in rs)
     matches = list(dict.fromkeys(x for r in rs for x in r["candidate_urls"]))
     report = {
@@ -195,6 +276,7 @@ def main():
         "new_backlinks_published_by_this_job": 0,
         "duration_seconds": round(time.monotonic() - started, 2),
         "sites": rs,
+        "submission_entrypoint_audits": entry_audits,
         "limitations": [
             "Sitemap URL records are not verified backlinks.",
             "A page lacking the group's handle in its URL can contain a link and will not be discovered by URL-only screening.",
@@ -216,6 +298,7 @@ def main():
         "top_sites": sorted([{"domain": x["domain"], "scanned": x["url_records_scanned"]} for x in rs],
                             key=lambda x: -x["scanned"])[:12],
     }, ensure_ascii=False), flush=True)
+    print("KQ247_SUBMIT_AUDIT_SUMMARY=" + json.dumps({"domains":len(entry_audits),"candidate_urls":sum(len(x["candidates"]) for x in entry_audits),"form_pages":sum(1 for x in entry_audits for q in x["candidates"] if q.get("forms",0)>0),"no_post_requests":True},ensure_ascii=False),flush=True)
     print("REPORT_FILE=reports/kq247-bulk-sitemap-scan.json", flush=True)
 
 if __name__ == "__main__":
