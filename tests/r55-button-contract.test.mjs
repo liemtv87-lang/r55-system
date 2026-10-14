@@ -100,3 +100,11 @@ test('group bot uses current-day locked or latest preview, never yesterday predi
  assert.ok(bot.includes("today_bongdalu_predictions_not_ready"));
  assert.ok(!bot.includes("day>=($1::date-interval '1 day')"));
 });
+
+test('canonical VPS customer link cannot bounce to stale Render latest-link from license service',()=>{
+ const client=read('deployment/football-original/public/client.html');
+ assert.ok(client.includes("if (location.hostname === '64-120-92-172.sslip.io') return true;"));
+ assert.ok(client.includes("importLinkMigration();"));
+ assert.ok(client.includes("if (data.dev) localStorage.setItem('kq247_dev'"));
+ assert.ok(client.includes("localStorage.setItem('kq247_football_code', String(data.code))"));
+});

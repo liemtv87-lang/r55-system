@@ -1187,6 +1187,10 @@
       }
       async function ensureLatestLink() {
         importLinkMigration();
+        // The canonical VPS client is already the destination. The licensing
+        // service may still advertise the previous Render URL during rollout;
+        // never redirect a migrated device back into a two-domain loop.
+        if (location.hostname === '64-120-92-172.sslip.io') return true;
         try {
           const r = await fetch(API + '?action=latest-link&product=' + PRODUCT, {
             cache: 'no-store',
