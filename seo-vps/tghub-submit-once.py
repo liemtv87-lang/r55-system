@@ -38,7 +38,9 @@ def run_one(page,key,doc):
  have_language=fill(page,'input[placeholder*="English"],input[name*="language" i]','Vietnamese')
  have_desc=fill(page,'textarea',g["description"])
  r["fields"]={"name":have_name,"link":have_link,"language":have_language,"description":have_desc}
- if not all(r["fields"].values()):return dict(r,status="form_changed",excerpt=body(page))
+ if not all(r["fields"].values()):
+  controls=page.locator("input,select,textarea,button").evaluate_all("""xs=>xs.filter(x=>x.getBoundingClientRect().width>0).slice(0,30).map(x=>({tag:x.tagName,name:x.name||'',placeholder:x.placeholder||'',type:x.type||'',label:x.getAttribute('aria-label')||''}))""")
+  return dict(r,status="form_changed",visible_controls=controls,excerpt=body(page))
  r["category"]=None
  r["country"]=None
  for sel in visible(page.locator("select")):
