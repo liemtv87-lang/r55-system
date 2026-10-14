@@ -38,6 +38,7 @@ jobs:
           python3 "$ROOT/patch-draw-parser-full27.py"
           grep -F 'full_results:nums' "$ROOT/minhngoc-draw.mjs"
           docker run --rm --network none -v "$ROOT":/stage:ro node:22-alpine node --check /stage/full27-daily-worker.mjs
+          chmod 0755 "$ROOT/run-full27-1930.sh"
           echo CHECK_AND_RUN_FULL27
           "$ROOT/run-full27-1930.sh"
           echo VERIFY_CUSTOMER_VIEW
