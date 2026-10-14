@@ -130,6 +130,7 @@ def discover(page, name, url):
         page.wait_for_timeout(350)
         info = page.evaluate("""() => ({
             forms: document.querySelectorAll('form').length,
+            page_excerpt: (document.body.innerText || '').slice(0,1800),
             submitInputs: [...document.querySelectorAll('input')].filter(x =>
                 /telegram|group|username|invite|link/i.test(x.name+' '+x.placeholder)).length,
             captcha: !!document.querySelector('[data-sitekey],iframe[src*=captcha]'),
@@ -147,6 +148,37 @@ def discover(page, name, url):
     except Exception as exc:
         return {"name": name, "url": url, "error": type(exc).__name__ + ": " + str(exc)[:120]}
 
+
+
+
+def qualify_directory(info):
+    """Reject unsuitable sources before anyone attempts to register a backlink."""
+    if info.get("http") != 200:
+        return {"status":"skip_unavailable","reason":"non_200_or_network_error"}
+    if info.get("captcha"):
+        return {"status":"skip_captcha","reason":"human_verification_required"}
+    if info.get("loginRequired"):
+        return {"status":"skip_auth","reason":"authentication_required"}
+    excerpt = (info.get("page_excerpt") or "").lower()
+    if any(v in excerpt for v in (
+        "one-time listing fee", "paid category", "payment required",
+        "pay to submit", "credit card required", "premium membership required"
+    )):
+        return {"status":"skip_paid","reason":"explicit_fee_or_paid_category"}
+    if any(x in excerpt for x in (
+        "submissions are closed", "submissions paused", "not accepting submissions"
+    )):
+        return {"status":"skip_closed","reason":"site_does_not_accept_submissions"}
+    if info.get("submitInputs", 0) < 1:
+        return {"status":"skip_no_link_field","reason":"no_visible_group_or_link_field"}
+    controls = info.get("controls") or []
+    buttons = [x.get("text","").lower() for x in controls if x.get("tag") == "button"]
+    has_submit = bool(info.get("forms")) or any(
+        any(k in s for k in ("submit", "add", "publish", "gửi", "đăng")) for s in buttons
+    )
+    if not has_submit:
+        return {"status":"needs_review","reason":"link_field_without_submit_action"}
+    return {"status":"candidate_submit_form","reason":"live_link_form_without_detected_block"}
 
 
 def submit_tgmania(page, group):
@@ -341,7 +373,9 @@ def main():
             else:
                 state["verified"].pop(group + "|" + url, None)
         for name, url in DIRECTORIES:
-            discoveries.append(discover(page, name, url))
+            row = discover(page, name, url)
+            row['qualification'] = qualify_directory(row)
+            discoveries.append(row)
         for group in GROUPS:
             key="TGMania|"+group
             if key not in state["submission_attempts"]:
@@ -385,6 +419,18 @@ def main():
         "shortfall_vs_target": max(0, GOAL_PER_HOUR - new_links),
         "group_metrics": by_group,
         "directory_checks": discoveries,
+        "form_first_filter": {
+            "scanned_domains": len(discoveries),
+            "candidate_forms": [
+                {"name": x["name"], "url": x["url"], "reason": x["qualification"]["reason"]}
+                for x in discoveries if x.get("qualification",{}).get("status")=="candidate_submit_form"
+            ],
+            "rejected_sources": [
+                {"name": x["name"], "reason": x["qualification"]["status"]}
+                for x in discoveries if x.get("qualification",{}).get("status")!="candidate_submit_form"
+            ],
+            "note": "A submission form is not a verified published backlink."
+        },
         "submission_attempts": state["submission_attempts"],
         "telegram_public_member_samples": member_samples,
         "membership_growth_today": membership_growth,
@@ -415,6 +461,8 @@ def main():
         "reach_measurement": "unavailable",
         "registration_attempts": {k:{"state":v.get("state"),"error":v.get("error"),"stage":v.get("stage")} for k,v in state["submission_attempts"].items()},
         "directories_inspected": len(discoveries),
+        "form_first_candidates": [x["name"] for x in discoveries if x.get("qualification",{}).get("status")=="candidate_submit_form"],
+        "excluded_form_sources": sum(1 for x in discoveries if x.get("qualification",{}).get("status")!="candidate_submit_form"),
         "submission_results": [{k:v for k,v in x.items() if k in ("directory","group","state","category")} for x in submissions],
     }, ensure_ascii=False), flush=True)
 
