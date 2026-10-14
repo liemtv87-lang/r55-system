@@ -25,12 +25,22 @@ test("reads all 20 embedded matches, not only 10 displayed",()=>{
  assert.equal(h.sourceCoverage.homeMatches,20);
  assert.equal(h.homeSummary.n,20);
 });
-test("retains AH/OU price history by bookmaker from real source variables",()=>{
+test("never attributes H2H bookmaker odds to an embedded score that does not match",()=>{
  const h=extractRichBongdaluHistory(example());
+ assert.equal(h.homeRows.length,20);
+ assert.equal(h.homeRows[0].matchId,null);
+ assert.equal(h.homeRows[0].quotes.length,0);
+ assert.equal(h.sourceCoverage.bookmakerCount,0);
+});
+test("retains AH/OU bookmaker prices when rendered and embedded score identity agrees",()=>{
+ // The first visible row has the same identity, score and team side as h_data[0].
+ const html=example().replace('info="2,1,101"','info="0,0,101"').replace('>2-1</td>','>0-0</td>');
+ const h=extractRichBongdaluHistory(html);
  assert.equal(h.sourceCoverage.bookmakerCount,2);
  assert.equal(h.homeRows[0].quotes.length,2);
  assert.equal(h.homeRows[0].quotes[1].ahClosing,-.25);
  assert.equal(h.homeRows[0].quotes[0].ouOpening,2.5);
+ assert.equal(h.homeRows[1].quotes.length,0);
 });
 test("does not create played results when source lacks score rows",()=>{
  const h=extractRichBongdaluHistory("<html>"+'x'.repeat(150)+"</html>");
@@ -78,4 +88,16 @@ test("counts line agreement only for identical published AH/OU quotes",()=>{
  const ou=bookmakerSideAgreement(q,{type:"OU",pick:"UNDER",line:2.75});
  assert.equal(ou.sameLineBookmakers,2);assert.equal(ou.priceLeanForPick,1);assert.equal(ou.neutralPriceVotes,1);
  assert.equal(bookmakerSideAgreement(q,{type:"AH",pick:"HOME",line:-1}).sameLineBookmakers,0);
+});
+
+test("bookmaker consensus counts real decimal prices, not Hong Kong raw quotes",()=>{
+ const q=[
+  {bookmaker:"Bet365",bookmakerId:"8",homeLine:-0.5,ouLine:2.5,homePrice:1.91,awayPrice:1.94,overPrice:1.92,underPrice:1.90},
+  {bookmaker:"Sbobet",bookmakerId:"31",homeLine:-0.5,ouLine:2.5,homePrice:1.90,awayPrice:1.95,overPrice:1.88,underPrice:1.96}
+ ];
+ const c=bookmakerMarketConsensus(q);
+ assert.equal(c.AH.availableBookmakers,2);
+ assert.equal(c.AH.lineVotes,2);
+ assert.equal(c.OU.availableBookmakers,2);
+ assert.equal(c.OU.lineVotes,2);
 });
