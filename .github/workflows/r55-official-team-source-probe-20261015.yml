@@ -1,0 +1,43 @@
+name: R55 Bongdalu Official Team Profile Recovery Probe
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-official-team-source-probe-20261015.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect verified team profiles read-only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase} from './lib/bongdaluR55.js';
+          const r=await resolveBongdaluBase();
+          const host=new URL(r.base).hostname.replace(/^www\./,'');
+          const hosts=['football.'+host,'www.'+host];
+          for(const id of ['80597','80877','234']){
+            for(const h of hosts){
+              const url='https://'+h+'/team/summary/'+id;
+              try{
+                const res=await fetch(url,{redirect:'follow',signal:AbortSignal.timeout(12000),headers:{'user-agent':'Mozilla/5.0'}});
+                const body=await res.text();
+                const t=body.indexOf('<title');
+                const title=t>=0?body.slice(t,body.indexOf('</title>',t)+8).slice(0,250):null;
+                const patterns=['var h_data','var a_data','Vs_hOdds','teamHistory','match/history','recent','Match List','tr1_','football'];
+                const present=Object.fromEntries(patterns.map(x=>[x,body.includes(x)]));
+                const scripts=[...body.matchAll(/<script[^>]+src=['"]([^'"]+)['"]/gi)].map(x=>x[1]).slice(-24);
+                const ids=[...new Set([...body.matchAll(/\b(?:id|teamId|teamid)\s*[:=]\s*['"]?(\d{4,8})/gi)].map(x=>x[1]))].slice(0,12);
+                console.log('R55_OFFICIAL_TEAM_PROFILE',JSON.stringify({id,host:h,status:res.status,final:new URL(res.url).hostname,bytes:body.length,title,present,scripts,ids,first:body.slice(0,150).replace(/\s+/g,' ')}));
+              }catch(e){console.log('R55_TEAM_PROFILE_ERROR',JSON.stringify({id,host:h,error:String(e.message||e)}))}
+            }
+          }
+          JS
