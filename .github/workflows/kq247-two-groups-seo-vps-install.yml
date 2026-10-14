@@ -1,7 +1,17 @@
 name: KQ247 Two Telegram Groups SEO VPS Install
 on:
   push:
-    paths: ['.github/workflows/kq247-two-groups-seo-vps-install.yml','seo-vps/**']
+    paths: [
+      '.github/workflows/kq247-two-groups-seo-vps-install.yml',
+      'seo-vps/groups-hourly.py',
+      'seo-vps/indexnow-changes.py',
+      'seo-vps/audit-backlinks.py',
+      'seo-vps/backlink-campaign.json',
+      'deployment/football-original/public/nhom-bong-da-telegram-mien-phi.html',
+      'deployment/football-original/public/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html',
+      'deployment/football-original/public/sitemap.xml',
+      'deployment/football-original/public/robots.txt'
+    ]
   workflow_dispatch:
 permissions:
   contents: read
