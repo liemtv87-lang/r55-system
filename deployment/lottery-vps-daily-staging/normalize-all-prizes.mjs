@@ -10,7 +10,18 @@ function reverseGroups(vals,groupSizes){
 }
 export function canonicalizePrizes(region,raw){
  const expected=region==='mb'?27:(region==='mt'||region==='mn'?18:0);
- if(!expected||!Array.isArray(raw)||raw.length!==expected)throw Error('INCOMPLETE_STATION_PRIZES_'+region);
+ if(!expected)throw Error('INCOMPLETE_STATION_PRIZES_'+region);
+ const structured=raw&&typeof raw==='object'&&!Array.isArray(raw);
+ if(structured && (region==='mt'||region==='mn')){
+  const fields=[['g8',1],['g7',1],['g6',3],['g5',1],['g4',7],['g3',2],['g2',1],['g1',1],['db',1]];
+  const flat=[];
+  for(const [field,count] of fields){
+   const x=raw[field];if(!Array.isArray(x)||x.length!==count)throw Error('MISSING_STRUCTURED_PRIZE_GROUP_'+field);
+   flat.push(...x);
+  }
+  raw=flat;
+ }
+ if(!Array.isArray(raw)||raw.length!==expected)throw Error('INCOMPLETE_STATION_PRIZES_'+region);
  const v=raw.map(x=>{if(typeof x!=='string'||!/^\d{2,6}$/.test(x))throw Error('INVALID_PRIZE_DIGITS');return x});
  if(region==='mb'){
   if(v.some((s,i)=>s.length!==mbLen[i]))throw Error('BAD_MB_PRIZE_POSITIONS');
@@ -23,9 +34,11 @@ export function canonicalizePrizes(region,raw){
 }
 export function normalizedStationDraw(row){
  if(!['mb','mt','mn'].includes(row.region)||typeof row.station!=='string'||!row.station.trim()||!row.draw_date)throw Error('BAD_STATION_OR_DAY');
- const original=row.full_results;
- const prizes=canonicalizePrizes(row.region,original);
- if(row.all2 && (!Array.isArray(row.all2)||row.all2.length!==original.length||original.some((x,i)=>x.slice(-2)!==row.all2[i])))
+ const raw=row.full_results;
+ const sourceOrder=raw&&typeof raw==='object'&&!Array.isArray(raw)?
+   ['g8','g7','g6','g5','g4','g3','g2','g1','db'].flatMap(k=>raw[k]||[]):raw;
+ const prizes=canonicalizePrizes(row.region,raw);
+ if(row.all2 && (!Array.isArray(row.all2)||row.all2.length!==sourceOrder.length||sourceOrder.some((x,i)=>x.slice(-2)!==row.all2[i])))
   throw Error('RAW_TWO_DIGIT_INCONSISTENCY');
  const special=row.region==='mb'?prizes[0]:prizes[17];
  if(row.special&&row.special!==special)throw Error('SPECIAL_DOES_NOT_MATCH');
