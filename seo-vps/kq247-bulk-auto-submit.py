@@ -90,7 +90,7 @@ def inspect_fields(page):
      fields:[...f.querySelectorAll('input,textarea,select')].map((e,i)=>({
        idx:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
        key:[e.name||'',e.id||'',e.placeholder||'',e.getAttribute('aria-label')||'',
-         e.closest('label')?.innerText||''].join(' ').toLowerCase().slice(0,200),
+         e.closest('label')?.innerText||'',(e.type==='radio'?e.value:'')].join(' ').toLowerCase().slice(0,200),
        required:e.required,disabled:e.disabled,
        options:e.tagName==='SELECT'?[...e.options].map(o=>({v:o.value,t:o.textContent.trim()})):null
      }))
@@ -179,9 +179,13 @@ def attempt(page, con, host, url, group_key, group):
             if field["tag"]=="select":
                 if not choose_option(inp,field,group):
                     write_result(con,host,group_key,url,"required_option_not_available",k);return
-            elif typ in ("checkbox","radio"):
+            elif typ=="radio":
+                if "telegram" in k and "platform" in k:
+                    inp.check(timeout=3000)
+                elif field["required"]:
+                    write_result(con,host,group_key,url,"requires_manual_radio_review",k);return
+            elif typ=="checkbox":
                 if field["required"]:
-                    # Unknown consent wording or charges => review.
                     write_result(con,host,group_key,url,"requires_manual_terms_review",k);return
             elif typ in ("hidden","submit","reset","button"):
                 continue
@@ -218,7 +222,7 @@ def main():
     con=prepare_db()
     deadline=time.monotonic()+TIME_LIMIT
     posted=0
-    print("KQ247_BULK_SUBMIT_READY="+json.dumps({"max_attempts":BATCH_LIMIT,"poll_seconds":30,
+    print("KQ247_BULK_SUBMIT_READY="+json.dumps({"max_attempts":BATCH_LIMIT,"poll_seconds":POLL_SECONDS if WATCH else 30,
         "limit_seconds":TIME_LIMIT,"skipped_previously_submitted":sorted(ALREADY_SENT_HOSTS)}),flush=True)
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
