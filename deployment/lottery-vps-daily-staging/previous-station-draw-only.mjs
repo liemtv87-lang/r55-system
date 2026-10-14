@@ -35,6 +35,13 @@ export function predictFromPreviousStationDraw({predictionDate,region,station,pr
  const target=dayValue(predictionDate);
  const d=normalizedStationDraw(previousDraw);
  if(d.region!==region||d.station!==station||d.draw_date>=target)throw Error('WRONG_PREVIOUS_STATION_DRAW');
+ // MB has a completed draw every calendar day: use exactly yesterday's own
+ // 27-prize draw for tomorrow. Provincial stations draw on specific weekdays;
+ // their input must be the immediately preceding actual draw of that station,
+ // never another station's draw from the previous calendar day.
+ const daysBetween=(Date.parse(target+'T12:00:00Z')-Date.parse(d.draw_date+'T12:00:00Z'))/86400000;
+ if(!Number.isInteger(daysBetween)||(region==='mb'?daysBetween!==1:daysBetween<1||daysBetween>7))
+  throw Error('INVALID_PREVIOUS_DRAW_SOURCE_DATE_'+region+'_'+station);
  const positions=d.full_results.flatMap((v,prize)=>[...v].map((char,column)=>({digit:+char,prize,column})));
  const expected=totalDigitPositions(region);
  if(positions.length!==expected)throw Error('MISSING_DIGIT_POSITION');
