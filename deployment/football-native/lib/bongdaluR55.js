@@ -210,26 +210,36 @@ function parseHistoryHtml(html){
 
 async function recoverOfficialBongdaluTeamForm(base,teamId,before){
  if(!Number.isInteger(teamId)||teamId<=0||!Number.isFinite(Number(before)))return [];
- const sources=[...new Set([base,"https://football.bongdalu812.com/"])];
- for(const origin of sources){
-  const found=new Map();
-  for(let pageNo=1;pageNo<=3;pageNo++){
+ // On Bongdalu the team schedule is a separate verified subdomain.
+ // 'init=1' supplies its PlayingPage; page 1 alone may be all future fixtures.
+ const root="https://football.bongdalu812.com/";
+ const seen=new Set(),found=new Map(),pages=[1];
+ for(let attempt=0;pages.length&&attempt<8&&found.size<20;attempt++){
+   const pageNo=pages.shift();
+   if(!Number.isInteger(pageNo)||pageNo<1||seen.has(pageNo))continue;
+   seen.add(pageNo);
    const path="ajax/getteamschedulebypageno?id="+encodeURIComponent(teamId)+
      "&pageNo="+pageNo+"&sclassId=0&init="+(pageNo===1?1:0);
    let payload;
-   try{
-    const raw=await get(origin,path,"application/json",11000);
-    payload=JSON.parse(raw);
-   }catch{break;}
-   if(!Array.isArray(payload?.MatchList))break;
+   try{payload=JSON.parse(await get(root,path,"application/json",11000));}
+   catch{continue}
+   if(!Array.isArray(payload?.MatchList))continue;
    for(const item of parseBongdaluTeamSchedule(payload,teamId,before)){
-    if(!found.has(item.matchId))found.set(item.matchId,item);
+     if(!found.has(item.matchId))found.set(item.matchId,item);
    }
-   if(found.size>=20||payload.MatchList.length<10)break;
-  }
-  if(found.size)return [...found.values()].sort((a,b)=>b.timestamp-a.timestamp).slice(0,20);
+   if(pageNo===1){
+     const total=Math.max(1,Number(payload.TotalPages||1));
+     const playing=Number(payload.PlayingPage);
+     if(Number.isInteger(playing)&&playing>=1&&playing<=total){
+       // Read at the pre-match point rather than scanning future seasons.
+       for(const p of [playing,playing+1,playing+2,playing+3,playing-1])
+         if(p>=1&&p<=total&&!seen.has(p))pages.push(p);
+     }else if(total>1){
+       for(const p of [2,3,4,5,6])if(p<=total)pages.push(p);
+     }
+   }
  }
- return [];
+ return [...found.values()].sort((a,b)=>b.timestamp-a.timestamp).slice(0,20);
 }
 
 async function history(base,id,before=null){
