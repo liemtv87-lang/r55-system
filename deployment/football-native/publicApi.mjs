@@ -21,7 +21,7 @@ function pickList(items,url){
  const now=Date.now();
  const matching=items.filter(p=>showStarted||(p.ts>now));
  const selected=url.searchParams.get('mode')==='featured'?matching.filter(p=>p.top):matching;
- selected.sort((a,b)=>Number(b.top)-Number(a.top)||b.priority-a.priority||a.ts-b.ts);
+ selected.sort((a,b)=>url.searchParams.get("mode")==="featured"?(b.priority-a.priority||a.ts-b.ts):a.ts-b.ts);
  return {matching,selected,items:selected.slice(0,toInt(url.searchParams.get('limit'),30))};
 }
 async function locked(){

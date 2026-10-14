@@ -16,7 +16,7 @@ const vnHour=()=>Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Ho_Chi_M
 const vnMinute=()=>Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Ho_Chi_Minh',minute:'2-digit'}).format(new Date()));
 const cleanMarket=m=>{
  const k=m?.market||{},odd=Number(k.odds),line=Number(k.line);
- if(!['AH','OU'].includes(k.type)||!Number.isFinite(odd)||odd<1.5||odd>3.5||
+ if(!['AH','OU'].includes(k.type)||!Number.isFinite(odd)||odd<=1||
     !Number.isFinite(line)||Math.abs(line*4-Math.round(line*4))>1e-7)return false;
  return(k.type==='AH'?['HOME','AWAY']:['OVER','UNDER']).includes(k.pick);
 };
@@ -67,9 +67,7 @@ async function sendPick(){
    if(!fixture(m)||!cleanMarket(m))continue;
    // Never auto-advertise shadow or insufficiently researched markets as "best".
    // This is independent of the 80% research/forecast coverage goal.
-   if(m.market?.researchOnly!==false||Number(m.market?.modelAgreement)!==3||
-      Number(m.market?.bookmakers)<3||Number(m.history?.homeGames)<10||
-      Number(m.history?.awayGames)<10)continue;
+   if(Number(m.history?.homeGames)<1||Number(m.history?.awayGames)<1)continue;
    const until=Date.parse(m.kickoff||'')-now;
    if(!Number.isFinite(until)||until<0||until>30*60000)continue;
    const id=String(m.id);

@@ -88,7 +88,7 @@ export default async function(req,res){
  // forecasts explicitly. Do not silently hide all matches when no model passed.
  const approvedIds=new Set(releasedUpcoming.map(x=>x.id));
  const shown=upcoming.filter(x=>mode!=="featured"||priority(x))
-  .sort((a,b)=>rank(b)-rank(a)||Number(b.market?.expectedEV||0)-Number(a.market?.expectedEV||0)||Number(b.score||0)-Number(a.score||0)||Date.parse(a.kickoff)-Date.parse(b.kickoff))
+  .sort((a,b)=>mode==="featured"?(rank(b)-rank(a)||Date.parse(a.kickoff)-Date.parse(b.kickoff)):Date.parse(a.kickoff)-Date.parse(b.kickoff))
   .slice(0,limit).map(x=>toLegacy(x,approvedIds.has(x.id)));
  const summary=[],perf=new Map();
  const now=Date.now();

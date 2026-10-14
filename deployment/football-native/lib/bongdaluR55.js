@@ -84,7 +84,7 @@ function parseOdds(xmls){
    const ah=Number(p[2]),ou=Number(p[10]);
    const hp=Number(p[3]),ap=Number(p[4]),op=Number(p[11]),up=Number(p[12]);
    if(!/^\d{5,12}$/.test(id)||![ah,ou,hp,ap,op,up].every(Number.isFinite)||
-       ![hp,ap,op,up].every(x=>x>.05&&x<=3)||ou<1.25||ou>7)continue;
+       ![hp,ap,op,up].every(x=>x>0)||ou<1.25||ou>7)continue;
    const q={name:String(source.name||"Bongdalu"),bookmakerId:String(source.id||""),homeLine:-ah,awayLine:ah,
      ouLine:ou,homeHK:hp,awayHK:ap,overHK:op,underHK:up};
    if(!byId.has(id))byId.set(id,new Map());
@@ -107,7 +107,7 @@ function parseOdds(xmls){
   const spread=field=>{const vals=quotes.map(x=>x[field]);return round(Math.max(...vals)-Math.min(...vals),3);};
   const homePrice=round(1+ahQuote.homeHK),awayPrice=round(1+ahQuote.awayHK);
   const overPrice=round(1+ouQuote.overHK),underPrice=round(1+ouQuote.underHK);
-  if([homePrice,awayPrice,overPrice,underPrice].some(x=>x<=1||x>4))continue;
+  if([homePrice,awayPrice,overPrice,underPrice].some(x=>!Number.isFinite(x)||x<=1))continue;
   const decimalQuotes=quotes.map(q=>({bookmaker:q.name,
    bookmakerId:String(q.bookmakerId||BOOKS.find(x=>x[0]===q.name)?.[1]||q.name),
    homeLine:q.homeLine,ouLine:q.ouLine,homePrice:round(1+q.homeHK),
@@ -304,13 +304,13 @@ function makeMarket(row,h,learned){
  const baseline=Array.isArray(row.market.bookmakerQuotes)?row.market.bookmakerQuotes:[];
  const evidence=new Map();
  const decimalPrice=v=>{
-  const n=Number(v);if(!Number.isFinite(n)||n<=.05)return null;
+  const n=Number(v);if(!Number.isFinite(n)||n<=0)return null;
   // Bongdalu comparison pages use Hong Kong prices; the model uses decimal.
-  return n<=1?round(1+n):n<=4?round(n):null;
+  return n<=1?round(1+n):round(n);
  };
  const valid=q=>q&&Number.isFinite(Number(q.homeLine))&&Number.isFinite(Number(q.ouLine))&&
   ["homePrice","awayPrice","overPrice","underPrice"].every(k=>
-   Number.isFinite(q[k])&&q[k]>1.05&&q[k]<=4);
+   Number.isFinite(q[k])&&q[k]>1);
  const key=q=>String(q.bookmakerId||q.bookmaker||"").trim().toLowerCase();
  for(const q of baseline){
   const item={...q,bookmaker:String(q.bookmaker||""),bookmakerId:String(q.bookmakerId||"")};
@@ -339,7 +339,7 @@ function makeMarket(row,h,learned){
  // Call the production R55 native bongMarket algorithm from the original
  // football-all-refresh-v3 source. No locally invented market prediction.
  const originalMatch={live_id:"bongdalu:"+row.bongdaluId,ts:row.ts,home:row.home,away:row.away,
-    country:row.country,league:row.league,rank:clamp(row.priority>0?row.priority/4:40,0,100)};
+    country:row.country,league:row.league,rank:50};
  // Primary signal: own-team form and historical odds. H2H stays recorded
  // as optional context, not a primary input or rejection gate.
  const result=nativeBongMarket(originalMatch,{market:mk},primaryFormEvidence(h),null,null,null,[]);
@@ -420,7 +420,7 @@ async function buildBongdaluR55(publish,stage=false){
  // Take all eligible verified Bongdalu markets (up to 450 for bounded batch work).
   // Never choose a fixed 60 or stop simply because the first 35 picks succeeded.
   const pool=all.filter(x=>x.ts>=Math.max(stage?now-5*60000:windowStart,now-5*60000)&&x.ts<=windowEnd&&!excluded(x)&&x.market)
-   .sort((a,b)=>b.priority-a.priority||b.market.bookmakerCount-a.market.bookmakerCount||a.ts-b.ts);
+   .sort((a,b)=>a.ts-b.ts);
  const learnedQ=await db.query("SELECT payload FROM football_compact_stats WHERE scope='r55_method_rank' LIMIT 1");
  const learned=(learnedQ.rows[0]?.payload?.methods||[]);
  let picked=[],visited=0,withHistory=0;
@@ -430,7 +430,7 @@ async function buildBongdaluR55(publish,stage=false){
   for(const {x,h} of results){visited++;if(h){withHistory++;const m=makeMarket(x,h,learned);if(m)picked.push(m)}}
   // Do not short-circuit after the first 35: process all time-window candidates.
  }
- picked.sort((a,b)=>b.priority-a.priority||b.score-a.score||a.ts-b.ts);
+ picked.sort((a,b)=>a.ts-b.ts||b.score-a.score);
  // Keep all validated selections: never truncate simply because a fixed count was reached.
  if(picked.length<20)return{ok:false,day,error:"bongdalu_verified_pool_less_than_20",seen:pool.length,checked:visited,withHistory,eligible:picked.length,locked:false};
  const snapshot={date:day,source:"Bongdalu pre-match Ensemble v3 H2H/AH/OU",model:"R55 Bongdalu Ensemble v3",locked:true,

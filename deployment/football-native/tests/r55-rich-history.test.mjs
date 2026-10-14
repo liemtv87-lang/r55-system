@@ -152,7 +152,7 @@ test("missing one team form may yield ONLY a research-only candidate; never fake
  const p=chooseR55Ensemble(row,h,native);
  assert.ok(p,"valid Bongdalu AH/OU markets should remain modelable");
  assert.equal(p.researchOnly,true);
- assert.equal(p.reason,"form_samples_under_15");
+ assert.equal(p.reason,"form_history_unavailable");
  assert.equal(p.sample.away,0);
  assert.ok(["AH","OU"].includes(p.type));
  assert.ok(Number.isFinite(p.ev));
@@ -253,4 +253,19 @@ test("only the two explicitly rejected low-tier fixtures are excluded",()=>{
  assert.equal(isR55IgnoredFixture({id:"BDL_3102994",league:"Myanmar League 2"}),false);
  assert.equal(isR55IgnoredFixture({id:"BDL_3102825",league:"Calcutta Football League"}),false);
  assert.equal(isR55IgnoredFixture({id:"BDL_3073740",league:"Europa League"}),false);
+});
+
+test("all leagues have same source-evidence score and bookmaker prices are never forced into a 1.65-2.20 window",()=>{
+ const row={league:"Lower division",priority:0,market:{homeLine:-2,awayLine:2,ouLine:4,
+  homePrice:1.55,awayPrice:2.65,overPrice:1.54,underPrice:2.45,bookmakerCount:1}};
+ const h={home:{n:20,gf:2,ga:1.1},away:{n:20,gf:1,ga:2},h2h:{n:0},individualHistory:{home:[],away:[]}};
+ const model={model:{xg_home:2.1,xg_away:1.1},market_risk:{},
+  ah:{pick:"HOME",signal_score:75},ou:{pick:"OVER",signal_score:75}};
+ const low=evaluateR55EvidenceQuality(row,h,model);
+ const high=evaluateR55EvidenceQuality({...row,league:"UEFA Champions League",priority:320},h,model);
+ assert.equal(low.ok,true);assert.equal(high.ok,true);assert.deepEqual(low.reasons,high.reasons);
+ const a=chooseR55Ensemble(row,h,model),b=chooseR55Ensemble({...row,priority:320},h,model);
+ assert.ok(a&&b);assert.deepEqual([a.type,a.pick,a.line,a.odds,a.reason],[b.type,b.pick,b.line,b.odds,b.reason]);
+ assert.ok([1.55,2.65,1.54,2.45].includes(a.odds));
+ assert.notEqual(a.reason,"competition_below_priority_floor");
 });

@@ -11,7 +11,7 @@ function usable(quotes,type){
  const line=type==="AH"?"homeLine":"ouLine",prices=type==="AH"?["homePrice","awayPrice"]:["overPrice","underPrice"];
  const unique=new Map();
  for(const q of Array.isArray(quotes)?quotes:[]){
-  if(!q||!quarter(q[line])||prices.some(k=>!finite(q[k])||Number(q[k])<=1.05||Number(q[k])>4))continue;
+  if(!q||!quarter(q[line])||prices.some(k=>!finite(q[k])||Number(q[k])<=1))continue;
   if(type==="OU"&&(Number(q.ouLine)<.5||Number(q.ouLine)>8))continue;
   const name=String(q.bookmaker||"").trim();if(name)unique.set(String(q.bookmakerId||name),q);
  }

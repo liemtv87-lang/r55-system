@@ -129,7 +129,7 @@ async function run(){
   const end=Date.parse(day+'T06:00:00Z')+86400000+300000;
   // User denominator: ALL divisions with genuinely priced AH/O-U, never only majors.
   const priced=k=>k&&["homePrice","awayPrice","overPrice","underPrice"].every(n=>
-    Number.isFinite(Number(k[n]))&&Number(k[n])>1.05&&Number(k[n])<=4);
+    Number.isFinite(Number(k[n]))&&Number(k[n])>1);
   const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&priced(m.market)&&!isR55IgnoredFixture(m));
   const eligibleIds=new Set(eligible.map(m=>m.id));
   const matches=[],exceptions=[],missingHistory=[];

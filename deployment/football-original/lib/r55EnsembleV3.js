@@ -31,16 +31,15 @@ function quality(row,h,native){
  const mk=row?.market||{},home=h?.home||{},away=h?.away||{},h2h=h?.h2h||{};
  const nh=Number(home.n||0),na=Number(away.n||0),nH2H=Number(h2h.n||0),books=Number(mk.bookmakerCount||0);
  const reason=[];
- if(nh<15||na<15)reason.push("form_samples_under_15");
- if(books<3)reason.push("bookmaker_count_under_3");
- if(nH2H<4)reason.push("head_to_head_sample_under_4");
- if(Number(mk.ahLineSpread||0)>.25||Number(mk.ouLineSpread||0)>.25)reason.push("bookmaker_line_disagreement");
- if(native?.market_risk?.bookmaker_disagreement)reason.push("native_disagreement");
+ if(nh<1||na<1)reason.push("form_history_unavailable");
+ // Any count of genuine Bongdalu bookmakers may be modeled.
+ // H2H is optional reference and never blocks a forecast.
+ // Difference between published Bongdalu companies is context, not a fixture ban.
  const numbers=[home.gf,home.ga,away.gf,away.ga,native?.model?.xg_home,native?.model?.xg_away];
  if(numbers.some(x=>!finite(Number(x))||Number(x)<0||Number(x)>8))reason.push("invalid_form_xg");
  if(!finite(Number(mk.homeLine))||!finite(Number(mk.awayLine))||
     Math.abs(Number(mk.homeLine)+Number(mk.awayLine))>.01)reason.push("inconsistent_handicap_sides");
- if(!finite(Number(mk.ouLine))||Number(mk.ouLine)<1.5||Number(mk.ouLine)>5)reason.push("ou_line_outside_model_range");
+ if(!finite(Number(mk.ouLine))||Number(mk.ouLine)<=0)reason.push("ou_line_invalid");
  return {ok:!reason.length,reasons:reason,books,nh,na,nH2H};
 }
 function estimates(row,h,native){
@@ -65,7 +64,7 @@ export function chooseR55Ensemble(row,h,native){
   {type:"OU",pick:"OVER",line:ou,odds:Number(mk.overPrice)},
   {type:"OU",pick:"UNDER",line:ou,odds:Number(mk.underPrice)}
  ].filter(x=>Number.isFinite(x.line)&&Number.isFinite(x.odds)&&
-    x.odds>=1.65&&x.odds<=2.20&&Math.abs(x.line*4-Math.round(x.line*4))<1e-8);
+    x.odds>1&&Math.abs(x.line*4-Math.round(x.line*4))<1e-8);
  const scored=options.map(x=>{
   const evs=models.map(([a,b])=>expectedReturn(x.type,x.pick,x.line,x.odds,a,b));
   const ev=evs.reduce((s,n)=>s+n,0)/evs.length,worst=Math.min(...evs),best=Math.max(...evs);
@@ -77,8 +76,7 @@ export function chooseR55Ensemble(row,h,native){
   // Huge modeled returns are often caused by stale form or market misalignment.
   // Quarantine them rather than advertising implausibly certain outcomes.
   const modelStable=worst>.025&&best-worst<.25&&ev>.085&&ev<.24;
-  const accept=q.ok&&modelStable&&!risk&&Number(row.priority)>=175&&!(x.type==="AH"&&Math.abs(x.line)>1.25)&&
-       !(x.type==="OU"&&x.line>=4);
+  const accept=q.ok&&modelStable&&!risk;
   // Model-only edges above 24% and very deep Asian lines caused the
   // unverified 12-Oct losses. For shadow picks, prefer less fragile markets
   // rather than chasing exaggerated expected returns. This is NOT a win guarantee.
@@ -87,8 +85,7 @@ export function chooseR55Ensemble(row,h,native){
    (x.type==="OU"&&x.line>=4?4:0)+(risk?10:0);
   return {...x,ev:round(ev,4),worstEV:round(worst,4),spreadEV:round(best-worst,4),
    fragility:fragile,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
-   researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":Number(row.priority)<175?"competition_below_priority_floor":!modelStable?"ensemble_edge_not_robust":
-      x.type==="AH"&&Math.abs(x.line)>1.25?"deep_ah":x.type==="OU"&&x.line>=4?"extreme_total":"accepted"};
+   researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":!modelStable?"ensemble_edge_not_robust":"accepted"};
  });
  if(!scored.length)return null;
  scored.sort((a,b)=>Number(a.researchOnly)-Number(b.researchOnly)||
