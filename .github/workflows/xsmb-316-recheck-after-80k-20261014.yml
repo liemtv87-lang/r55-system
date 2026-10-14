@@ -1,0 +1,41 @@
+name: XSMB Recheck Fixed 316 Method Against New 80K Studies
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/xsmb-316-recheck-after-80k-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --disable-pip-version-check --quiet numpy
+      - name: Reproduce previously frozen 316, not selected on current holdout
+        env:
+          OPENBLAS_NUM_THREADS: '1'
+          OMP_NUM_THREADS: '1'
+        run: python3 research/xsmb_316_independent_replay_20261013.py
+      - name: Verify every day and the fixed holdout result
+        run: |
+          python3 - <<'PY'
+          import csv,hashlib,json,pathlib
+          src=pathlib.Path('research/results/xsmb_316_500_replay_20261013.csv')
+          m=json.loads(pathlib.Path('research/results/xsmb_316_500_replay_manifest.json').read_text())
+          rows=list(csv.DictReader(src.open()))
+          assert len(rows)==1000 and sum(int(r['at_least_one']) for r in rows[500:])==316
+          assert all(r['split']=='holdout' for r in rows[500:])
+          assert hashlib.sha256(src.read_bytes()).hexdigest()==m['sha256']
+          print('FIXED_316_500_REPLAY=PASS DAYS=316 / 500')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xsmb-316-independent-replay-20261014
+          path: |
+            research/results/xsmb_316_500_replay_20261013.csv
+            research/results/xsmb_316_500_replay_manifest.json
+          retention-days: 21
