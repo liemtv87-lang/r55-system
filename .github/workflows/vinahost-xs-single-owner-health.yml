@@ -35,6 +35,8 @@ jobs:
           docker compose config --services | grep -E 'lottery|group|sales' || true
           echo XS_BOT_DRY_SOURCE
           docker exec kq247-lottery-bot python -c 'import pathlib; p=pathlib.Path("/app/lottery-bot/sender.py"); print("SOURCE_EXISTS",p.exists(),"VPS_INDEX_SUPPORTED","KQ247_LOCKED_INDEX_PATH" in p.read_text())'
+          echo XS_VPS_LOCKED_SNAPSHOT_READ_ONLY_PROOF
+          docker exec kq247-lottery-bot python -c 'import sys,os,json,collections;sys.path.insert(0,"/app/lottery-bot");import sender;p=os.environ.get("KQ247_LOCKED_INDEX_PATH");assert p and p.endswith("station-locked-index.json");rows=json.load(open(p))["records"];assert len(rows)==36;g=collections.defaultdict(list);[g[(r["region"],r["predictionDate"])].append(r["station"]) for r in rows];checks=[];[(checks.append((reg, min(day for region,day in g if region==reg))) ) for reg in ("mb","mt","mn")];[(lambda picks,fp: (print("XS_REGION_LOCKED_SOURCE_OK",reg,day,len(picks),bool(fp)),len(picks)==len(g[(reg,day)]) or (_ for _ in ()).throw(ValueError("SOURCE_STATION_COUNT"))))(*sender.read_snapshot(day,reg)) for reg,day in checks]'
           echo XS_SCHEDULER_STATUS
           curl -fsS --max-time 8 http://127.0.0.1:18085/healthz
           VPS
