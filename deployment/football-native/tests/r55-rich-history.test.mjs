@@ -1,3 +1,4 @@
+import {primaryFormEvidence} from "../lib/r55FormFirst.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {extractRichBongdaluHistory} from "../lib/r55RichHistory.js";
@@ -167,4 +168,21 @@ test("no form for either team is not silently upgraded to quality-accepted",()=>
  assert.equal(p.researchOnly,true);
  assert.equal(p.sample.home,0);
  assert.equal(p.sample.away,0);
+});
+
+test("H2H is supplementary and cannot alter primary prediction inputs",()=>{
+ const history={home:{n:20,gf:1.8,ga:1.1},away:{n:20,gf:1.3,ga:1.5},
+  home_asian:{closing:{n:20,win_rate:.56}},away_asian:{closing:{n:20,win_rate:.49}},
+  h2h:{n:12,edge:1,total:5.4},h2h_asian:{closing:{n:12,win_rate:.92}},
+  individualHistory:{home:[{matchId:"10",quotes:[]}],away:[]}};
+ const model=primaryFormEvidence(history);
+ assert.notStrictEqual(model,history);
+ assert.equal(model.home,history.home);
+ assert.equal(model.away,history.away);
+ assert.equal(model.home_asian,history.home_asian);
+ assert.equal(model.individualHistory,history.individualHistory);
+ assert.deepEqual(model.h2h,{n:0,edge:0,total:0});
+ assert.equal(model.h2h_asian.closing.n,0);
+ assert.equal(history.h2h.n,12,"real H2H retained for supplementary diagnostics");
+ assert.deepEqual(primaryFormEvidence({...history,h2h:{n:0,edge:0,total:0}}),model);
 });
