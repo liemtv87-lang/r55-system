@@ -36,3 +36,13 @@
 2. Chạy lại trực tiếp 3102824 và 3102993 bằng `V.history`, ghi số trận home/away, provenance `sourceCoverage.teamScheduleRecovery`; nếu vẫn 0, đọc thật từng trang `/ajax/getteamschedulebypageno`, kiểm tra trường JSON/HTTP trước khi sửa parser.
 3. Chạy `worker.mjs model-batch` và đối chiếu mô hình/coverage/quality/research-only; giữ bất biến snapshot ngày đã khóa.
 4. Chấm thực tế kèo xác minh, không tự coi ≥80% modeled tương đương ≥65% thắng.
+
+## Audit bổ sung khoảng 05:50 VN, 15/10
+- GitHub Actions `38649944393`, đọc công khai API chính thức:
+  - team 80597 (`Uttar Palli Milan Sangha`): trang schedule trả **1 trận tương lai** ID 3102824, `State="0"`, không có trận FT.
+  - team 80877 (`Elite Kings FC`): tương tự, chỉ ID 3102993 trạng thái `0`.
+  - đội AZ Alkmaar ID 234: `TotalPages=129`, 50 trận ở lượt gọi `init=1`; không thể chỉ đọc trang đầu vì đa số trận tương lai.
+- Trường thời gian thật của JSON là **`Time`**, dạng `2026/10/15 17:00:00`, KHÔNG PHẢI `E8Date`. Đã thêm bộ giải thời gian Bongdalu theo VN vào `r55TeamSchedule.js`, commit `acb253586f50abc210a282daa6735203fca41b1a`.
+- Đã mở rộng recovery theo `PlayingPage` thay vì chỉ trang 1-3 (commit `7fc3d4a25b02856c691e2cc6cbe39693f4ebfad7`); unit test `da8da1241e0a2aa06c5d8c70b7fa7fd3341261bd` pass.
+- QUAN TRỌNG về phạm vi: người dùng yêu cầu **mọi trận có odds**; không có chỉ thị loại riêng ID 3102824 và 3102993. Commit khác từng thêm bộ lọc hai trận mà không có căn cứ từ yêu cầu hiện hành. Đã đặt bộ lọc rỗng tại `r55FixtureExclusions.js` và sửa unit test, các commit `c7cac41a70b0fa9a3cb921cad9d19760fc39aaf8`, `a039d9bbb7e83d5fef237fe2c901b88e1f35abc8`. Không tự loại lại khi chưa có yêu cầu của người dùng.
+- Audit `38649840774` khi VPS đồng thời triển khai: trước khi parser mới hoàn tất, mô hình tính 171/171 trận eligible tại thời điểm đó; 2 đội bên trên chưa có lịch sử bên mới, và tác vụ kết thúc mã 137, nên không được coi đó là proof hoàn tất. Cần xác minh lại khi triển khai ổn định.
