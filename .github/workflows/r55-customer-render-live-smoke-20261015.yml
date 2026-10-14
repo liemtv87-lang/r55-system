@@ -42,4 +42,20 @@ jobs:
           print('R55_LIVE_CLIENT_API',json.dumps({'limit':n,'available':len(a),'date':d.get('date'),'locked':d.get('locked')},ensure_ascii=False))
           PY
           done
+          MAIN_URL='https://kq247-football-live.onrender.com/'
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --max-time 20 "$MAIN_URL" -o /tmp/r55-main-render.html; then break; fi
+            sleep 4
+          done
+          test -s /tmp/r55-main-render.html
+          grep -Fq "'https://64-120-92-172.sslip.io/api/main-football?data=1'" /tmp/r55-main-render.html
+          if grep -Fq 'kq247bdapi.compute.c-3.ap-southeast-1.aws.neon.tech/?action=football-predictions' /tmp/r55-main-render.html; then
+            echo 'R55_RENDER_MAIN_OLD_NEON_PREDICTION_SOURCE=FAIL'; exit 1
+          fi
+          for token in 'onclick="load(20)"' 'onclick="load(30)"' "copyMode(20, 'all'" "copyMode(30, 'all'" "copyMode(5000, 'featured'" "copyMode(5000, 'all'" 'id="learningState"' 'onclick="refreshCurrent()"' 'onclick="toggleCollapse()"'; do
+            if ! grep -Fq "$token" /tmp/r55-main-render.html; then
+              echo "R55_RENDER_MAIN_BUTTON_MISSING: $token";exit 1
+            fi
+          done
+          echo "R55_RENDER_MAIN_CUSTOMER_SAME_VPS_FEED=PASS"
           echo "R55_CUSTOMER_OLD_LINK_AND_BUTTON_APIS=PASS"
