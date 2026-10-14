@@ -20,15 +20,23 @@ const modified=structuredClone(history);
 modified[100].full_results[0]='99999';
 modified[100].special='99999';
 modified[100].all2[0]='99';
-const y=predictFromLastDrawWithCalibration({previousDraw:history[0],history:modified,calibration:p,predictionDate:target});
-for(const key of ['lotto3','doubles','dan50','dan60','dan75','three_digit'])assert.deepEqual(x[key],y[key],key);
+// A changed historical result must invalidate the prior calibration, not silently reuse it.
+assert.throws(
+ ()=>predictFromLastDrawWithCalibration({previousDraw:history[0],history:modified,calibration:p,predictionDate:target}),
+ /UNVERIFIED_500_STATION_CALIBRATION/
+);
+const revised=calibrateStation500({history:modified,region:'mb',station:'XSMB',predictionDate:target});
+const y=predictFromLastDrawWithCalibration({previousDraw:history[0],history:modified,calibration:revised,predictionDate:target});
+assert.equal(y.sourceDate,x.sourceDate);
+assert.equal(y.audit.bridgeSourceDrawCount,1);
+assert.equal(y.audit.backtest500.historyUsedForDailyVotes,false);
 const archive=JSON.parse(readFileSync(new URL('./mtmn-35stations-prior-draw-samples.json',import.meta.url),'utf8')).stations;
 const sample=archive.filter(x=>x.region==='mn'&&x.station==='An Giang');
 assert.equal(sample.length,11);
 assert.throws(()=>forecastOneDrawAnd500Backtest({history:sample,region:'mn',station:'An Giang',predictionDate:target}),/REQUIRE_500_COMPLETE_DRAW_RESULTS_SAME_STATION/);
 assert.throws(()=>calibrateStation500({history,region:'mn',station:'An Giang',predictionDate:target}),/CROSS_STATION_OR_FUTURE_TRAINING/);
 console.log('XS_ONE_DRAW_500_MB_REAL_FULL_RESULTS=PASS');
-console.log('XS_HISTORICAL_DRAW_NEVER_ENTERS_TODAY_POSITION_VOTES=PASS');
+console.log('XS_ONLY_LATEST_ACTUAL_GENERATES_DAILY_POSITION_VOTES=PASS');
 console.log('XS_NO_FAKE_MT_MN_500_BACKTEST=PASS');
 console.log('XS_BACKTEST_TRANSITIONS',p.backtest.trainTransitions,p.backtest.heldoutTransitions);
 console.log('XS_MB_PRIVATE_CANDIDATE_NOT_PUBLISHED',x.lotto3.join(','));
