@@ -107,8 +107,55 @@ def read_vps_locked_snapshot(day,region,index_path):
     fp=hashlib.sha256(json.dumps(sorted(digests),ensure_ascii=False,sort_keys=True).encode("utf-8")).hexdigest()
     return found,fp
 
-def read_snapshot(day,region):
+def locked_predraw_cache_path(day,region):
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}",day) or region not in REGIONS:
+        raise ValueError("bad predraw cache metadata")
+    return STORE/day/("locked-"+region+"-predraw.json")
+
+def save_locked_predraw(day,region,stations,fp):
+    path=locked_predraw_cache_path(day,region)
+    path.parent.mkdir(parents=True,exist_ok=True)
+    data={"day":day,"region":region,"stations":stations,"fingerprint":fp,
+          "saved_at":datetime.now(VN).isoformat()}
+    if path.exists():
+        prior=json.loads(path.read_text(encoding="utf8"))
+        if any(prior.get(x)!=data[x] for x in ("day","region","stations","fingerprint")):
+            raise ValueError("IMMUTABLE_PREDRAW_CACHE_CONFLICT_"+region)
+        return
+    try:
+        with path.open("x",encoding="utf8") as out:
+            json.dump(data,out,ensure_ascii=False,sort_keys=True)
+            out.flush()
+            os.fsync(out.fileno())
+    except FileExistsError:
+        return save_locked_predraw(day,region,stations,fp)
+
+def read_locked_predraw(day,region):
+    path=locked_predraw_cache_path(day,region)
+    if not path.is_file():return None
+    d=json.loads(path.read_text(encoding="utf8"))
+    saved=datetime.fromisoformat(d["saved_at"]).astimezone(VN)
+    if (d.get("day")!=day or d.get("region")!=region or saved.date().isoformat()!=day
+        or saved.time().replace(tzinfo=None)>=REGIONS[region]["after"]):
+        raise ValueError("PREDRAW_CACHE_NOT_BEFORE_RESULT_"+region)
+    stations=d.get("stations")
+    if not isinstance(stations,dict) or not (1 if region=="mb" else 2)<=len(stations)<=(1 if region=="mb" else 4):
+        raise ValueError("PREDRAW_CACHE_STATIONS_INVALID_"+region)
+    if re.fullmatch(r"[0-9a-f]{64}",str(d.get("fingerprint",""))) is None:
+        raise ValueError("PREDRAW_CACHE_FINGERPRINT_INVALID")
+    for pick in stations.values():
+        if (len(pick.get("three_lotto",[]))!=3 or len(pick.get("doubles",[]))!=2
+            or any(len(pick.get("de",{}).get(key,[]))!=n for key,n in
+                   (("dan50",50),("dan60",60),("dan75",75),("three_digit",500)))
+            or any(z[-2:] not in pick["de"]["dan75"] for z in pick["de"]["three_digit"])):
+            raise ValueError("PREDRAW_CACHE_POOLS_INVALID")
+    return stations,d["fingerprint"]
+
+def read_snapshot(day,region,phase=None):
     if os.environ.get('KQ247_LOCKED_INDEX_PATH'):
+        if phase=="result":
+            original=read_locked_predraw(day,region)
+            if original:return original
         return read_vps_locked_snapshot(day,region,os.environ['KQ247_LOCKED_INDEX_PATH'])
     source=http_json(NEON_READONLY_SNAPSHOT+"?date="+day)
     if not (source.get("ok") is True and source.get("found") is True and source.get("locked") is True
@@ -130,9 +177,15 @@ def read_snapshot(day,region):
         if not isinstance(doubles,list) or len(doubles)!=2 or any(not re.fullmatch(r"\d\d",str(x)) for x in doubles):
             raise ValueError("invalid doubles for "+name)
         de=pick.get("de",{})
-        if not all(isinstance(de.get(k),list) and len(de[k])==n for k,n in
-                   [("dan50",50),("dan60",60),("dan75",75),("three_digit",500)]):
-            raise ValueError("missing de/3-cang for "+name)
+        for field,size,width in [("dan50",50,2),("dan60",60,2),
+                                 ("dan75",75,2),("three_digit",500,3)]:
+            values=de.get(field)
+            if (not isinstance(values,list) or len(values)!=size
+                    or len(set(values))!=size
+                    or any(not isinstance(n,str) or re.fullmatch(r"\d{"+str(width)+r"}",n) is None for n in values)):
+                raise ValueError("invalid "+field+" in locked snapshot for "+name)
+        if any(n[-2:] not in de["dan75"] for n in de["three_digit"]):
+            raise ValueError("3c_outside_dan75 for "+name)
     return stations,fp
 
 def station_name(s):
@@ -179,7 +232,7 @@ def draw_results(day,region,expected_stations):
         found[name]={"special":special,"all2":[x[-2:] for x in nums]}
         if len(found)==len(expected_stations): break
     if {station_name(k) for k in found}!={station_name(k) for k in expected_stations}:
-        raise ValueError("missing stations from actual draw; expected="+repr(sorted(expected_stations))+" found="+repr(sorted(found.keys())))
+        raise ValueError("missing stations from actual draw")
     return found
 
 def html_escape(s):
@@ -197,10 +250,31 @@ def message(day,region,station,pick,draw=None):
               +f"💎 3 CÀNG {end3}: {'✅' if end3 in de['three_digit'] else '❌'}\n"
               +"🔒 Chấm snapshot khóa trước giờ quay.")
     else:
-        tail=(f"🎲 3 LÔ: {' - '.join(nums)}\n🔵 LÔ KÉP: {' - '.join(doubles)}\n"
-              +f"🏅 D50/D60/D75: {len(de['dan50'])}/{len(de['dan60'])}/{len(de['dan75'])}\n"
-              +"🔒 Theo snapshot khóa trước giờ quay.")
-    footer="\n📣 t.me/xsbm999 | t.me/muatool_du_doan_bot"
+        # Send the actual locked prediction lists; counts alone leave the
+        # customer unable to see the 50/60/75 picks and 500 three-digit picks.
+        # Format all of them in one Telegram message (under 4096 chars).
+        rows=lambda values,per: "\n".join(" ".join(values[i:i+per])
+                                       for i in range(0,len(values),per))
+        tail=(
+            f"🎲 3 LÔ: {' - '.join(nums)}\n"
+            f"🔵 LÔ KÉP: {' - '.join(doubles)}\n"
+            f"🔴 DÀN ĐỀ 50 SỐ:\n{rows(de['dan50'],25)}\n"
+            f"🔴 DÀN ĐỀ 60 SỐ:\n{rows(de['dan60'],25)}\n"
+            f"🔴 DÀN ĐỀ 75 SỐ:\n{rows(de['dan75'],25)}\n"
+            f"💎 DÀN 3 CÀNG (500 SỐ):\n{rows(de['three_digit'],25)}\n"
+            "🔒 Theo snapshot khóa trước giờ quay."
+        )
+    footer=(
+        "\n\n━━━━━━━━━━━━━━"
+        "\n📢 Bán tool Phân tích dự đoán XSMB, MT, MN"
+        "\n📢 Tool Phân tích, dự đoán kèo bóng đá, chọn xiên 6,8,10 trận."
+        "\n📢 Tool Vietlott 6x45 6x55"
+        "\n📱 Sử dụng link trên ĐT dễ dàng - nhanh chóng - hiệu quả"
+        "\n⚽ Vào nhóm kèo bóng: https://t.me/keochuyengia79"
+        "\n🎯 Hoặc nhóm Xổ số: https://t.me/xsbm999"
+        "\n🎁 Tool có mã sử dụng Free 10 ngày"
+        "\n🛒 Mua tool / Lấy lại mã: https://t.me/muatool_du_doan_bot"
+    )
     return "<b>"+html_escape(head+tail+footer)+"</b>"
 
 def committed_state(path,contents):
@@ -298,7 +372,9 @@ def main():
             if dry and not forced_phase and not due(now,region,phase): continue
             print("CHECK",region,phase)
             try:
-                stations,fp=read_snapshot(day,region)
+                stations,fp=read_snapshot(day,region,phase)
+                if phase=="pre" and not dry and os.environ.get("KQ247_LOCKED_INDEX_PATH"):
+                    save_locked_predraw(day,region,stations,fp)
                 draws=draw_results(day,region,stations) if phase=="result" else None
                 for st,pick in stations.items():
                     matched=next((v for k,v in draws.items() if station_name(k)==station_name(st)),None) if draws else None
