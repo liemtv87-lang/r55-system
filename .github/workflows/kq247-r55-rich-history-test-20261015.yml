@@ -1,0 +1,24 @@
+name: R55 Bongdalu Rich History Safety Tests
+on:
+  push:
+    branches:
+      - r55-bongdalu-deep-history-20261015
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          node --check deployment/football-native/lib/r55RichHistory.js
+          node --check deployment/football-native/lib/bongdaluR55.js
+          node --check deployment/football-native/lib/r55EnsembleV3.js
+          node --check deployment/football-bots/group-worker.mjs
+          node --check deployment/football-original/lib/r55ReleaseGate.js
+      - name: Bongdalu evidence tests
+        run: node --test deployment/football-native/tests/r55-rich-history.test.mjs
