@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   train:
-    name: Search shard \${{ matrix.shard }}
+    name: Search shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -28,11 +28,11 @@ jobs:
       - name: Check research source syntax and run 10k candidates on train 500 only
         run: |
           python3 -m py_compile research/xsmb_3lo_consecutive_80k_20261014.py
-          python3 research/xsmb_3lo_consecutive_80k_20261014.py --shard \${{ matrix.shard }} --candidates 10000 --output research/results/xsmb_consecutive/shard-\${{ matrix.shard }}.json
+          python3 research/xsmb_3lo_consecutive_80k_20261014.py --shard ${{ matrix.shard }} --candidates 10000 --output research/results/xsmb_consecutive/shard-${{ matrix.shard }}.json
       - uses: actions/upload-artifact@v4
         with:
-          name: xsmb-consecutive-shard-\${{ matrix.shard }}
-          path: research/results/xsmb_consecutive/shard-\${{ matrix.shard }}.json
+          name: xsmb-consecutive-shard-${{ matrix.shard }}
+          path: research/results/xsmb_consecutive/shard-${{ matrix.shard }}.json
           retention-days: 14
   heldout500:
     name: Frozen winner then evaluate last 500
