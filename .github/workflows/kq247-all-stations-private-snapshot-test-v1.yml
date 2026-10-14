@@ -23,7 +23,7 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
-          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json,verified-five-stations-full-results-20261014.json,schema-previous-station-locked.sql,persist-previous-station-locked.py,export-previous-station-snapshots.py} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json,verified-five-stations-full-results-20261014.json,multi-station-locked-reader.mjs,schema-previous-station-locked.sql,persist-previous-station-locked.py,export-previous-station-snapshots.py} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
           sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           ROOT=/opt/kq247/lottery-daily-staging
@@ -68,4 +68,21 @@ jobs:
           assert sum(r['region']=='mn' for r in x['records'])==21
           print('ALL_36_VPS_PRIVATE_DATABASE_LOCKS_VERIFIED',len(x['records']))
           PY
+          echo VPS_36_READER_PRIVATE_STAGE
+          docker run --rm --network none --read-only -v "$ROOT/multi-station-locked-reader.mjs":/app/server.mjs:ro node:22-alpine node --check /app/server.mjs
+          if ! docker ps --format '{{.Names}}' | grep -Fxq kq247-xs-36-reader; then
+           docker run -d --name kq247-xs-36-reader --restart unless-stopped --network football-staging_default --read-only --security-opt no-new-privileges --cap-drop ALL --cpus 0.5 --memory 160m --pids-limit 80 -v "$ROOT/multi-station-locked-reader.mjs":/app/server.mjs:ro -v "$ROOT/public-locked":/locked:ro node:22-alpine node /app/server.mjs
+          fi
+          docker run --rm --network football-staging_default node:22-alpine node --input-type=module -e '
+          const url="http://kq247-xs-36-reader:3019";
+          const j=await(await fetch(url+"/healthz")).json();
+          if(!j.ok||j.mb!==1||j.mt!==14||j.mn!==21)throw Error("VIEWER_36_COUNTS_"+JSON.stringify(j));
+          for(const r of ["xsmb","xsmt","xsmn"]){
+           const x=await fetch(url+"/xoso?region="+r);const s=await x.text();
+           if(x.status!==200||!["3 LÔ BẠCH THỦ","2 LÔ KÉP","DÀN ĐỀ 50","DÀN ĐỀ 60","DÀN ĐỀ 75","DÀN 3 CÀNG"].every(t=>s.includes(t)))throw Error("INVALID_STATION_PAGE_"+r);
+           console.log("PRIVATE_STATION_PAGE_PASS",r,s.length)
+          }
+          console.log("ALL_36_REGIONS_PRIVATE_READER_VALIDATED",j);
+          '
+          echo CADDY_PUBLIC_ROUTE_UNCHANGED
           VPS
