@@ -4,6 +4,7 @@ on:
     paths:
       - deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs
       - deployment/lottery-vps-daily-staging/one-draw-500-method-gate.test.mjs
+      - deployment/lottery-vps-daily-staging/one-draw-500-private-stage.mjs
       - .github/workflows/kq247-xs-one-draw-500-gate.yml
   workflow_dispatch:
 permissions:
@@ -35,14 +36,17 @@ jobs:
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs root@64.120.92.172:/tmp/kq247-one-draw-500-method.mjs
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/one-draw-500-private-stage.mjs root@64.120.92.172:/tmp/kq247-one-draw-private-stage.mjs
           sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
           set -Eeuo pipefail
           dest=/opt/kq247/lottery-daily-staging/one-draw-500-method-selector.mjs
           test -s /tmp/kq247-one-draw-500-method.mjs
           test -s /opt/kq247/lottery-daily-staging/normalize-all-prizes.mjs
           install -m 0644 /tmp/kq247-one-draw-500-method.mjs "$dest"
+          install -m 0644 /tmp/kq247-one-draw-private-stage.mjs /opt/kq247/lottery-daily-staging/one-draw-500-private-stage.mjs
           docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --check /stage/one-draw-500-method-selector.mjs
           test -s /opt/kq247/lottery-daily-staging/public-locked/xsmb-2026-10-15.json
+          docker run --rm --init --network none --cpus 1.5 --memory 700m -v /opt/kq247/lottery-daily-staging:/stage node:22-alpine node /stage/one-draw-500-private-stage.mjs
           grep -Fq '"51"' /opt/kq247/lottery-daily-staging/public-locked/xsmb-2026-10-15.json
           docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-original
           docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-bot
