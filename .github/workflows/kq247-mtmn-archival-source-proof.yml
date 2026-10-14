@@ -1,0 +1,19 @@
+name: KQ247 MT MN Historical Full18 Source Proof
+on:
+  push:
+    paths:
+      - deployment/lottery-vps-daily-staging/mtmn-archival-source-check.mjs
+      - .github/workflows/kq247-mtmn-archival-source-proof.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify one real 2016 station full 18 prizes and correct field order
+        run: |
+          node --check deployment/lottery-vps-daily-staging/mtmn-archival-source-check.mjs
+          node deployment/lottery-vps-daily-staging/mtmn-archival-source-check.mjs
