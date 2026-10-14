@@ -19,8 +19,7 @@ import time
 from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
-ROOT = Path("/opt/pwremote/kq247-backlink-background")
-ROOT.mkdir(parents=True, exist_ok=True)
+ROOT = Path(os.environ.get("KQ247_BASE", "/opt/pwremote/kq247-backlink-background"))
 DB = ROOT / "sources.sqlite3"
 REPORT = ROOT / "latest.json"
 INPUTS = [ROOT / "url-inventory.txt", Path("/opt/pwremote/kq247-domain-first/url-inventory.txt")]
@@ -111,10 +110,6 @@ def safe_remote(host):
         return bool(addrs) and all(ipaddress.ip_address(a[4][0]).is_global for a in addrs)
     except (OSError, ValueError):
         return False
-
-class NoPrivateRedirect:
-    # Implemented via urllib RedirectHandler on demand in fetch() below.
-    pass
 
 class HtmlScan(HTMLParser):
     def __init__(self):
@@ -289,6 +284,7 @@ def main():
         selftest()
         return
     import fcntl
+    ROOT.mkdir(parents=True, exist_ok=True)
     with (ROOT / "worker.lock").open("w") as lock:
         try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -312,9 +308,8 @@ def main():
                 responses = list(pool.map(inspect, entries))
             for host, final, status, reason, suggestions in responses:
                 # Follow in-domain first-party submission links at most once.
-                if status=="no_form" and suggestions:
+                if status=="no_form" and suggestions and suggestions[0] != final and urlsplit(final).path != urlsplit(suggestions[0]).path:
                     con.execute("UPDATE hosts SET url=?,reason='follow_submit_link' WHERE host=?", (suggestions[0],host))
-                    suggestions=[]
                 else:
                     con.execute("UPDATE hosts SET url=?,status=?,reason=?,checked=? WHERE host=?",
                       (final,status,reason,datetime.datetime.now(datetime.timezone.utc).isoformat(),host))
