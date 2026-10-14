@@ -1,84 +1,13 @@
-name: KQ247 XS all 36 same-link safe public sync after redeploy
+name: KQ247 XS original UI route protected
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/kq247-xsmb-live-locked-snapshot-route.yml']
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  sync:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Replace only XS backend on existing URLs with automatic rollback
-        env:
-          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          install -d -m 700 "$HOME/.ssh"
-          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
-          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
-          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/route-xs-all36-safe.py root@64.120.92.172:/opt/kq247/lottery-daily-staging/
-          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
-          set -euo pipefail
-          BASE=/opt/kq247/lottery-daily-staging
-          LIVE=/opt/kq247/deployment/football-staging/Caddyfile
-          BACKUP="$BASE/Caddyfile.same-link-backup"
-          test -s "$LIVE"
-          python3 "$BASE/route-xs-all36-safe.py"
-          CANDIDATE=/opt/kq247/deployment/football-staging/Caddyfile.xs-all36-candidate
-          test -s "$CANDIDATE"
-          cp "$LIVE" "$BACKUP"
-          echo XS_CUSTOMER_502_DIAGNOSTICS
-          docker ps -a --format '{{.Names}} {{.Status}}' | grep -E 'lottery-original|football-staging|xs-36-reader'
-          docker logs --tail 35 kq247-lottery-original 2>&1 | tail -35
-          docker run --rm --network football-staging_default node:22-alpine node --input-type=module -e '
-          for(const name of ["lottery-original:3004","kq247-xs-36-reader:3019"]){
-            try{let r=await fetch("http://"+name+"/healthz",{signal:AbortSignal.timeout(5000)});console.log("XS_BACKEND",name,r.status);}
-            catch(e){console.log("XS_BACKEND_ERROR",name,String(e.message));}
-          }'
-          echo XS_EXISTING_URLS_PRECHECK
-          for r in xsmb xsmt xsmn; do
-            curl --fail -sS -m 12 "http://127.0.0.1:18080/xoso-khach?region=$r" > "$BASE/customer-before-$r.html"
-          done
-          docker run --rm --network football-staging_default node:22-alpine node --input-type=module -e '
-          const root="http://kq247-xs-36-reader:3019";
-          const j=await(await fetch(root+"/healthz")).json();
-          if(!j.ok||j.mb!==1||j.mt!==14||j.mn!==21)throw Error("NOT_ALL_36_READY_"+JSON.stringify(j));
-          for(const region of ["xsmb","xsmt","xsmn"]){
-           const r=await fetch(root+"/xoso?region="+region),t=await r.text();
-           if(!r.ok||!["3 LÔ BẠCH THỦ","DÀN ĐỀ 50","DÀN ĐỀ 60","DÀN ĐỀ 75","DÀN 3 CÀNG"].every(x=>t.includes(x)))throw Error("INVALID_PRIVATE_REGION_"+region);
-          }
-          console.log("XS_36_STATION_BACKEND_READY");
-          '
-          changed=0
-          rollback(){
-            if [ "$changed" = 1 ]; then
-              cp "$BACKUP" "$LIVE"
-              docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
-              echo XS_PUBLIC_ROUTE_RESTORED
-            fi
-          }
-          trap rollback EXIT
-          cp "$CANDIDATE" "$LIVE"
-          changed=1
-          docker exec kq247-football-staging caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-          docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
-          for r in xsmb xsmt xsmn; do
-            curl --fail -sS -m 15 "http://127.0.0.1:18080/xoso?region=$r" > "$BASE/live-xs-$r.html"
-            grep -q 'DÀN 3 CÀNG' "$BASE/live-xs-$r.html"
-            grep -q '3 LÔ BẠCH THỦ' "$BASE/live-xs-$r.html"
-            curl --fail -sS -m 12 "http://127.0.0.1:18080/xoso-khach?region=$r" > "$BASE/customer-after-$r.html"
-            cmp "$BASE/customer-before-$r.html" "$BASE/customer-after-$r.html"
-            grep -q 'kq247_lottery_code' "$BASE/customer-after-$r.html"
-            echo "XS_SAME_EXISTING_URL_VERIFIED $r"
-          done
-          curl --fail -sS -m 15 'https://64-120-92-172.sslip.io/xoso?region=xsmt' | grep -q 'DÀN ĐỀ 75'
-          curl --fail -sS -m 15 'https://64-120-92-172.sslip.io/xoso?region=xsmn' | grep -q 'DÀN ĐỀ 75'
-          changed=0
-          trap - EXIT
-          echo KQ247_XS_ALL36_SAME_LINK_PUBLIC_SYNC_PASS
-          VPS
+      - run: |
+          echo "XS original interface restored via deployment/football-staging/Caddyfile"
+          echo "Previous 36-station UI promotion is disabled."
+          echo "Existing URL and customer license flow are preserved."
