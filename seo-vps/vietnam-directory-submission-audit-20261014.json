@@ -1,0 +1,89 @@
+{
+  "checked_on": "2026-10-14",
+  "priority": "Vietnamian-audience and Vietnamese-language communities first",
+  "groups": {
+    "football": "https://t.me/keochuyengia79",
+    "lottery": "https://t.me/xsbm999"
+  },
+  "sites": [
+    {
+      "name": "TeleGroups",
+      "form_url": "https://telegroups.org/submit",
+      "priority": 1,
+      "verified_features": [
+        "country select",
+        "category select",
+        "public username or invite link"
+      ],
+      "blocker": "Form includes verification; needs regular human completion if challenged",
+      "status": "ready_for_compliant_manual_submission"
+    },
+    {
+      "name": "Telegram Group",
+      "form_url": "https://telegram-group.com/en/publish/",
+      "priority": 2,
+      "verified_features": [
+        "group name",
+        "description",
+        "sports and news categories",
+        "group link field",
+        "no CAPTCHA detected in initial read-only form inspection"
+      ],
+      "status": "form_verified_no_submitted_receipt"
+    },
+    {
+      "name": "TgramLink Vietnamese",
+      "form_url": "https://tgramlink.com/vi",
+      "priority": 1,
+      "verified_features": [
+        "Vietnamese language",
+        "free submit link listing"
+      ],
+      "blocker": "VPS Playwright HTTP 403 Cloudflare; do not bypass",
+      "status": "requires_nonblocked_owner_browser"
+    },
+    {
+      "name": "TgDio Vietnamese",
+      "form_url": "https://vi.tgdio.com/groups",
+      "priority": 2,
+      "verified_features": [
+        "Vietnamese group directory",
+        "free basic listing"
+      ],
+      "blocker": "site requires owner sign-in",
+      "status": "owner_login_required"
+    },
+    {
+      "name": "Groupsor",
+      "form_url": "https://www.groupssor.com/submit/",
+      "priority": 4,
+      "blocker": "Country dropdown excludes Vietnam",
+      "status": "ineligible_for_truthful_vietnam_listing"
+    },
+    {
+      "name": "WT Group Links",
+      "form_url": "https://wtgrouplinks.com/submit-your-telegram-groups/",
+      "priority": 4,
+      "blocker": "Rules prohibit groups promoting gambling; do not misclassify prediction/odds groups to avoid moderation",
+      "status": "requires_strict_content_eligibility_review"
+    },
+    {
+      "name": "TelegramGroups.co",
+      "form_url": "https://telegramgroups.co/submit",
+      "priority": 4,
+      "blocker": "Submissions temporarily paused according to VPS Playwright response 2026-10-14",
+      "status": "unavailable"
+    }
+  ],
+  "counts": {
+    "known_independently_verified_external_backlinks": 2,
+    "verified_new_in_this_submission_audit": 0
+  },
+  "principles": [
+    "Never count a sitemap URL or attempted submission as a backlink",
+    "One accurate profile per group per directory",
+    "Do not bypass CAPTCHA, site protections or paywalls",
+    "Verify a public listing page contains an actual link to its target before counting",
+    "No changes to KQ247 production bots, license, data or snapshot"
+  ]
+}
