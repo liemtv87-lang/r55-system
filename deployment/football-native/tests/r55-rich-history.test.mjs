@@ -1,6 +1,7 @@
 import {parseVerifiedTeamSchedule,formSummary} from "../lib/r55TeamScheduleFallback.js";
 import {primaryFormEvidence} from "../lib/r55FormFirst.js";
 import test from "node:test";
+import {isR55IgnoredFixture} from "../lib/r55FixtureExclusions.js";
 import assert from "node:assert/strict";
 import {extractRichBongdaluHistory} from "../lib/r55RichHistory.js";
 import {collectBongdaluPageBookmakers,oddsComparisonPageState} from "../lib/r55BookmakerPage.js";
@@ -244,4 +245,12 @@ test("real Bongdalu Time field respects Vietnam clock and excludes future games"
  assert.equal(res.length,1);
  assert.equal(res[0].matchId,"1234567");
  assert.equal(res[0].teamGoals,2);
+});
+
+test("exclude ONLY two user-rejected low-tier fixtures",()=>{
+ assert.equal(isR55IgnoredFixture({id:"BDL_3102824",league:"Calcutta Football League"}),true);
+ assert.equal(isR55IgnoredFixture({bongdaluId:"3102993",league:"Myanmar League 2"}),true);
+ assert.equal(isR55IgnoredFixture({id:"BDL_3102994",league:"Myanmar League 2"}),false);
+ assert.equal(isR55IgnoredFixture({id:"BDL_3102825",league:"Calcutta Football League"}),false);
+ assert.equal(isR55IgnoredFixture({id:"BDL_3073740",league:"Europa League"}),false);
 });
