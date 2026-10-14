@@ -57,7 +57,7 @@ SITES = {
   "tinnhanhchungkhoan.vn": "other_vietnamese"
 }
 SEEDS = ("sitemap.xml", "sitemap_index.xml", "wp-sitemap.xml")
-LIMIT_HOST = 8
+LIMIT_HOST = 16
 MAX_COMPRESSED_BYTES = 9_000_000
 MAX_EXPANDED_BYTES = 48_000_000
 TIMEOUT = 7
@@ -116,7 +116,7 @@ def inspect(host,category):
             kind, paths=decode_sitemap(data)
             if kind=="sitemapindex":
                 for u in paths:
-                    if allowed(u,host) and u not in seen and len(queue)<500: queue.append(u)
+                    if allowed(u,host) and u not in seen and len(queue)<300: queue.append(u)
             else:
                 for candidate in paths:
                     if candidate in inspected: continue
@@ -173,6 +173,6 @@ def main():
     },ensure_ascii=False),flush=True)
     print("VIETNAM_TOP_DOMAINS="+json.dumps(sorted(
       [{"domain":x["domain"],"scanned":x["sitemap_url_records_scanned"],"topic":x["topic_candidate_url_count"]} for x in rows],
-      key=lambda x:-x["sitemap_url_records_scanned"])[:15],ensure_ascii=False),flush=True)
+      key=lambda x:-x["scanned"])[:15],ensure_ascii=False),flush=True)
 
 if __name__=="__main__":main()
