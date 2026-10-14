@@ -510,6 +510,24 @@
       "status": "submitted_pending_review",
       "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38548970205",
       "public_listing_url": null
+    },
+    {
+      "directory": "tgden.com",
+      "group": "football",
+      "target": "https://t.me/keochuyengia79",
+      "submitted_at_utc": "2026-10-14T10:45:36Z",
+      "status": "submit_clicked_unverified",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38551750853",
+      "public_listing_url": null
+    },
+    {
+      "directory": "tgden.com",
+      "group": "lottery",
+      "target": "https://t.me/xsbm999",
+      "submitted_at_utc": "2026-10-14T10:45:39Z",
+      "status": "submit_clicked_unverified",
+      "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38551750853",
+      "public_listing_url": null
     }
   ],
   "failed_submissions": [
