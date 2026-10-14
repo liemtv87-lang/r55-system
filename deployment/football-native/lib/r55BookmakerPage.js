@@ -1,3 +1,12 @@
+// A HTTP 200 can be a CDN/bot-protection challenge rather than Bongdalu odds.
+// Never report such a response as a successful odds-comparison collection.
+export function oddsComparisonPageState(html){
+ if(typeof html!=="string"||!html.trim())return "fetch_failed";
+ if(/<title[^>]*>\s*Security Verification\s*<\/title>/i.test(html)||
+    /(?:cf-chl|captcha|verify you are human|security verification)/i.test(html))return "security_challenge";
+ if(!/<tr\b[^>]*\bid=["']tr_o_[12]_\d+["']/i.test(html))return "unrecognized_layout";
+ return "genuine_odds_rows";
+}
 // Supplement the daily XML bookmaker sample with every company rendered by
 // Bongdalu's official odds-comparison page. A missing page never creates odds.
 const clean=s=>String(s||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/\s+/g," ").trim();
@@ -8,7 +17,7 @@ function handicap(s){
  return m?(Number(m[1])+Number(m[2]))/2:null;
 }
 export function collectBongdaluPageBookmakers(html){
- if(typeof html!=="string")return [];
+ if(oddsComparisonPageState(html)!=="genuine_odds_rows")return [];
  const books=new Map();
  for(const match of html.matchAll(/<tr\b[^>]*\bid=["']tr_o_([12])_(\d+)["'][^>]*>([\s\S]*?)<\/tr>/gi)){
   const stage=Number(match[1]),id=String(match[2]),row=match[3];
