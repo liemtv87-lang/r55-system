@@ -77,6 +77,6 @@ export async function applyLockedOverlay(html,region,requestedStation){
  replace(/<script>const d=\{[\s\S]*?\};/,'<script>const d='+JSON.stringify(data)+';','COPY_DATA');
  if(!html.includes('XỔ SỐ BA MIỀN BẢN CHÍNH')||!html.includes('id="copyall"')||
  !html.includes('id="kq247-xs-qc"')||!html.includes('DÀN 3 CÀNG (500 số)'))
- throw Error('NEON_LAYOUT_INCOMPLETE');
+ throw Error('NEON_LAYOUT_INCOMPLETE_'+JSON.stringify({title:html.includes('XỔ SỐ BA MIỀN BẢN CHÍNH'),copyall:html.includes('id="copyall"'),qc:html.includes('id="kq247-xs-qc"'),three:html.includes('DÀN 3 CÀNG (500 số)')}));
  return html;
 }
