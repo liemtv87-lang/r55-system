@@ -1,0 +1,49 @@
+name: XSMB 316 Exact Recent 30 Multihit Dates
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/xsmb-316-recent30-multihit-20261014.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - name: Reproduce daily 3-lo hits and show all 2-plus flash dates
+        run: |
+          python3 - <<'PY'
+          import runpy,sys,json
+          sys.argv=["research/xsmb_3lo_covariance_diversity_20261013.py","hybrid"]
+          r=runpy.run_path("research/xsmb_3lo_covariance_diversity_20261013.py")
+          cnt=r["counts"]
+          dates=[row["date"] for row in r["rows"]]
+          picks=r["chosen"]
+          START=r["START"]
+          days=[]
+          for i in range(970,1000):
+              day_index=START+i
+              pairs=sorted((int(x),int(cnt[day_index,int(x)])) for x in picks[i])
+              total=sum(n for _,n in pairs)
+              days.append({"date":dates[day_index],"picks":[f"{v:02d}" for v,n in pairs],
+                 "nhay":total,"number_flashes":{f"{v:02d}":n for v,n in pairs},
+                 "two_or_more":total>=2})
+          summary={"period":[days[0]["date"],days[-1]["date"]],
+              "hit_days":sum(v["nhay"]>0 for v in days),
+              "days_2plus":sum(v["nhay"]>=2 for v in days),
+              "days_3plus":sum(v["nhay"]>=3 for v in days),
+              "total_nhay":sum(v["nhay"] for v in days),
+              "multi_hit_days":[v for v in days if v["two_or_more"]],
+              "all_last30":days}
+          assert summary["hit_days"]==26,summary
+          assert summary["days_2plus"]==5,summary
+          assert summary["days_3plus"]==2,summary
+          assert summary["total_nhay"]==33,summary
+          print("XSMB_316_LAST30_MULTI_HITS="+json.dumps(summary,ensure_ascii=False))
+          PY
