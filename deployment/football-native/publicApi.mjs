@@ -4,9 +4,22 @@ import {isR55IgnoredFixture} from './lib/r55FixtureExclusions.js';
 const getVNDay=()=>new Intl.DateTimeFormat('en-CA',{
   year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Ho_Chi_Minh'
 }).format(new Date());
+const leagueTier=x=>{
+ const league=String(x?.league||"").toLowerCase().trim().replace(/\s+/g," ");
+ const country=String(x?.country||"").toLowerCase();
+ if(/\b(women|ladies|female|youth|reserve|under[- ]?2[013]|u1[5-9]|u2[0-3])\b/.test(league)||/\b(la liga 2|bundesliga 2|2[.] bundesliga|serie b|ligue 2)\b/.test(league))return 0;
+ if(/^(uefa )?(champions league|uefa champions league)$/.test(league)||/^(uefa )?europa league$/.test(league)||/^(conmebol )?copa libertadores$/.test(league))return 350;
+ if(/^(english|england) premier league$/.test(league)||league==="premier league"&&/anh|england|english/.test(country))return 320;
+ if(/^(spanish|spain) la liga$/.test(league)||league==="la liga"&&/spain|tây ban nha/.test(country))return 300;
+ if(/^(italy|italian) serie a$/.test(league)||league==="serie a"&&/italy|ý|italia/.test(country))return 300;
+ if(/^(german|germany) bundesliga$/.test(league)||league==="bundesliga"&&/german|đức/.test(country))return 300;
+ if(/^(france|french) ligue 1$/.test(league)||league==="ligue 1"&&/france|pháp/.test(country))return 300;
+ if(/^(japan )?(j1 league|j-league)$/.test(league))return 275;
+ return 0;
+};
 const toInt=(s,d)=>s==='all'?5000:(s==null||s==='')?d:Number.isFinite(Number(s))?Math.min(5000,Math.max(1,Math.trunc(Number(s)))):d;
 const makePick=m=>{
- const k=m.market||{},ts=Number(m.ts)||Date.parse(m.kickoff||''),top=Number(m.priority)>=175;
+ const k=m.market||{},ts=Number(m.ts)||Date.parse(m.kickoff||''),top=leagueTier(m)>0;
  return {id:m.id,ts,home:m.home,away:m.away,league:m.league,country:m.country,
   provider:'Bongdalu',method:k.method||m.method,top,
   priority:Number(m.priority||0),bookmaker_count:Number(k.bookmakers||0),

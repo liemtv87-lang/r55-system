@@ -82,3 +82,11 @@ test('default main and native endpoints use current-day native preview instead o
  assert.ok(native.includes('source_detail:\x27native_live_preview_unlocked\x27'));
  assert.ok(!native.includes('legacy_locked_snapshot_fallback'));
 });
+
+test('featured matches use the exact same major-league rule in both VPS API engines',()=>{
+ const native=read('deployment/football-native/publicApi.mjs');
+ const rank=/const leagueTier=x=>\\{[\\s\\S]*?\\n\\};/;
+ assert.equal(native.match(rank)?.[0],api.match(rank)?.[0]);
+ assert.match(native,/top=leagueTier\\(m\\)>0/);
+ assert.match(api,/const priority=x=>leagueTier\\(x\\)>0/);
+});
