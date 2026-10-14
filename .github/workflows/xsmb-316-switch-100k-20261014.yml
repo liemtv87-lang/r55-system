@@ -1,0 +1,40 @@
+name: XSMB 316 Plus Consecutive 100K Train-Only Switch Study
+on:
+  push:
+    branches: [main]
+    paths:
+      - research/xsmb_316_switch_100k_20261014.py
+      - .github/workflows/xsmb-316-switch-100k-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate-and-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 38488651617
+          github-token: ${{ github.token }}
+          pattern: xsmb-consecutive-shard-*
+          merge-multiple: true
+          path: research/results/xsmb_consecutive
+      - name: Ensure eight prior training-only shard outputs
+        run: |
+          python3 -m py_compile research/xsmb_316_switch_100k_20261014.py
+          test "$(find research/results/xsmb_consecutive -name 'shard-*.json' | wc -l)" -eq 8
+      - name: Independently train one regime switch on older 500 then reveal latest 500
+        run: |
+          python3 research/xsmb_316_switch_100k_20261014.py --directory research/results/xsmb_consecutive --candidates 100000 --output research/results/xsmb_switch_100k_holdout.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-switch-100k-independent-holdout
+          path: research/results/xsmb_switch_100k_holdout.json
+          retention-days: 30
