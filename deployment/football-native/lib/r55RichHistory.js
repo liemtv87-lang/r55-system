@@ -75,7 +75,15 @@ function completeRows(html,table,embeddedVar,teamId){
  // The website commonly renders 10 rows while its embedded array may have 20.
  // Prefer complete embedded chronology when it genuinely contains more results.
  if(embedded.length>visible.length){
-  return embedded.map((x,i)=>({...x,matchId:visible[i]?.matchId||null,date:visible[i]?.date||null}));
+  // A visible row and an embedded record may have different ordering. Never
+  // attach a bookmaker quote to a different match merely by array index.
+  // Link only when the independent score AND team-side fields agree.
+  return embedded.map((x,i)=>{
+   const v=visible[i];
+   const verified=!!v&&v.matchId&&v.homeGoals===x.homeGoals&&
+    v.awayGoals===x.awayGoals&&v.teamIsHome===x.teamIsHome;
+   return {...x,matchId:verified?v.matchId:null,date:verified?v.date:null};
+  });
  }
  return visible;
 }
