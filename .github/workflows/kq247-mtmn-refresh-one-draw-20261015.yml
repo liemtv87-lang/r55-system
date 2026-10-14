@@ -46,7 +46,8 @@ jobs:
           for r in draws:
            assert len(r['full_results'])==18 and len(r['all2'])==18
            assert all(p[-2:]==v for p,v in zip(r['full_results'],r['all2']))
-           assert len(r['special'])==6
+           assert len(r['full_results'][-1])==6
+           if 'special' in r: assert r['special']==r['full_results'][-1]
           for station in ['Cần Thơ','Sóc Trăng','Đồng Nai','Khánh Hòa','Đà Nẵng']:
            r=next(x for x in draws if x['station']==station)
            assert r['draw_date']>='2026-10-14',(station,r['draw_date'])
