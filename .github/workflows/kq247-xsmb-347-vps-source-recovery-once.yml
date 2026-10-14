@@ -1,0 +1,86 @@
+name: KQ247 XSMB 347 historical code audit (VPS read only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-347-vps-source-recovery-once.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kq247-xsmb-347-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Connect to VPS with pinned server key
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          install -d -m 755 research/lottery
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'nice -n 15 python3 -' > research/lottery/xsmb347-vps-source-audit.json <<'PY'
+          import os, pathlib, json, hashlib, datetime, re, time
+          roots=['/opt/pwremote','/opt/kq247','/srv/kq247','/var/backups/kq247','/home/kq247']
+          skips={'.git','.cache','node_modules','.venv','venv','__pycache__','vendor','dist','build','site-packages','logs'}
+          suffixes={'.sql','.py','.js','.mjs','.cjs','.ts','.json','.md','.sh','.txt','.yml','.yaml'}
+          checks={
+            '347': re.compile(rb'347[/_ -]?500|strategy347|_347_|347_RECONSTRUCTED',re.I),
+            '338': re.compile(rb'338[/_ -]?500|338_family|338signal',re.I),
+            'ruleswitch': re.compile(rb'(switch.{0,45}(?:miss|hit|streak))|(?:miss|streak).{0,45}switch',re.I),
+            'three_lotto': re.compile(rb'bach.?thu|three_lotto|lotto3|3[_ -]?lo',re.I),
+            'r84': re.compile(rb'R84_REG7|R84.*(?:LO|LOTTO)',re.I)
+          }
+          inspected=0; matched=[]; cutoff=time.monotonic()+70
+          for root in roots:
+            if not os.path.isdir(root):continue
+            for base,dirs,files in os.walk(root,followlinks=False):
+              dirs[:]=[d for d in dirs if d not in skips and not d.startswith('.')]
+              if time.monotonic()>cutoff or inspected>=22000:break
+              for name in files:
+                if inspected>=22000 or time.monotonic()>cutoff:break
+                p=pathlib.Path(base)/name
+                if p.suffix.lower() not in suffixes or p.name.startswith('.') or any(
+                  v in p.name.lower() for v in ('secret','token','credential','password','license','payment','.env','private_key')
+                ):continue
+                try:
+                  st=p.stat()
+                  if st.st_size<100 or st.st_size>2500000:continue
+                  data=p.read_bytes()
+                  inspected+=1
+                  tags=[tag for tag,regex in checks.items() if regex.search(data)]
+                  if tags:
+                    matched.append({'path':str(p),'sha256':hashlib.sha256(data).hexdigest(),
+                                    'size':st.st_size,'modified_utc':datetime.datetime.fromtimestamp(st.st_mtime,datetime.timezone.utc).isoformat(),
+                                    'markers':tags})
+                except (OSError,ValueError):pass
+          matched.sort(key=lambda v:(-len(v['markers']),('347' not in v['markers']),v['path']))
+          print(json.dumps({'audited_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                 'read_only':True,'scanned_files':inspected,'candidate_count':len(matched),
+                 'roots_examined':[r for r in roots if os.path.isdir(r)],
+                 'candidates':matched[:100],
+                 'note':'Paths/hashes only; source code not published. A marker is NOT validation of the original 347/500 algorithm.'},
+                 ensure_ascii=False,indent=2))
+          PY
+          python3 -m json.tool research/lottery/xsmb347-vps-source-audit.json >/dev/null
+          cat research/lottery/xsmb347-vps-source-audit.json
+      - name: Save read-only audit evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add research/lottery/xsmb347-vps-source-audit.json
+          if ! git diff --cached --quiet; then
+            git commit -m "audit: inventory VPS historical XSMB 347 code candidates, read only"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
