@@ -6,7 +6,7 @@ const CONFIG={
 };
 const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9]/g,'');
 function cell(t,cls){
- const pattern=new RegExp('<td\\b[^>]*class=["\\'][^"\\']*\\b'+cls+'\\b[^"\\']*["\\'][^>]*>([\\s\\S]*?)<\\/td>','i');
+ const pattern=new RegExp("<td\\b[^>]*class=[^>]*\\b"+cls+"\\b[^>]*>([\\s\\S]*?)<\\/td>","i");
  const block=t.match(pattern)?.[1]||'';
  return [...block.matchAll(/<div\b[^>]*>\s*(\d{2,6})\s*<\/div>/gi)].map(x=>x[1]);
 }
@@ -21,7 +21,7 @@ export async function fetchAllOfficialDraws(day,region){
  if(html.length<10000||html.length>450000)throw Error('RESULT_SOURCE_LENGTH_BAD');
  const title=html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]||'';
  if(!title.includes(pretty))throw Error('RESULT_SOURCE_WRONG_DATE');
- const regex=new RegExp('<table\\b[^>]*class=["\\'][^"\\']*\\b'+conf.table+'\\b[^"\\']*["\\'][^>]*>[\\s\\S]*?<\\/table>','gi');
+ const regex=new RegExp("<table\\b[^>]*class=[^>]*\\b"+conf.table+"\\b[^>]*>[\\s\\S]*?<\\/table>","gi");
  const tables=[...html.matchAll(regex)].slice(0,region==='mb'?1:4).map(m=>m[0]);
  const items=[];
  for(const table of tables){
