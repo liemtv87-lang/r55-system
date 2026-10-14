@@ -91,3 +91,12 @@ test('featured matches use the exact same major-league rule in both VPS API engi
  assert.ok(native.includes('top=leagueTier(m)>0'));
  assert.ok(api.includes('const priority=x=>leagueTier(x)>0'));
 });
+
+test('group bot uses current-day locked or latest preview, never yesterday predictions',()=>{
+ const bot=read('deployment/football-bots/group-worker.mjs');
+ assert.ok(bot.includes("WHERE day=$1::date AND source='bongdalu-r55'"));
+ assert.ok(bot.includes("'r55_native_preview_'+day"));
+ assert.ok(bot.includes("'r55_provisional_'+day"));
+ assert.ok(bot.includes("today_bongdalu_predictions_not_ready"));
+ assert.ok(!bot.includes("day>=($1::date-interval '1 day')"));
+});

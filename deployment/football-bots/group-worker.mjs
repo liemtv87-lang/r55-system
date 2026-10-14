@@ -59,14 +59,29 @@ async function sendPick(){
  if(last&&now-last<SEND_INTERVAL_MS)
   return {reason:'cooldown_50_minutes',minutesRemaining:Math.ceil((SEND_INTERVAL_MS-(now-last))/60000)};
  const day=vnDate();
- const q=await pool.query("SELECT day::text AS day,payload FROM football_snapshots WHERE day>=($1::date-interval '1 day') ORDER BY day DESC LIMIT 2",[day]);
+ // Telegram must use the SAME current-day forecast as the main/client views:
+ // today's sealed lock after 13:00, otherwise the newest complete Bongdalu
+ // same-day preview. Never advertise yesterday's still-future picks as today's.
+ const official=await pool.query("SELECT day::text AS day,payload FROM football_snapshots WHERE day=$1::date AND source='bongdalu-r55' AND locked_at IS NOT NULL LIMIT 1",[day]);
+ let current=official.rows[0]||null,forecastState=current?'official_locked':null;
+ if(!current){
+  const rows=await pool.query("SELECT scope,payload,updated_at FROM football_compact_stats WHERE scope=ANY($1::text[]) ORDER BY updated_at DESC",[[ 'r55_provisional_'+day,'r55_native_preview_'+day ]]);
+  const fresh=rows.rows.find(x=>{
+   const p=x.payload;
+   return Array.isArray(p?.matches)&&p.matches.length>0&&
+    (x.scope==='r55_provisional_'+day?p?.scanProgress?.complete===true:
+      p?.preview===true&&p?.locked===false&&p?.date===day&&Number(p?.scanProgress?.marketPool)>0);
+  });
+  if(!fresh)return {reason:'today_bongdalu_predictions_not_ready'};
+  current={day,payload:fresh.payload};
+  forecastState=fresh.scope==='r55_provisional_'+day?'provisional':'native_live_preview';
+ }
  const byFixture=new Map();
- for(const x of q.rows){
+ for(const x of [current]){
   const matches=typeof x.payload==='string'?JSON.parse(x.payload).matches:x.payload?.matches;
   for(const m of matches||[]){
    if(!fixture(m)||!cleanMarket(m))continue;
-   // Never auto-advertise shadow or insufficiently researched markets as "best".
-   // This is independent of the 80% research/forecast coverage goal.
+   // Require actual, attributable source form; never fabricate a team's history.
    if(Number(m.history?.homeGames)<1||Number(m.history?.awayGames)<1)continue;
    const until=Date.parse(m.kickoff||'')-now;
    if(!Number.isFinite(until)||until<0||until>30*60000)continue;
@@ -104,7 +119,7 @@ async function sendPick(){
     [key,JSON.stringify({state:'sent',source:'bongdalu-r55',day:x.day,id:x.m.id,
      messageId,group:CHANNEL,owner:'vinahost-vps',certified:false,majorLeague:x.major})]);
    log('R55_VPS_GROUP_SEND_ACK',{id:x.m.id,day:x.day,messageId,majorLeague:x.major,minutesBefore:Number(((Date.parse(x.m.kickoff)-Date.now())/60000).toFixed(1))});
-   return {sent:true,count:1,id:x.m.id,day:x.day,messageId,majorLeague:x.major};
+   return {sent:true,count:1,id:x.m.id,day:x.day,messageId,majorLeague:x.major,forecastState};
   }catch(e){
    // An ambiguous Telegram failure must not create repeated posts.
    await pool.query("UPDATE football_compact_stats SET payload=$2::jsonb,updated_at=now() WHERE scope=$1",
