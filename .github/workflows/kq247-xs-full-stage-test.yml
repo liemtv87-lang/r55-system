@@ -1,0 +1,19 @@
+name: KQ247 XSMB complete 500 plus 1000-method DE stage test
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-full-stage-test.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -qq -y sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/full-daily-worker.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run --rm --network bridge -v /opt/kq247/lottery-daily-staging:/stage node:22-alpine node /stage/full-daily-worker.mjs'
