@@ -60,6 +60,11 @@ def select_exact_visible(page, choices):
     return None
 
 def next_button(page):
+    # Telekit uses a visible #nextBtn, but its accessible role/name lookup
+    # may not resolve because of styling or nested markup.
+    primary = page.locator("button#nextBtn")
+    if primary.count() and primary.first.is_visible() and primary.first.is_enabled():
+        return primary.first
     buttons = page.get_by_role("button", name=re.compile(r"^NEXT$", re.I))
     return next((x for x in buttons.all() if x.is_visible() and x.is_enabled()), None)
 
@@ -140,8 +145,9 @@ def main():
         for key, group in GROUPS.items():
             if key in data["groups"]:
                 prior=data["groups"][key]
-                if prior.get("state")=="next_button_unavailable" and not prior.get("rechecked_ui_once"):
-                    prior["rechecked_ui_once"]=True
+                if prior.get("state")=="next_button_unavailable" and not prior.get("nextbtn_selector_retry_v1"):
+                    # Safe to retry a pre-submit UI failure exactly once: no POST occurred.
+                    prior["nextbtn_selector_retry_v1"]=True
                     save(data)
                 else:
                     print("PREVIOUS_ATTEMPT_KEPT",key,prior.get("state"),flush=True)
