@@ -26,7 +26,16 @@ function validateDraw(draw){
  if(ids.size!==pos.length)throw Error('POSITION_DUPLICATE');
  return pos;
 }
-export function predictStationFromOneDraw(draw){
+function nextDrawDate(draw,weeklySchedule){
+ if(draw.region==='mb')return nextDay(draw.draw_date,1);
+ const key=draw.region+'|'+draw.station;
+ const weekdays=weeklySchedule?.[key];
+ if(!Array.isArray(weekdays)||!weekdays.length||weekdays.some(n=>!Number.isInteger(n)||n<0||n>6))throw Error('MISSING_VALID_WEEKLY_SCHEDULE_'+key);
+ const current=new Date(draw.draw_date+'T12:00:00Z').getUTCDay();
+ for(let delta=1;delta<=7;delta++)if(weekdays.includes((current+delta)%7))return nextDay(draw.draw_date,delta);
+ throw Error('NO_NEXT_STATION_DRAW_DATE');
+}
+export function predictStationFromOneDraw(draw,{weeklySchedule}={}){
  const pos=validateDraw(draw),m=pos.length,nPrizes=draw.full_results.length;
  const voto=new Float64Array(100),de=new Float64Array(100),headReject=new Float64Array(10),hundReject=new Float64Array(10),three=new Float64Array(1000),kep=new Float64Array(10);
  const coverage=new Uint32Array(m),families={pairCrossPrize:0,pairWithinPrize:0,triangleCrossPrize:0,triangleOnePrize:0};
@@ -88,7 +97,7 @@ export function predictStationFromOneDraw(draw){
  const sourceHash=createHash('sha256').update(JSON.stringify([draw.region,draw.station,draw.draw_date,draw.full_results])).digest('hex');
  return {region:draw.region,station:draw.station,sourceDate:draw.draw_date,
   // MB draws daily; MT/MN individual stations run weekly.
-  predictionDate:nextDay(draw.draw_date,draw.region==='mb'?1:7),
+  predictionDate:nextDrawDate(draw,weeklySchedule),
   lotto3:picks,doubles,de:{
     dan50,dan60,dan75,three_digit:triples,hard_excluded_head:String(excludeHead),
     three_digit_hard_excluded_hundred:String(excludeHund)
