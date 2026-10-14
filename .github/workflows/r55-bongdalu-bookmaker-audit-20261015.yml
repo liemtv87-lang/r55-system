@@ -42,7 +42,7 @@ jobs:
             fixtures:matches.length,withBookmakerQuotes:priced.length,
             medianQuotesPerFixture:sizes.length?sizes[Math.floor(sizes.length/2)]:0,
             maxQuotesPerFixture:sizes.at(-1)||0,
-            examples:priced.slice(0,3).map(x=>({id:x.id,books:x.market.bookmakerCount,consensus:x.market.bookmakerConsensus}))};
+            examples:priced.slice(0,3).map(x=>({id:x.id,books:x.market.bookmakerCount,consensus:x.market.bookmakerConsensus,quotes:x.market.bookmakerQuotes.slice(0,3)}))};
           console.log("R55_BONGDALU_BOOKMAKER_AUDIT",JSON.stringify(report));
           if(!priced.length||!names.length)process.exitCode=2;
           JS
