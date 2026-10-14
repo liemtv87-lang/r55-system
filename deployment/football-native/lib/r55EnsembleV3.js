@@ -27,13 +27,14 @@ function expectedReturn(type,pick,line,odds,home,away){
  }
  return value;
 }
-function quality(row,h,native){
+export function evaluateR55EvidenceQuality(row,h,native){
  const mk=row?.market||{},home=h?.home||{},away=h?.away||{},h2h=h?.h2h||{};
  const nh=Number(home.n||0),na=Number(away.n||0),nH2H=Number(h2h.n||0),books=Number(mk.bookmakerCount||0);
  const reason=[];
  if(nh<15||na<15)reason.push("form_samples_under_15");
  if(books<3)reason.push("bookmaker_count_under_3");
- if(nH2H<4)reason.push("head_to_head_sample_under_4");
+ // Zero prior head-to-head meetings is normal for first-time UEFA/WC fixtures.
+ // H2H is optional context, never an entry/release quality requirement.
  if(Number(mk.ahLineSpread||0)>.25||Number(mk.ouLineSpread||0)>.25)reason.push("bookmaker_line_disagreement");
  if(native?.market_risk?.bookmaker_disagreement)reason.push("native_disagreement");
  const numbers=[home.gf,home.ga,away.gf,away.ga,native?.model?.xg_home,native?.model?.xg_away];
@@ -100,7 +101,7 @@ function nativeSide(row,native,type){
  return null;
 }
 export function chooseR55Ensemble(row,h,native){
- const mk=row?.market||{},q=quality(row,h,native);
+ const mk=row?.market||{},q=evaluateR55EvidenceQuality(row,h,native);
  if(!native?.model||!q.ok&&q.reasons.includes("invalid_form_xg"))return null;
  let models;
  try{models=estimates(row,h,native)}catch{return null;}
