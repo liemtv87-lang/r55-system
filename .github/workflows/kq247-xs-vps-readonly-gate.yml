@@ -1,0 +1,32 @@
+name: KQ247 XS customer full snapshot read-only DB gate
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-readonly-gate.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Create verified-only customer view in isolated VPS schema
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/customer-readonly-view.sql root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          docker exec -i kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < /opt/kq247/lottery-daily-staging/customer-readonly-view.sql
+          echo CUSTOMER_FULL_SNAPSHOT_VIEW
+          docker exec kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM kq247_xs_vps.customer_locked_full_snapshots;"'
+          echo PRIVATE_LOCKED_LOTTO_COUNT
+          docker exec kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT count(*) FROM kq247_xs_vps.locked_lotto_daily;"'
+          echo CUSTOMER_VIEW_NEVER_READS_LOTTO_ONLY_STAGE=PASS
+          VPS
