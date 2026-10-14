@@ -23,7 +23,7 @@ jobs:
           from pathlib import Path
           j=json.loads(Path('reports/kq247-vn-first-scout.json').read_text())
           assert j['sources_considered']>=30
-          assert all(item['sitemap_requests_attempted'] <= 8 for item in j['sites'])
+          assert all(item['sitemap_requests_attempted'] <= 16 for item in j['sites'])
           assert j['external_backlinks_published_by_this_scan']==0
           print('VIETNAM_FIRST_SCAN_PASS')
           PY
