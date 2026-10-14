@@ -4,7 +4,7 @@
 A URL in a sitemap is NOT a backlink or a submission site. This job only
 discovers Viet-language pages for subsequent editorial relevance checks.
 Never posts/forms, never circumvents site protections, and never claims
-unverified backlink counts. Throttled to <= 8 requests per host.
+unverified backlink counts. Throttled to <= 16 sitemap requests per host.
 """
 import concurrent.futures
 import datetime as dt
@@ -54,7 +54,21 @@ SITES = {
   "soha.vn": "football_editorial",
   "danviet.vn": "football_editorial",
   "vietnamline.org": "vietnamese_blog",
-  "tinnhanhchungkhoan.vn": "other_vietnamese"
+  "tinnhanhchungkhoan.vn": "other_vietnamese",
+  "thethaovanhoa.vn": "football_editorial",
+  "thethaovietnam.vn": "football_editorial",
+  "bongdaso.com": "football_editorial",
+  "thanhnien.vn": "football_editorial",
+  "dantri.com.vn": "football_editorial",
+  "vietnamnet.vn": "football_editorial",
+  "vov.vn": "football_editorial",
+  "vtcnews.vn": "football_editorial",
+  "tuoitre.vn": "football_editorial",
+  "vnexpress.net": "football_editorial",
+  "tienphong.vn": "football_editorial",
+  "nld.com.vn": "football_editorial",
+  "vietnamplus.vn": "football_editorial",
+  "baomoi.com": "news_aggregator"
 }
 SEEDS = ("sitemap.xml", "sitemap_index.xml", "wp-sitemap.xml")
 LIMIT_HOST = 16
@@ -65,6 +79,14 @@ GROUPS = ("keochuyengia79", "xsbm999")
 TOPIC_TOKENS = (
     "telegram", "nhom-telegram", "nhom-bong", "bong-da", "bongda",
     "xo-so", "xoso", "xsmb", "xsmt", "xsmn", "kqxs", "nhom"
+)
+# These are editorial/contact opportunities only; they do NOT imply that
+# third-party sites accept public backlinks or unreviewed user submissions.
+SUBMIT_TOKENS = (
+    "gui-bai", "dang-bai", "gui-tin", "dang-tin", "cong-tac-vien",
+    "congtacvien", "lien-he", "lienhe", "dong-gop", "submit",
+    "add-group", "dang-nhom", "them-nhom", "post-article",
+    "publish", "gui-lien-ket", "gui-link", "dang-ky-cong-tac"
 )
 AGENT = "KQ247-VN-SEO-Scout/1.0 (read-only public sitemap indexing)"
 
@@ -100,6 +122,7 @@ def inspect(host,category):
     inspected=set()
     relevant=[]
     matches=[]
+    submission_candidates=[]
     errors=[]
     per=Counter()
     attempts=0
@@ -125,6 +148,10 @@ def inspect(host,category):
                     p=urllib.parse.urlsplit(lc).path
                     if any(k in lc for k in GROUPS):
                         if len(matches)<25: matches.append(candidate)
+                    if any(k in p for k in SUBMIT_TOKENS):
+                        per["editorial_or_submission_url_records"]+=1
+                        if len(submission_candidates)<18:
+                            submission_candidates.append(candidate)
                     if any(k in p for k in TOPIC_TOKENS):
                         per["topic_url_records"]+=1
                         if len(relevant)<18: relevant.append(candidate)
@@ -136,6 +163,8 @@ def inspect(host,category):
       "sitemap_requests_attempted":attempts,
       "sitemap_url_records_scanned":len(inspected),
       "topic_candidate_url_count":per["topic_url_records"],
+      "editorial_or_submission_url_count":per["editorial_or_submission_url_records"],
+      "editorial_or_submission_url_examples":submission_candidates,
       "topic_url_examples":relevant,
       "group_handle_url_examples":matches,
       "errors":errors,
@@ -154,13 +183,14 @@ def main():
       "external_backlinks_published_by_this_scan":0,
       "sitemap_url_records_scanned":sum(x["sitemap_url_records_scanned"] for x in rows),
       "topic_candidate_url_records":sum(x["topic_candidate_url_count"] for x in rows),
+      "editorial_or_submission_url_records":sum(x["editorial_or_submission_url_count"] for x in rows),
       "sitemap_requests_attempted":sum(x["sitemap_requests_attempted"] for x in rows),
       "group_handle_url_candidates":sum(len(x["group_handle_url_examples"]) for x in rows),
       "duration_seconds":round(time.monotonic()-started,2),
       "sites":rows,
       "limits":["Only public sitemap records, no HTML posting, no CAPTCHA evasion.",
                 "A URL record is not a verified external backlink or a site that allows submissions.",
-                "Max 8 sitemap GETs per host; results may be partial.",
+                "Max 16 sitemap GETs per host; results may be partial.",
                 "External referring sites should allow one relevant truthful listing or editorial article."]
     }
     os.makedirs("reports",exist_ok=True)
@@ -168,7 +198,7 @@ def main():
         json.dump(result,f,ensure_ascii=False,indent=2)
     print("KQ247_VN_FIRST_RESULTS="+json.dumps({
       k:result[k] for k in ("checked_at_utc","sources_considered","sitemap_url_records_scanned",
-        "topic_candidate_url_records","sitemap_requests_attempted","group_handle_url_candidates",
+        "topic_candidate_url_records","editorial_or_submission_url_records","sitemap_requests_attempted","group_handle_url_candidates",
         "sources_confirmed_allow_public_backlink_submission","external_backlinks_published_by_this_scan","duration_seconds")
     },ensure_ascii=False),flush=True)
     print("VIETNAM_TOP_DOMAINS="+json.dumps(sorted(
