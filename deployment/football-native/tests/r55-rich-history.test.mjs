@@ -1,3 +1,4 @@
+import {parseVerifiedTeamSchedule,formSummary} from "../lib/r55TeamScheduleFallback.js";
 import {primaryFormEvidence} from "../lib/r55FormFirst.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -185,4 +186,26 @@ test("H2H is supplementary and cannot alter primary prediction inputs",()=>{
  assert.equal(model.h2h_asian.closing.n,0);
  assert.equal(history.h2h.n,12,"real H2H retained for supplementary diagnostics");
  assert.deepEqual(primaryFormEvidence({...history,h2h:{n:0,edge:0,total:0}}),model);
+});
+
+test("official team schedule recovery accepts only verified finished matches",()=>{
+ const raw={TotalPages:1,MatchList:[
+  {ID:500101,State:-1,HomeID:80597,AwayID:12345,HomeScore:2,AwayScore:1,E8Date:"2026-10-01T13:00:00Z"},
+  {ID:500102,State:-1,HomeID:50000,AwayID:80597,HomeScore:0,AwayScore:3,E8Date:"2026-10-03T13:00:00Z"},
+  {ID:500103,State:0,HomeID:80597,AwayID:10001,HomeScore:2,AwayScore:0},
+  {ID:500104,State:-1,HomeID:80597,AwayID:10002,HomeScore:"",AwayScore:""},
+  {ID:500105,State:-1,HomeID:80000,AwayID:80001,HomeScore:2,AwayScore:1},
+  {ID:500106,State:-1,HomeID:80597,AwayID:10003,HomeScore:1,AwayScore:1,E8Date:"2026-10-18T13:00:00Z"}
+ ]};
+ const rows=parseVerifiedTeamSchedule(raw,80597,Date.parse("2026-10-15T00:00:00Z"));
+ assert.equal(rows.length,2);
+ assert.deepEqual(rows.map(r=>r.matchId),["500102","500101"]);
+ assert.equal(rows[0].teamGoals,3);
+ assert.equal(rows[0].conceded,0);
+ assert.equal(rows[0].teamIsHome,false);
+ assert.equal(rows[1].source,"bongdalu_verified_team_schedule");
+ assert.equal(rows[0].quotes.length,0,"do not fabricate historical odds");
+ const form=formSummary(rows);
+ assert.equal(form.n,2);
+ assert.equal(form.ppg,3);
 });
