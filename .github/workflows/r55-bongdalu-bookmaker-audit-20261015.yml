@@ -28,6 +28,14 @@ jobs:
             'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
           import {resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from "./lib/bongdaluR55.js";
           const rr=await resolveBongdaluBase();
+          const demoHtml=await getBongdaluText(rr.base,"oddscomp/3073074","text/html",11000).catch(()=>"");
+          const demoRows=[...demoHtml.matchAll(/<tr\\b[^>]*>[\\s\\S]*?<\\/tr>/gi)].map(x=>x[0]);
+          const sampleRows=demoRows.filter(x=>/<td\\b/i.test(x)).slice(0,5).map(x=>x.slice(0,1350));
+          console.log("R55_ODDSCOMP_HTML_STRUCTURE",JSON.stringify({
+           size:demoHtml.length,rowCount:demoRows.length,
+           scriptSources:[...demoHtml.matchAll(/<script[^>]+src=["']([^"']+)/gi)].slice(0,8).map(x=>x[1]),
+           firstTags:demoRows.slice(0,12).map(x=>(x.match(/<tr[^>]*>/i)||[])[0]||""),
+           rowSamples:sampleRows}));
           const xmls=await Promise.all(V.BOOKS.map(async([name,id])=>{
             try{return {name,id,text:await getBongdaluText(rr.base,"gf/data/odds/en/goal"+id+".xml","text/xml",11000),ok:true}}
             catch(e){return {name,id,text:"",ok:false,error:String(e.message||e).slice(0,100)}}}));
