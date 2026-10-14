@@ -1,0 +1,44 @@
+name: R55 Bongdalu Odds Page Layout Diagnostic
+on:
+  push:
+    branches:
+      - r55-bongdalu-deep-history-20261015
+    paths:
+      - .github/workflows/r55-oddscomp-layout-readonly-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Print only Bongdalu public HTML selector metadata, without changing production
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase,getBongdaluText} from './lib/bongdaluR55.js';
+          import {collectBongdaluPageBookmakers} from './lib/r55BookmakerPage.js';
+          const r=await resolveBongdaluBase();
+          for(const fixture of ['3073074','3073084']){
+            const path='oddscomp/'+fixture;
+            try{
+              const html=await getBongdaluText(r.base,path,'text/html',15000);
+              const tags=[...html.matchAll(/<tr\b[^>]*>/gi)].map(x=>x[0].slice(0,200));
+              const selectors=tags.filter(x=>/tr_o_|odds|company|asian|over|under/i.test(x)).slice(0,15);
+              const keys=[...new Set([...html.matchAll(/\bid=['"]([^'"]+)['"]/gi)].map(x=>x[1]))];
+              const links=[...html.matchAll(/(?:oddscomp|asian|overunder|goal)[^"'<>\s]{0,80}/gi)].slice(0,8).map(x=>x[0]);
+              console.log('R55_ODDSCOMP_LAYOUT',JSON.stringify({fixture,source:r.base,bytes:html.length,
+                title:(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]?.replace(/\s+/g,' ').slice(0,110)||null,
+                trCount:tags.length,trIdOCount:tags.filter(x=>/tr_o_/i.test(x)).length,
+                selectorExamples:selectors,ids:keys.filter(x=>/odds|company|tr_|tab_|ah|ou|table/i.test(x)).slice(0,35),
+                links,extractedBookmakers:collectBongdaluPageBookmakers(html).length}));
+            }catch(e){console.log('R55_ODDSCOMP_LAYOUT_ERROR',JSON.stringify({fixture,error:String(e?.message||e).slice(0,160)}));}
+          }
+          JS
