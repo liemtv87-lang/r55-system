@@ -115,8 +115,8 @@ def evaluate(data,p,first,last,batch=32):
             hit+=C[days,ix].astype(np.uint8)
             scores[row,days,ix]=-1e7
             if slot<2:
-                heads=(hd[None,None,:]==hd[ix,:,None]).astype(np.float32)
-                tails=(tl[None,None,:]==tl[ix,:,None]).astype(np.float32)
+                heads=(hd[None,None,:]==hd[ix][:,:,None]).astype(np.float32)
+                tails=(tl[None,None,:]==tl[ix][:,:,None]).astype(np.float32)
                 scores-=block[:,2,None,None]*(heads+tails)
                 cc=cov[days,ix,:]
                 scores-=block[:,3,None,None]*cc
