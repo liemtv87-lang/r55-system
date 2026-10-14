@@ -50,20 +50,29 @@ jobs:
             test ! -f "$f" || ls -lh "$f"
           done
           before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
-          if test -s "$base/worker.pid" && kill -0 "$(cat "$base/worker.pid")" 2>/dev/null; then
-            echo "KQ247_BACKGROUND_ALREADY_RUNNING_PID=$(cat "$base/worker.pid")"
+          pid="$(cat "$base/worker.pid" 2>/dev/null || true)"
+          if test -n "$pid" && kill -0 "$pid" 2>/dev/null && \
+              tr '\\0' ' ' < "/proc/$pid/cmdline" | grep -Fq -- '--watch'; then
+            echo "KQ247_WATCH_ALREADY_RUNNING_PID=$pid"
           else
+            if test -n "$pid" && kill -0 "$pid" 2>/dev/null; then
+              cmdline="$(tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+              if echo "$cmdline" | grep -Fq 'kq247-backlink-background-discovery'; then
+                kill "$pid" || true
+              fi
+            fi
             cd "$base"
             nohup nice -n 15 python3 -u \
               "$base/kq247-backlink-background-discovery-20261014.py" --watch \
               >>"$base/worker.log" 2>&1 </dev/null &
             echo $! > "$base/worker.pid"
             sleep 4
-            if ! kill -0 "$(cat "$base/worker.pid")" 2>/dev/null && test ! -s "$base/latest.json"; then
-              echo "Worker failed before report:"
+            if ! kill -0 "$(cat "$base/worker.pid")" 2>/dev/null; then
+              echo "Worker failed; recent diagnostic log:"
               tail -n 60 "$base/worker.log" || true
               exit 1
             fi
+            echo "KQ247_WATCH_STARTED_PID=$(cat "$base/worker.pid")"
           fi
           echo "KQ247_BACKGROUND_LOG_TAIL:"
           tail -n 12 "$base/worker.log" || true
