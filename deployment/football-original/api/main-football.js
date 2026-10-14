@@ -74,7 +74,7 @@ export default async function(req,res){
  // Filter before limit so 20/30 means 20/30 upcoming games, not slots occupied by started games.
  const cutoff=Date.now();
  const startedCount=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return !Number.isFinite(ms)||ms<=cutoff;}).length;
- const upcoming=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return Number.isFinite(ms)&&ms>cutoff&&!excludedLeague(x);});
+ const upcoming=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return Number.isFinite(ms)&&ms>cutoff;});
  // Snapshot is ranked strongest-first. Apply limit before any client-side kickoff sort,
  // otherwise 20/30 would incorrectly select the earliest fixtures instead of strongest.
  const methodAudit=learned.rows[0]?.payload;
