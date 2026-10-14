@@ -64,3 +64,10 @@ This file is an operational handoff. Verbatim user/assistant chat history has **
 - Separate existing `r55TeamScheduleFallback.js` from a concurrent recovery edit also exists; it is not the parser invoked by current `bongdaluR55.js`. Avoid duplicate data paths and future-leaking un-timestamped fallback scores.
 - NEXT: verify latest staging deploy completed without container regressions; check official schedule AJAX response for 80597 and 80877 without guessing fields; rerun 172-future-market whole-feed audited coverage to see whether BDL_3102824 and BDL_3102993 have more verified form and can now be modeled; inspect provider quotes and release gate independently. Preserve existing links and immutable snapshots.
 - This checkpoint is a chronological progress ledger, **not** a verbatim reproduction of all prior chat messages.
+
+## Two explicit fixture exclusions, 05:50 VN on 2026-10-15
+- User requested the two low-tier fixtures being investigated be dropped, not that all Myanmar/Calcutta matches be excluded. Exactly BDL_3102824 (Calcutta Football League) and BDL_3102993 (Myanmar League 2) are excluded from new R55 predictions.
+- New pure module `deployment/football-native/lib/r55FixtureExclusions.js` (commit cc76e2a) filters ONLY these IDs. Its use was added in the native predictor, chunked snapshot pool and audit/model-eligible future set; other games and other leagues remain permitted.
+- Unit test includes positive and negative examples. Last code commit `7354acd1326eaa16790b9172dadea4ff4e69aa18`, GitHub Actions test run `38650274754` SUCCESS.
+- VPS staging deployment workflow `38650274734` was pending at checkpoint, because preceding deployment `38650268670` was still running. Do not claim production or customer/bot output updated until verified.
+- DO NOT treat prior 171-fixture preview or locked historical snapshot as if retroactively filtered; recompute/read from actual deployed pipeline as appropriate, preserving immutable prior snapshots.
