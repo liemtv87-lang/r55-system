@@ -1,0 +1,26 @@
+name: KQ247 XS VPS daily staging worker
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-local-vps-daily-stage.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Test a complete daily local forecast on the VPS without publishing
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/daily-worker.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/daily-worker.mjs
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/football-original/lib/r55XsDraws.js root@64.120.92.172:/opt/kq247/lottery-daily-staging/minhngoc-draw.mjs
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage node:22-alpine node --check /stage/daily-worker.mjs'
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage node:22-alpine node /stage/daily-worker.mjs'
+          echo XS_LOCAL_DAILY_STAGING_READY
