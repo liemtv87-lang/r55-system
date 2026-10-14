@@ -9,10 +9,12 @@ const ROOT='/stage', HISTORY=join(ROOT,'xsmb-history-live.json');
 const now=new Date();
 const fmt=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
 const parts=Object.fromEntries(fmt.formatToParts(now).filter(p=>p.type!=='literal').map(p=>[p.type,p.value]));
-const today=parts.year+'-'+parts.month+'-'+parts.day;
+const localCalendarDate=parts.year+'-'+parts.month+'-'+parts.day;
 const time=parts.hour+':'+parts.minute;
-if(time<'19:30')throw Error('BEFORE_1930_VN: '+time);
 const plusDay=d=>new Date(Date.parse(d+'T12:00:00Z')+86400000).toISOString().slice(0,10);
+const previousDay=d=>new Date(Date.parse(d+'T12:00:00Z')-86400000).toISOString().slice(0,10);
+// Before 19:30, latest completed draw is YESTERDAY; never attempt today's unfinished draw.
+const today=time<'19:30'?previousDay(localCalendarDate):localCalendarDate;
 const target=plusDay(today);
 const lockPath=join(ROOT,'full-daily-lock');
 const lock=await open(lockPath,'wx').catch(e=>{throw Error('ANOTHER_DAILY_RUN_OR_STALE_LOCK_'+e.code)});
