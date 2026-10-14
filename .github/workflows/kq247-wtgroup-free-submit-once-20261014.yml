@@ -32,7 +32,9 @@ jobs:
           base=/opt/pwremote/seo-wtgroup-free-once-20261014
           install -d -m 0755 "$base"
           install -d -m 0750 "$base/state"
-          chown 1000:1000 "$base/state"
+          uid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -u)"
+          gid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -g)"
+          chown "$uid:$gid" "$base/state"
           cat > "$base/submit.py" <<'PY'
           import json,datetime,pathlib,re,urllib.parse
           from playwright.sync_api import sync_playwright
