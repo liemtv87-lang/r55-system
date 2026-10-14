@@ -36,6 +36,24 @@ const nowDate=vn.year+'-'+vn.month+'-'+vn.day;
 const completedDate=(vn.hour+':'+vn.minute)>='19:30'?nowDate:dateShift(nowDate,-1);
 const offline=process.argv.includes('--offline');
 const affected=new Set();
+// Verified real October 14 provincial results; used only to fill gaps in archived sources.
+// No synthetic prizes, no reuse for later station source dates.
+const supplemental=JSON.parse(await readFile(join(ROOT,'verified-five-stations-full-results-20261014.json'),'utf8'));
+if(supplemental.date!=='2026-10-14'||supplemental.stations?.length!==5)throw Error('BAD_SUPPLEMENTAL_PROVENANCE');
+for(const row of supplemental.stations){
+ if(row.draw_date>completedDate)continue;
+ const id=stationNames.get(row.region+'|'+aliased(row.station));
+ if(!id)throw Error('SUPPLEMENTAL_STATION_NOT_FOUND');
+ const normalized=normalizedStationDraw(row);
+ const old=stations.get(id),matching=old.find(x=>x.draw_date===row.draw_date);
+ if(matching){
+  const past=normalizedStationDraw(matching);
+  if(past.all2.some((v,i)=>v!==normalized.all2[i])||past.special!==normalized.special)
+   throw Error('CONFLICTING_VERIFIED_PRIZE_'+id);
+ }else{
+  old.push(normalized);affected.add(id);
+ }
+}
 if(!offline){
  const queries=[];
  for(let delta=7;delta>=0;delta--)for(const region of ['mt','mn'])
@@ -81,6 +99,17 @@ for(const [id,list] of stations){
  const lag=(Date.parse(completedDate)-Date.parse(latest.draw_date))/86400000;
  if(lag<0||lag>7){rejected.push({station:id,error:'SOURCE_TOO_OLD_'+latest.draw_date});continue;}
  const weekly=new Set(draws.slice(0,11).map(x=>new Date(x.draw_date+'T12:00:00Z').getUTCDay()));
+ // Reject archives that skipped a draw already scheduled and completed after latest stored result.
+ // This prevents putting next-week labels on last week's data.
+ let missed=null;
+ for(let offset=1;offset<=7;offset++){
+  const candidate=dateShift(latest.draw_date,offset);
+  if(candidate>completedDate)break;
+  if(region==='mb'||weekly.has(new Date(candidate+'T12:00:00Z').getUTCDay())){
+   missed=candidate;break;
+  }
+ }
+ if(missed){rejected.push({station:id,error:'MISSING_ALREADY_COMPLETED_DRAW_'+missed});continue;}
  let target=null;
  for(let step=1;step<=8;step++){
   const candidate=dateShift(completedDate,step);
