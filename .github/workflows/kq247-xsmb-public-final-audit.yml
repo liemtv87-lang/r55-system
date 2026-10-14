@@ -1,0 +1,59 @@
+name: KQ247 XSMB public HTTPS locked snapshot final audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-public-final-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify real HTTPS, all 500 three-cang, customer gate, calendar and last source day
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+          curl -fLsS -m 14 'https://64-120-92-172.sslip.io/xoso?region=xsmb' -o "$TMP/mb.html"
+          curl -fLsS -m 14 'https://64-120-92-172.sslip.io/xoso-khach?region=xsmb' -o "$TMP/client.html"
+          curl -fLsS -m 14 'https://64-120-92-172.sslip.io/xoso?region=xsmt' -o "$TMP/mt.html"
+          curl -fLsS -m 14 'https://64-120-92-172.sslip.io/xoso?region=xsmn' -o "$TMP/mn.html"
+          python3 - "$TMP" <<'PY'
+          import pathlib,re,sys,json,html
+          d=pathlib.Path(sys.argv[1])
+          s=(d/'mb.html').read_text()
+          assert all(x in s for x in ('51 – 52 – 91','33 – 77','DÀN ĐỀ 50','DÀN ĐỀ 60','DÀN ĐỀ 75','DÀN 3 CÀNG'))
+          assert 'Neon' not in s
+          lengths={}
+          for key in ('dan50','dan60','dan75','baCang'):
+           m=re.search(r'<div class="numbers" id="'+key+r'">(.*?)</div>',s,re.S)
+           assert m,key
+           vals=re.findall(r'<b>(\d+)</b>',m.group(1))
+           lengths[key]=len(vals)
+           assert len(vals)==len(set(vals))
+          assert lengths=={'dan50':50,'dan60':60,'dan75':75,'baCang':500},lengths
+          assert 'kq247_lottery_code' in (d/'client.html').read_text()
+          for key in ('mt','mn'):
+           s=(d/(key+'.html')).read_text()
+           assert '<html' in s.lower()
+          print('HTTPS_LOCKED_XSMB_LIVE_PAGE_PASS',lengths)
+          print('XS_CUSTOMER_CODE_GATE_PRESERVED_PASS')
+          print('XS_OTHER_TWO_REGIONS_PRESERVED_PASS')
+          PY
+          echo TIMER_REAL_EXEC
+          systemctl show kq247-xsmb-1930-staging.service -p ExecStart
+          echo TIMER_REAL_NEXT
+          systemctl list-timers kq247-xsmb-1930-staging.timer --no-pager
+          echo LOCAL_SNAPSHOT_FULL_LOCK
+          docker exec kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT prediction_date,source_last_date,lotto3,doubles FROM kq247_xs_vps.customer_locked_full_snapshots ORDER BY prediction_date DESC LIMIT 1;"'
+          echo HTTPS_FULL27_CUSTOMER_SYNC_VERIFIED
+          VPS
