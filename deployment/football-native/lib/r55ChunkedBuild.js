@@ -75,7 +75,7 @@ export async function processBongdaluChunk(mode){
  const chunk=state.pool.slice(start,end);
  const rows=[];
  for(let n=0;n<chunk.length;n+=12){
-  rows.push(...await Promise.all(chunk.slice(n,n+12).map(async m=>({m,h:await V.history(state.source,m.bongdaluId)}))));
+  rows.push(...await Promise.all(chunk.slice(n,n+12).map(async m=>({m,h:await V.history(state.source,m.bongdaluId,m.ts)}))));
  }
  const batch=rows.map(({m,h})=>h?V.makeMarket(m,h,learned):null).filter(Boolean).map(slim);
  const merged=[...(Array.isArray(state.matches)?state.matches:[]),...batch];
