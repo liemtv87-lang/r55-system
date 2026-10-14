@@ -1,0 +1,56 @@
+name: KQ247 XS original UI new method private proof
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-original-ui-new-snapshot-private-proof.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Test current original UI with immutable VPS snapshots without public changes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/neon-locked-overlay.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          BASE=/opt/kq247/lottery-daily-staging
+          docker run --rm --network none -v "$BASE/neon-locked-overlay.mjs":/app/overlay.mjs:ro node:22-alpine node --check /app/overlay.mjs
+          docker run --rm --network football-staging_default -v "$BASE/neon-locked-overlay.mjs":/app/overlay.mjs:ro -v "$BASE/public-locked":/app/locked:ro node:22-alpine node --input-type=module -e '
+          import {applyLockedOverlay} from "/app/overlay.mjs";
+          import {readFile} from "node:fs/promises";
+          const index=JSON.parse(await readFile("/app/locked/station-locked-index.json","utf8"));
+          const local=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Ho_Chi_Minh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+          const expected={mb:1,mt:3,mn:3};
+          for(const [short,reg] of [["mb","xsmb"],["mt","xsmt"],["mn","xsmn"]]){
+           const resp=await fetch("http://lottery-original:3004/xoso?region="+reg);
+           if(!resp.ok)throw Error("ORIGINAL_BACKEND_OFFLINE_"+reg+"_"+resp.status);
+           const html=await resp.text();
+           const rows=index.records.filter(r=>r.region===short&&r.predictionDate===local);
+           if(rows.length!==expected[short])throw Error("TODAY_STATION_COUNT_"+reg+"_"+rows.length);
+           const target=await applyLockedOverlay(html,reg,rows[0].station);
+           const css=s=>[...s.matchAll(/<style[^>]*>([\\s\\S]*?)<\\/style>/g)].map(m=>m[1]).join("");
+           if(css(target)!==css(html))throw Error("CHANGED_ORIGINAL_CSS_"+reg);
+           if(!target.includes("Dự đoán "+local.split("-").reverse().join("/")))throw Error("WRONG_PREDICTION_DAY_"+reg);
+           if(target.includes("Nguồn 500 kỳ"))throw Error("OLD_METHOD_LEAK_"+reg);
+           if(!target.includes("const d={"))throw Error("COPY_HANDLER_DATA_MISSING_"+reg);
+           if(!target.includes("DÀN 3 CÀNG (500 số)"))throw Error("THREE_DIGITS_MISSING_"+reg);
+           if(!target.includes("id=\"kq247-xs-qc\""))throw Error("QC_MISSING_"+reg);
+           const matched=target.match(/<div class="stations">([\\s\\S]*?)<\\/div>/);
+           if(!matched||([...matched[1].matchAll(/class="btn /g)]).length!==rows.length)throw Error("EXTRA_STATIONS_"+reg);
+           for(const r of rows){if(!matched[1].includes(encodeURIComponent(r.station)))throw Error("STATION_NOT_SHOWN_"+r.station);}
+           console.log("ORIGINAL_UI_NEW_METHOD_PRIVATE_PASS",reg,rows.length,rows.map(x=>x.station).join("|"),target.length);
+          }
+          console.log("ALL_3_REGIONS_ORIGINAL_UI_CSS_UNCHANGED_SOURCE_VALIDATED");
+          '
+          echo PUBLIC_LINKS_UNCHANGED
+          VPS
