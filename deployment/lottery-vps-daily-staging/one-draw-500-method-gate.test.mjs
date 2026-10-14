@@ -38,5 +38,10 @@ assert.throws(()=>calibrateStation500({history,region:'mn',station:'An Giang',pr
 console.log('XS_ONE_DRAW_500_MB_REAL_FULL_RESULTS=PASS');
 console.log('XS_ONLY_LATEST_ACTUAL_GENERATES_DAILY_POSITION_VOTES=PASS');
 console.log('XS_NO_FAKE_MT_MN_500_BACKTEST=PASS');
+const hold=p.backtest.report.outOfSampleEnsembleLotto3;
+assert.equal(hold.testedTransitions,p.backtest.heldoutTransitions);
+assert(hold.daysWithAtLeastOneHit>=0&&hold.daysWithAtLeastOneHit<=hold.testedTransitions);
+assert(hold.daysWithTwoOrMoreHits<=hold.daysWithAtLeastOneHit);
 console.log('XS_BACKTEST_TRANSITIONS',p.backtest.trainTransitions,p.backtest.heldoutTransitions);
+console.log('XS_MB_REAL_HELDOUT_150_DAYS',JSON.stringify(hold));
 console.log('XS_MB_PRIVATE_CANDIDATE_NOT_PUBLISHED',x.lotto3.join(','));
