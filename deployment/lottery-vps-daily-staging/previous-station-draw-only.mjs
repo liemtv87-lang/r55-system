@@ -119,7 +119,7 @@ export function predictFromPreviousStationDraw({predictionDate,region,station,pr
   digitPositions:positions.length,sourceSHA256:createHash('sha256').update(JSON.stringify([region,station,d.draw_date,d.full_results])).digest('hex'),
   lotto3:lotto,doubles,dan50,dan60,dan75,three_digit,
   hardExcludedHead:String(removeHead),hardExcludedHundred:String(bannedHundred),
-  previousForecastsUsed:false,method:'SAME_STATION_PREVIOUS_DRAW_ALL_PRIZE_POSITIONS_V1',
+  previousForecastsUsed:false,allPrizesUsed:true,allPositionsUsed:true,method:'SAME_STATION_PREVIOUS_DRAW_ALL_PRIZE_POSITIONS_V1',
   exclusionsValidated:validated,exclusionSource:reason,
   audit:{pairRules,catchTripleRules,removeTripleRules,coveredPositions:seen.reduce((s,n)=>s+n,0),
    allPrizesUsed:true,allPositionsUsed:true,bridgeSourceDrawCount:1,
