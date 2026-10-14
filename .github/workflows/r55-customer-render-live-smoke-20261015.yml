@@ -1,0 +1,45 @@
+name: R55 Customer Legacy-Link Live Smoke
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-customer-render-live-smoke-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check old customer URL and exact production prediction endpoint
+        run: |
+          set -euo pipefail
+          URL='https://kq247-football-live.onrender.com/client.html'
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --max-time 20 "$URL" -o /tmp/r55-client-live.html; then break; fi
+            sleep 4
+          done
+          test -s /tmp/r55-client-live.html
+          grep -Fq "PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1'" /tmp/r55-client-live.html
+          if grep -Fq 'kq247-r55-football.hatchable.site/api/main-football' /tmp/r55-client-live.html; then
+            echo 'R55_CUSTOMER_OLD_HATCHABLE_ENDPOINT=FAIL'; exit 1
+          fi
+          for token in 'onclick="load(20)"' 'onclick="load(30)"' 'onclick="load(5000)"' 'onclick="refreshCurrent()"' 'onclick="toggleCollapse()"' "copyMode(20, 'all'" "copyMode(30, 'all'" "copyMode(5000, 'featured'" "copyMode(5000, 'all'" 'async function copyMatch(i)' "await cp(txt(match))" 'kq247_football_code' 'kq247_football_session'; do
+            if ! grep -Fq "$token" /tmp/r55-client-live.html; then
+              echo "R55_CUSTOMER_BUTTON_MISSING: $token";exit 1
+            fi
+          done
+          for limit in 20 30 5000; do
+            curl -fsSL --retry 3 --max-time 20 "https://64-120-92-172.sslip.io/api/main-football?data=1&mode=all&limit=$limit" -o "/tmp/r55-live-$limit.json"
+            python3 - "$limit" <<'PY'
+          import json,sys
+          n=int(sys.argv[1]);d=json.load(open('/tmp/r55-live-'+str(n)+'.json'))
+          assert d.get('ok') is True and isinstance(d.get('predictions'),list),(n,'api_not_ready')
+          a=d['predictions']
+          assert len(a)<=n,(n,'limit_exceeded',len(a))
+          ids=[str(x.get('id')) for x in a]
+          assert len(ids)==len(set(ids)),(n,'duplicate_games')
+          assert not set(ids)&{'BDL_3102824','BDL_3102993'},(n,'excluded_games')
+          print('R55_LIVE_CLIENT_API',json.dumps({'limit':n,'available':len(a),'date':d.get('date'),'locked':d.get('locked')},ensure_ascii=False))
+          PY
+          done
+          echo "R55_CUSTOMER_OLD_LINK_AND_BUTTON_APIS=PASS"
