@@ -1,4 +1,4 @@
-name: KQ247 XS all 36 same-link safe public sync
+name: KQ247 XS all 36 same-link safe public sync after redeploy
 on:
   push:
     branches: [main]
