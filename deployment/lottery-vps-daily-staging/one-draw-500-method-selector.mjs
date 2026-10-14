@@ -104,6 +104,8 @@ function bannedFromHistory(history,region,station){
 export function predictFromLastDrawWithCalibration({previousDraw,history,calibration,predictionDate}){
  const d=normalizedStationDraw(previousDraw),{region,station}=d,lag=delta(predictionDate,d.draw_date);
  const checked=checkedHistory(history,region,station,predictionDate);
+ if(sha([d.draw_date,d.full_results])!==sha([checked.at(-1).draw_date,checked.at(-1).full_results]))
+   throw Error('PREVIOUS_DRAW_NOT_EQUAL_TO_BACKTEST_LATEST_ACTUAL');
  if(!Number.isInteger(lag)||(region==='mb'?lag!==1:lag<1||lag>7))throw Error('WRONG_STATION_PREVIOUS_DRAW_DATE');
  if(calibration?.region!==region||calibration.station!==station||calibration.predictionDate!==predictionDate||
     calibration.sourceDate!==d.draw_date||calibration.backtest?.realCompleteDraws!==500||
