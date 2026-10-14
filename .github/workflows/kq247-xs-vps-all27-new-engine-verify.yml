@@ -1,0 +1,38 @@
+name: KQ247 XSMB full27 positional consensus daily validation
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-all27-new-engine-verify.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -qq -y sshpass
+      - name: Test 500 full27 real draws and independently recomputed daily exclusion
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/de-all27-pos-v2.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'docker run -i --rm --network none --read-only --memory 750m --cpus 1.5 -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module' <<'JS'
+          import fs from 'node:fs';
+          import {predictDe27Daily} from '/stage/de-all27-pos-v2.mjs';
+          const records=JSON.parse(fs.readFileSync('/stage/xsmb-history-live.json','utf8'));
+          for(const day of ['2026-10-13','2026-10-14','2026-10-15']){
+            const past=records.filter(x=>x.draw_date<day&&x.region==='mb'&&x.station==='XSMB').sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
+            const t=Date.now(),r=predictDe27Daily({predictionDate:day,draws:past});
+            const lengths=[r.dan50.length,r.dan60.length,r.dan75.length,r.three_digit.length];
+            if(r.sourceDate!==past[0].draw_date||r.fullPrizesPerDay!==27||lengths.join(',')!=='50,60,75,500')throw Error('bad_27_prize_daily_forecast');
+            if(r.dan75.some(n=>n.startsWith(r.hard_excluded_head)))throw Error('excluded_head_present');
+            if(r.three_digit.some(n=>n[0]===r.three_digit_hard_excluded_hundred||!r.dan75.includes(n.slice(-2))))throw Error('3digit_not_subset');
+            console.log('ALL27_1000_RULES_DAILY_OK',JSON.stringify({day,sourceDate:r.sourceDate,model:r.model,excludedHead:r.hard_excluded_head,excludedHundred:r.three_digit_hard_excluded_hundred,methods:r.method_counts,poolSizes:lengths,ms:Date.now()-t}));
+          }
+          JS
