@@ -431,6 +431,22 @@
       "first_verified_at_utc": "2026-10-13T22:23:43Z",
       "verification": "public_http_200_exact_t_me_anchor",
       "source": "https://github.com/liemtv87-lang/r55-system/actions/runs/38477485507"
+    },
+    {
+      "group": "football",
+      "listing_url": "https://vi.tgdio.com/group/%40keochuyengia79",
+      "target_url": "https://t.me/keochuyengia79",
+      "first_verified_at_utc": "2026-10-14T08:45:45Z",
+      "verification": "public_http_200_exact_t_me_anchor_Playwright",
+      "source": "https://github.com/liemtv87-lang/r55-system/actions/runs/38537378508"
+    },
+    {
+      "group": "lottery",
+      "listing_url": "https://vi.tgdio.com/group/%40xsbm999",
+      "target_url": "https://t.me/xsbm999",
+      "first_verified_at_utc": "2026-10-14T08:45:45Z",
+      "verification": "public_http_200_exact_t_me_anchor_Playwright",
+      "source": "https://github.com/liemtv87-lang/r55-system/actions/runs/38537378508"
     }
   ],
   "rules": [
