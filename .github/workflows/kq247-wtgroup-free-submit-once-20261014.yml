@@ -1,4 +1,4 @@
-name: KQ247 Groupsor Fix Hidden Radio Submit Once
+name: KQ247 Groupsor One-Time Form Repair
 on:
   push:
     branches: [seo-wtgroup-oneoff-20261014]
@@ -66,7 +66,11 @@ jobs:
             form=page.locator('form:has(input[placeholder*="t.me"])')
             if form.count()!=1:return {'status':'form_ambiguous','count':form.count()}
             radio=form.locator('input[type=radio][value*="telegram" i]')
-            if radio.count()==1:\n              radio.locator('xpath=ancestor::label').click(timeout=8000) if radio.locator('xpath=ancestor::label').count()==1 else page.get_by_text('Telegram',exact=True).first.click(timeout=8000)\n              if not radio.is_checked():return {'status':'platform_radio_not_checked'}
+            if radio.count()==1:
+              labels=radio.locator('xpath=ancestor::label')
+              if labels.count()==1: labels.click(timeout=8000)
+              else: page.get_by_text('Telegram',exact=True).first.click(timeout=8000)
+              if not radio.is_checked(): return {'status':'platform_radio_not_checked'}
             else:
               alt=form.get_by_label('Telegram',exact=True)
               if alt.count()==1:alt.check()
