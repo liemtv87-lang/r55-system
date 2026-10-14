@@ -1,0 +1,41 @@
+name: KQ247 XS staging lotto 27 positions after holiday gap fix
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-lotto-27position-staging-check-v2.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check only staged historical model with 500 actual draws on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/lotto-full27-independent-v1.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'docker run -i --rm --network none --read-only --cpus=1.5 --memory=768m -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module' <<'JS'
+          import fs from 'node:fs';
+          import {predictLottoFull27} from '/stage/lotto-full27-independent-v1.mjs';
+          const all=JSON.parse(fs.readFileSync('/stage/xsmb-history-live.json','utf8'));
+          for(const day of ['2026-10-13','2026-10-14','2026-10-15']){
+            const subset=all.filter(x=>x.region==='mb'&&x.station==='XSMB'&&x.draw_date<day)
+              .sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
+            const began=Date.now();
+            const p=predictLottoFull27({predictionDate:day,draws:subset});
+            const a=p.audit;
+            if(a.lastActualPrizeDigitPositions!==107||a.coveredBySupportedIndependentRules!==107||a.supportedIndependentRules<1000||a.activeFamilyCount<8)throw Error('INSUFFICIENT_INDEPENDENT_POSITIONAL_COVERAGE');
+            if(p.picks.length!==3||p.doubles.length!==2)throw Error('INVALID_DAILY_SELECTION');
+            if(p.picks.some(x=>a.excludedConsecutive.includes(x)||a.excludedGanOver10.includes(x))||p.doubles.some(x=>a.excludedConsecutive.includes(x)||a.excludedGanOver10.includes(x)))throw Error('HARD_EXCLUSION_FAILURE');
+            console.log('KQ247_LOTTO27_VPS_STAGED_PROOF',JSON.stringify({date:day,sourceDate:p.sourceLastDate,allPrizes:27,positions:107,independentPositionRules:a.supportedIndependentRules,families:a.activeFamilyCount,lotto:p.picks,doubles:p.doubles,inputFingerprint:p.sourceInputHash,elapsedMs:Date.now()-began}));
+          }
+          JS
