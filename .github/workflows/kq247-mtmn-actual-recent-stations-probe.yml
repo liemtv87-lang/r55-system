@@ -1,0 +1,30 @@
+name: KQ247 MT MN all-prize live-result station probe
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-mtmn-actual-recent-stations-probe.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Fetch 14 October real draw results for each MT/MN station on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/minhngoc-all-stations.mjs root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'docker run -i --rm --network bridge --read-only -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module' <<'JS'
+          import {fetchAllOfficialDraws} from '/stage/minhngoc-all-stations.mjs';
+          for(const region of ['mt','mn']){
+           const d=await fetchAllOfficialDraws('2026-10-14',region);
+           if(!d.length||d.some(x=>x.full_results.length!==18||x.all2.length!==18))throw Error('INCOMPLETE_DAILY_STATION');
+           console.log('OFFICIAL_ALL_PRIZE_DAILY_STATIONS',JSON.stringify({region,drawDate:'2026-10-14',stations:d.map(x=>x.source_station),count:d.length,
+            firstFull:d.map(x=>x.full_results[0])}));
+          }
+          JS
