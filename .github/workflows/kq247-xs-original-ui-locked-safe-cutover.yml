@@ -1,0 +1,144 @@
+name: KQ247 XS Original UI Locked Safe Cutover
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-original-ui-locked-safe-cutover.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-xs-locked-single-service-cutover
+  cancel-in-progress: false
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Transfer immutable-source original UI release only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          tar -czf /tmp/kq247-xs-release.tgz xs-release/
+          sshpass -e scp -o StrictHostKeyChecking=yes /tmp/kq247-xs-release.tgz root@64.120.92.172:/tmp/kq247-xs-release.tgz
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          cd /opt/kq247
+          tar -xzf /tmp/kq247-xs-release.tgz
+          test -r lottery-daily-staging/public-locked/station-locked-index.json
+          test -r lottery-daily-staging/public-locked/xsmb-2026-10-15.json
+          docker image inspect kq247/lottery-original-ui:local >/dev/null
+          docker build --pull=false -q -t kq247/xs-ui-original-locked:20261015-v1 xs-release >/dev/null
+          docker rm -f kq247-xs-ui-locked-canary >/dev/null 2>&1 || true
+          docker run -d --name kq247-xs-ui-locked-canary --network football-staging_default \
+            --read-only --tmpfs /tmp:size=16m --restart no \
+            -v /opt/kq247/lottery-daily-staging/public-locked:/app/locked:ro \
+            kq247/xs-ui-original-locked:20261015-v1 >/dev/null
+          trap 'docker rm -f kq247-xs-ui-locked-canary >/dev/null 2>&1 || true' EXIT
+          docker exec -i kq247-xs-ui-locked-canary node --input-type=module <<'NODE'
+          import {readFile} from 'node:fs/promises';
+          const index=JSON.parse(await readFile('/app/locked/station-locked-index.json','utf8'));
+          const one=JSON.parse(await readFile('/app/locked/xsmb-2026-10-15.json','utf8'));
+          if(index.type!=='READ_ONLY_LOCKED_STATION_PREDICTIONS'||index.records?.length!==36)
+           throw Error('NO_COMPLETE_STATION_INDEX');
+          if(one.prediction?.lotto3?.join(',')!=='51,52,91'||one.prediction?.doubles?.join(',')!=='33,77')
+           throw Error('ORIGINAL_MB_51_52_91_NOT_LOCKED');
+          const css=s=>[...s.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)].map(m=>m[0]).join('\n');
+          for(const [reg,short,count] of [['xsmb','mb',1],['xsmt','mt',3],['xsmn','mn',3]]){
+           const url='/xoso?region='+reg;
+           const [o,n]=await Promise.all([
+             fetch('http://lottery-original:3004'+url),
+             fetch('http://127.0.0.1:3004'+url)
+           ]);
+           if(!o.ok||!n.ok)throw Error('PRIVATE_CANARY_HTTP_'+reg+'_'+o.status+'_'+n.status);
+           const [original,locked]=await Promise.all([o.text(),n.text()]);
+           if(css(original)!==css(locked))throw Error('ORIGINAL_CSS_CHANGED_'+reg);
+           if(!locked.includes('id="kq247-xs-qc"')||!locked.includes('DÀN 3 CÀNG (500 số)')||
+              !locked.includes('data-copy="lotto3"')||!locked.includes('const d={'))
+              throw Error('ORIGINAL_UI_FEATURE_MISSING_'+reg);
+           const rows=index.records.filter(r=>r.region===short&&r.predictionDate==='2026-10-15');
+           if(rows.length!==count)throw Error('WRONG_TODAY_STATION_COUNT_'+reg+'_'+rows.length);
+           const menu=locked.split('<div class="stations">')[1]?.split('</div>')[0]||'';
+           if(menu.split('class="btn ').length-1!==count)throw Error('WRONG_STATION_TABS_'+reg);
+           for(const item of rows){
+            if(!menu.includes(encodeURIComponent(item.station)))throw Error('STATION_TAB_MISSING_'+item.station);
+            const query='/xoso?region='+reg+'&station='+encodeURIComponent(item.station);
+            const page=await fetch('http://127.0.0.1:3004'+query);
+            if(!page.ok)throw Error('STATION_PAGE_FAIL_'+item.station);
+            const html=await page.text(),expect=reg==='xsmb'?one.prediction.lotto3:item.payload.lotto3;
+            const first=html.match(/data-copy="lotto3"[\s\S]*?<div class="nums ([^"]*)">([\s\S]*?)<\/div>/);
+            if(!first)throw Error('STATION_LOTTO3_DOM_MISSING_'+item.station);
+            if(!expect.every(number=>first[2].includes('>'+number+'</span>')))throw Error('STATION_PICKS_DIFFER_'+item.station);
+           }
+           if(reg==='xsmb'){
+            const a=locked.match(/data-copy="lotto3"[\s\S]*?<div class="nums ([^"]*)">([\s\S]*?)<\/div>/);
+            if(!a||!['51','52','91'].every(num=>a[2].includes('>'+num+'</span>')))
+             throw Error('USER_APPROVED_MB_CHANGED');
+           }
+           console.log('ORIGINAL_CSS_LOCKED_DATA_STATION_COPY_PASS',reg,count);
+          }
+          const [clOld,clNew]=await Promise.all([
+           fetch('http://lottery-original:3004/xoso-khach?region=xsmb'),
+           fetch('http://127.0.0.1:3004/xoso-khach?region=xsmb')
+          ]);
+          if(!clOld.ok||!clNew.ok||await clOld.text()!==await clNew.text())
+           throw Error('CUSTOMER_LICENSE_PAGE_CHANGED');
+          console.log('CUSTOMER_LICENSE_HTML_BYTE_IDENTICAL');
+          NODE
+          # Read-only sender parity: no Telegram POST or bot restart.
+          docker exec kq247-lottery-bot python -c 'import sys;sys.path.insert(0,"/app/lottery-bot");from sender import read_vps_locked_snapshot as s;x="/app/locked/station-locked-index.json";v,_=s("2026-10-15","mb",x);assert v["XSMB"]["three_lotto"]==["51","52","91"];print("BOT_MB_ORIGINAL_PRE_DRAW_LOCK=PASS")'
+          for region in mt mn; do
+            docker exec kq247-lottery-bot python -c 'import sys;sys.path.insert(0,"/app/lottery-bot");from sender import read_vps_locked_snapshot as s;x="/app/locked/station-locked-index.json";v,_=s("2026-10-15",sys.argv[1],x);assert len(v)==3;print("BOT_REGION_SAME_STATION_LOCK_PASS",sys.argv[1],len(v))' "$region"
+          done
+          echo KQ247_XS_CANARY_ALL_THREE_REGIONS_AND_BOT=PASS
+          # Promotion changes only lottery-original. All other live services remain untouched.
+          cd /opt/kq247/deployment/football-staging
+          oldimage=$(docker inspect --format '{{.Image}}' kq247-lottery-original)
+          test -n "$oldimage"
+          docker tag "$oldimage" kq247/xs-ui-original-precutover:20261015-v1
+          cat > /opt/kq247/xs-release/compose-overlay.yml <<'YAML'
+          services:
+            lottery-original:
+              image: kq247/xs-ui-original-locked:20261015-v1
+              volumes:
+                - /opt/kq247/lottery-daily-staging/public-locked:/app/locked:ro
+          YAML
+          cat > /opt/kq247/xs-release/compose-rollback.yml <<'YAML'
+          services:
+            lottery-original:
+              image: kq247/xs-ui-original-precutover:20261015-v1
+          YAML
+          rollback() {
+            echo XS_RELEASE_SMOKE_FAILED_ROLLING_BACK
+            docker compose -f compose.yaml -f /opt/kq247/xs-release/compose-rollback.yml up --no-build -d --no-deps lottery-original || true
+          }
+          trap 'rollback' ERR
+          docker compose -f compose.yaml -f /opt/kq247/xs-release/compose-overlay.yml config -q
+          docker compose -f compose.yaml -f /opt/kq247/xs-release/compose-overlay.yml up --no-build -d --no-deps lottery-original
+          for i in $(seq 1 16); do
+            if curl --fail --silent --max-time 8 'http://127.0.0.1:18084/xoso?region=xsmb' >/tmp/kq247-xs-locked-live.html; then break; fi
+            sleep 2
+          done
+          grep -Fq '<span class="num">51</span>' /tmp/kq247-xs-locked-live.html
+          grep -Fq '<span class="num">52</span>' /tmp/kq247-xs-locked-live.html
+          grep -Fq '<span class="num">91</span>' /tmp/kq247-xs-locked-live.html
+          for region in xsmb xsmt xsmn; do
+            curl --fail --silent --max-time 15 "http://127.0.0.1:18080/xoso?region=$region" |
+              grep -Fq 'DÀN 3 CÀNG (500 số)'
+            echo "PUBLIC_EXISTING_LINK_LOCKED_PASS_$region"
+          done
+          curl --fail --silent --max-time 12 'http://127.0.0.1:18080/xoso-khach?region=xsmb' \
+            | cmp - /opt/kq247/deployment/lottery-original/public/client-vps.html
+          echo XS_CUSTOMER_LICENSE_UNCHANGED=PASS
+          curl --fail --silent --max-time 8 'http://127.0.0.1:18084/healthz' |
+            grep -Fq 'VPS_POSTGRES_IMMUTABLE_LOCKED'
+          trap - ERR
+          docker rm -f kq247-xs-ui-locked-canary >/dev/null
+          trap - EXIT
+          echo XS_ORIGINAL_UI_VPS_IMMUTABLE_PUBLIC_CUTOVER=SUCCESS
+          VPS
