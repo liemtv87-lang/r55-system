@@ -121,7 +121,7 @@ async function run(){
   // and future kickoff inside the operative window may become forecasts.
   const source=await resolveBongdaluBase();
   const xmls=await Promise.all(V.BOOKS.map(async([name,id])=>({
-    name,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')
+    name,id,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')
   })));
   const markets=V.parseOdds(xmls),records=V.parseFeed(source.js,markets);
   const now=Date.now(),day=V.vnDay();
