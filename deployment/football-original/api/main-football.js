@@ -5,6 +5,10 @@ import {getCompactR55} from "lib/compactR55.js";
 import {releaseDecision,freshRanking} from "lib/r55ReleaseGate.js";
 export const access="public";
 export const methods=["GET"];
+// User chose to omit these two specific fixtures, not whole competitions.
+// Historical locked archives and settlement records remain unchanged.
+const userExcludedIds=new Set(["3102824","3102993"]);
+const isUserExcluded=m=>userExcludedIds.has(String(m?.bongdaluId??m?.id??"").replace(/^BDL_/i,""));
 // Live view must also filter lower-tier games from older frozen/provisional snapshots.
 const excludedLeague=x=>/(?:\b(?:league|liga|division|div|lig)\s*[-.]?\s*[34]\b|\b(?:iii|iv)\s+(?:liga|league|division)\b|\b(?:third|fourth|3rd|4th)\s+(?:division|league|tier)\b|\b(?:league|division)\s+(?:three|four|iii|iv)\b|(?:primera|segunda)\s+division\s+rfef|\bhungary\s+nb\s+iii\b|\bchinese\s+football\s+association\s+yi\s+league\b|\bj3\s+league\b|\bnorway\s+2[.]liga\b|\bgreece\s+(?:divison|division)\s+c\b|\bserie\s+[cd]\b|\btercera\b|\b(?:youth|reserves?|amateur|friendly|u(?:1[5-9]|2[0-3]))\b)/i.test(String(x?.league||"")+" "+String(x?.home||"")+" "+String(x?.away||""));
 const leagueTier=x=>{
@@ -74,7 +78,7 @@ export default async function(req,res){
  // Filter before limit so 20/30 means 20/30 upcoming games, not slots occupied by started games.
  const cutoff=Date.now();
  const startedCount=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return !Number.isFinite(ms)||ms<=cutoff;}).length;
- const upcoming=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return Number.isFinite(ms)&&ms>cutoff;});
+ const upcoming=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return !isUserExcluded(x)&&Number.isFinite(ms)&&ms>cutoff;});
  // Snapshot is ranked strongest-first. Apply limit before any client-side kickoff sort,
  // otherwise 20/30 would incorrectly select the earliest fixtures instead of strongest.
  const methodAudit=learned.rows[0]?.payload;

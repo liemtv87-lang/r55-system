@@ -775,20 +775,28 @@
           : '-';
       }
       async function cp(t) {
+        if (!String(t || '').trim()) throw Error('Không có trận để sao chép.');
         try {
+          if (!navigator.clipboard?.writeText) throw Error('clipboard_unavailable');
           await navigator.clipboard.writeText(t);
         } catch {
           const a = document.createElement('textarea');
           a.value = t;
           document.body.appendChild(a);
           a.select();
-          document.execCommand('copy');
+          const ok = document.execCommand('copy');
           a.remove();
+          if (!ok) throw Error('Không sao chép được. Hãy kiểm tra quyền clipboard.');
         }
       }
-      function copyBuy() {
-        cp(BUY);
-        $('msg').textContent = 'Đã copy link mua tool.';
+      async function copyBuy() {
+        try {
+          await cp(BUY);
+          $('msg').textContent = '✅ Đã copy link mua tool.';
+        } catch (e) {
+          $('msg').textContent = '❌ ' + e.message;
+          return;
+        }
         try { window.kq247GrowthCapture?.('sales bot copied', { sales_bot: 'muatool_du_doan_bot' }); } catch {}
       }
       function methods(x) {
@@ -937,7 +945,7 @@
         return [...a].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
       }
       function copyMatch(i) {
-        cp(txt(ALL[i]));
+        cp(txt(ALL[i])).catch(e => { $('summary').textContent = '❌ ' + e.message; });
       }
       function toggleCollapse() {
         COLLAPSED = !COLLAPSED;
@@ -1075,11 +1083,15 @@
           PICKS_API +
             '?mode=' + encodeURIComponent(mode) +
             '&limit=' + encodeURIComponent(n) +
-            '&from_ts=0',
+            '&from_ts=' + Date.now(),
           { cache: 'no-store', signal: AbortSignal.timeout(15000) }
         );
+        const type = String(r.headers.get('content-type') || '').toLowerCase();
+        if (!type.includes('application/json'))
+          throw Error('API trả trang HTML thay vì dữ liệu. Vui lòng bấm CẬP NHẬT.');
         const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) throw Error(j.error || 'Không tải được snapshot bóng đá');
+        if (!r.ok || !j.ok || !Array.isArray(j.predictions))
+          throw Error(j.error || 'Không tải được snapshot bóng đá');
         // Native VPS returns locked predictions but intentionally omits 'found'.
         // An absent field is not the same as no data: verify the snapshot array.
         const hasSnapshot = Array.isArray(j.predictions) && j.predictions.length > 0 &&

@@ -1,4 +1,5 @@
 import {db} from 'hatchable';
+import {isR55IgnoredFixture} from './lib/r55FixtureExclusions.js';
 
 const getVNDay=()=>new Intl.DateTimeFormat('en-CA',{
   year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Ho_Chi_Minh'
@@ -44,12 +45,16 @@ export async function readMainFootball(url){
   const preview=q.rows[0]?.payload;
   if(!preview?.preview||!Array.isArray(preview.matches)||preview.matches.length<1)
    throw Error('native_preview_not_ready');
-  const list=preview.matches.map(makePick);
+  // Read-time filter corrects stale unlocked previews without mutating archives.
+  const active=preview.matches.filter(m=>!isR55IgnoredFixture(m));
+  const list=active.map(makePick);
+  const excludedCount=preview.matches.length-active.length;
+  const pool=Math.max(list.length,Number(preview.scanProgress?.marketPool||preview.matches.length)-excludedCount);
   const {matching,selected,items}=pickList(list,url);
   return {ok:true,locked:false,preview:true,source:'Bongdalu',date:day,
    model:'R55 VPS risk-adjusted live preview',source_detail:'native_live_preview_unlocked',
-   snapshot_total:list.length,marketPool:preview.scanProgress?.marketPool||0,
-   coverage:preview.scanProgress?.coverage||null,updated_at:q.rows[0].updated_at,
+   snapshot_total:list.length,marketPool:pool,
+   coverage:pool?+(100*list.length/pool).toFixed(2):null,updated_at:q.rows[0].updated_at,
    hidden_started:list.length-matching.length,total:selected.length,predictions:items,
    oneMarketPerMatch:true,legacyFallback:false,stale:Date.now()-Date.parse(q.rows[0].updated_at)>4*3600000};
  }
@@ -58,7 +63,7 @@ export async function readMainFootball(url){
  const sourceIsNative=n?.date===currentDay;
  if(sourceIsNative){
   const raw=Array.isArray(n.payload?.matches)?n.payload.matches:[];
-  const list=raw.map(makePick);
+  const list=raw.filter(m=>!isR55IgnoredFixture(m)).map(makePick);
   const {matching,selected,items}=pickList(list,url);
   return {ok:true,locked:true,source:'Bongdalu',date:n.date,model:'R55 VPS native',
    provider:'Bongdalu',source_detail:'native_locked_snapshot',snapshot_total:list.length,
@@ -73,7 +78,7 @@ export async function readMainFootball(url){
    ...p,priority:p.top?200:0,trusted_pick:false,ah_release:false,ou_release:false,
    model_state:'legacy_immutable_unverified',source_detail:'legacy_locked_bongdalu_mirror',
  }));
- const {matching,selected,items:predictions}=pickList(items,url);
+ const {matching,selected,items:predictions}=pickList(items.filter(m=>!isR55IgnoredFixture(m)),url);
  return {...d,source:'Bongdalu',source_detail:'legacy_locked_snapshot_fallback',
   trusted_pick:false,legacyFallback:true,
   snapshot_total:items.length,hidden_started:items.length-matching.length,
