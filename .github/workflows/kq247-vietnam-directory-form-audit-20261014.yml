@@ -39,6 +39,9 @@ jobs:
             "https://telegram-group.com/en/publish/",
             "https://wtgrouplinks.com/submit-your-telegram-groups/",
             "https://tgram.vn/",
+            "https://telekit.link/addgroup",
+            "https://telegroups.org/submit",
+            "https://groupsgyani.org/submit-telegram-group-and-channel-links",
           ]
           with sync_playwright() as p:
             browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
