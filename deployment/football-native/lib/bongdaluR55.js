@@ -105,14 +105,17 @@ function parseOdds(xmls){
   const homePrice=round(1+ahQuote.homeHK),awayPrice=round(1+ahQuote.awayHK);
   const overPrice=round(1+ouQuote.overHK),underPrice=round(1+ouQuote.underHK);
   if([homePrice,awayPrice,overPrice,underPrice].some(x=>x<=1||x>4))continue;
+  const decimalQuotes=quotes.map(q=>({bookmaker:q.name,
+   bookmakerId:String(q.bookmakerId||BOOKS.find(x=>x[0]===q.name)?.[1]||q.name),
+   homeLine:q.homeLine,ouLine:q.ouLine,homePrice:round(1+q.homeHK),
+   awayPrice:round(1+q.awayHK),overPrice:round(1+q.overHK),
+   underPrice:round(1+q.underHK),source:"bongdalu_odds_xml"}));
   out.set(String(id),{...market,homeLine:ah,awayLine:-ah,ouLine:ou,
    homePrice,awayPrice,overPrice,underPrice,
    rawHongKongOdds:{home:ahQuote.homeHK,away:ahQuote.awayHK,over:ouQuote.overHK,under:ouQuote.underHK},
    bookmakerCount:quotes.length,bookmakerNames:quotes.map(q=>q.name),
-   bookmakerQuotes:quotes.map(q=>({bookmaker:q.name,bookmakerId:q.bookmakerId,homeLine:q.homeLine,ouLine:q.ouLine,
-     homePrice:round(1+q.homeHK),awayPrice:round(1+q.awayHK),
-     overPrice:round(1+q.overHK),underPrice:round(1+q.underHK)})),
-   bookmakerConsensus:bookmakerMarketConsensus(quotes),
+   bookmakerQuotes:decimalQuotes,
+   bookmakerConsensus:bookmakerMarketConsensus(decimalQuotes),
     ahLineSpread:spread("homeLine"),ouLineSpread:spread("ouLine"),
    ahPriceBookmaker:ahQuote.name,ouPriceBookmaker:ouQuote.name,
    originalMarketParser:"football-all-refresh-v3_v128",
@@ -228,17 +231,35 @@ function makeMarket(row,h,learned){
  // the actual betting price tied to the separately verified XML bookmaker line.
  const extras=Array.isArray(h.oddscompCompanies)?h.oddscompCompanies:[];
  const baseline=Array.isArray(row.market.bookmakerQuotes)?row.market.bookmakerQuotes:[];
- const evidence=new Map(baseline.map(q=>[String(q.bookmaker).toLowerCase(),{
-  name:q.bookmaker,homeLine:Number(q.homeLine),ouLine:Number(q.ouLine)}]));
+ const evidence=new Map();
+ const decimalPrice=v=>{
+  const n=Number(v);if(!Number.isFinite(n)||n<=.05)return null;
+  // Bongdalu comparison pages use Hong Kong prices; the model uses decimal.
+  return n<=1?round(1+n):n<=4?round(n):null;
+ };
+ const valid=q=>q&&Number.isFinite(Number(q.homeLine))&&Number.isFinite(Number(q.ouLine))&&
+  ["homePrice","awayPrice","overPrice","underPrice"].every(k=>
+   Number.isFinite(q[k])&&q[k]>1.05&&q[k]<=4);
+ const key=q=>String(q.bookmakerId||q.bookmaker||"").trim().toLowerCase();
+ for(const q of baseline){
+  const item={...q,bookmaker:String(q.bookmaker||""),bookmakerId:String(q.bookmakerId||"")};
+  if(valid(item)&&key(item))evidence.set(key(item),item);
+ }
  for(const q of extras){
-  if(!Number.isFinite(Number(q.homeLine))||!Number.isFinite(Number(q.ouLine)))continue;
-  evidence.set(String(q.name).toLowerCase(),{name:q.name,homeLine:Number(q.homeLine),ouLine:Number(q.ouLine)});
+  const item={bookmaker:String(q.name||q.bookmaker||""),bookmakerId:String(q.bookmaker||""),
+   homeLine:Number(q.homeLine),ouLine:Number(q.ouLine),
+   homePrice:decimalPrice(q.homePrice),awayPrice:decimalPrice(q.awayPrice),
+   overPrice:decimalPrice(q.overPrice),underPrice:decimalPrice(q.underPrice),
+   source:"bongdalu_oddscomp_page"};
+  if(valid(item)&&key(item)&&!evidence.has(key(item)))evidence.set(key(item),item);
  }
  const allQuotes=[...evidence.values()],lineSpread=field=>
   allQuotes.length?round(Math.max(...allQuotes.map(x=>x[field]))-Math.min(...allQuotes.map(x=>x[field])),3):0;
  const mk={...row.market,
-   bookmakerCount:Math.max(Number(row.market.bookmakerCount||0),allQuotes.length),
-   bookmakerNames:allQuotes.length?allQuotes.map(q=>q.name):row.market.bookmakerNames,
+   bookmakerCount:allQuotes.length,
+   bookmakerNames:allQuotes.map(q=>q.bookmaker),
+   bookmakerQuotes:allQuotes,
+   bookmakerConsensus:bookmakerMarketConsensus(allQuotes),
    ahLineSpread:allQuotes.length?lineSpread("homeLine"):row.market.ahLineSpread,
    ouLineSpread:allQuotes.length?lineSpread("ouLine"):row.market.ouLineSpread,
    sourceOddsComparisonFetched:!!h.oddsComparisonFetched,
