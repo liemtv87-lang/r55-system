@@ -16,7 +16,7 @@ function validateHistory(predictionDate,draws){
  const h=[...draws].sort((a,b)=>b.draw_date.localeCompare(a.draw_date));
  for(let k=0;k<500;k++){
   const d=h[k];dayTime(d.draw_date);
-  if(d.draw_date>=predictionDate||k>0&&days(h[k-1].draw_date,d.draw_date)!==1)
+  if(d.draw_date>=predictionDate||k>0&&days(h[k-1].draw_date,d.draw_date)<=0)
    throw Error('nonconsecutive_or_future_actual_'+k);
   if(!Array.isArray(d.full_results)||d.full_results.length!==27||
    !Array.isArray(d.all2)||d.all2.length!==27)throw Error('need_all27_full_prizes_'+k);
