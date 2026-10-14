@@ -205,6 +205,10 @@ def attempt(page, con, host, url, group_key, group):
         status,forminfo=check_eligible(page,url,discovered_form)
         if status!="eligible":
             write_result(con,host,group_key,url,status);return
+        # Avoid duplicate submissions when the target already has a live public listing.
+        if is_public_listing(page,group["url"]):
+            write_result(con,host,group_key,url,"published_verified",page.url)
+            return
         form=page.locator("form").nth(forminfo["formIndex"])
         fields=forminfo["fields"]
         selected_radio_names=set()
@@ -261,8 +265,15 @@ def attempt(page, con, host, url, group_key, group):
         btn.click(timeout=10000)
         page.wait_for_timeout(900)
         body=page.locator("body").inner_text(timeout=5000).lower()[-1500:]
-        # A receipt page is not evidence of a published public backlink.
-        if re.search(r"success|thank you|submitted|received|moderation|pending|review|cảm ơn|thành công",body):
+        # Count a public backlink only if the POST navigated to an independently
+        # accessible listing page containing a hyperlink to the exact target.
+        post_url=urlsplit(page.url)
+        original=urlsplit(url)
+        listing_page=(post_url.scheme=="https" and post_url.hostname==original.hostname
+                      and post_url.path.rstrip("/")!=original.path.rstrip("/"))
+        if listing_page and is_public_listing(page,group["url"]):
+            write_result(con,host,group_key,url,"published_verified",page.url)
+        elif re.search(r"success|thank you|submitted|received|moderation|pending|review|cảm ơn|thành công",body):
             write_result(con,host,group_key,url,"submitted_pending_review",page.url)
         else:
             write_result(con,host,group_key,url,"submitted_outcome_unknown",page.url)
