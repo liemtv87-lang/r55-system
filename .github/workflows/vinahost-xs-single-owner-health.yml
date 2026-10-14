@@ -20,7 +20,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$SSHPASS"
-          sshpass -e ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           curl -fsS http://127.0.0.1:18085/healthz | python3 -c 'import json,sys; s=json.load(sys.stdin); print("XS_VPS_HEALTH="+json.dumps(s,ensure_ascii=False)); assert s["ok"] and s["active"] and s["has_token"]'
           docker exec kq247-lottery-bot python -c 'import json,pathlib; p=pathlib.Path("/data/xs-test-message-20261012.json"); assert p.is_file(); d=json.loads(p.read_text()); assert d.get("chat_id")=="-1004320899120" and int(d.get("message_id",0))>0; print("XS_VPS_TEST_MESSAGE_ID="+str(d["message_id"]))'
