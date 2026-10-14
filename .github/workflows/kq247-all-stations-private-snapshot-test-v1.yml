@@ -1,0 +1,52 @@
+name: KQ247 all stations same-draw private snapshot stage
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-all-stations-private-snapshot-test-v1.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify 36 individual private predictions with all original prize positions
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          ROOT=/opt/kq247/lottery-daily-staging
+          for f in normalize-all-prizes.mjs previous-station-draw-only.mjs station-previous-draw-runner.mjs minhngoc-all-stations.mjs; do
+           docker run --rm --network none --read-only -v "$ROOT":/stage:ro node:22-alpine node --check "/stage/$f"
+          done
+          echo ALL_POS_SOURCE_CHECK_PASS
+          docker run --rm --network none --cpus 1.5 --memory 600m -v "$ROOT":/stage node:22-alpine node /stage/station-previous-draw-runner.mjs --offline
+          echo SNAPSHOT_SAMPLE_COUNTS
+          python3 - <<'PY'
+          import pathlib,json
+          base=pathlib.Path('/opt/kq247/lottery-daily-staging/station-next-private')
+          files=list(base.glob('*.json'))
+          d={}
+          for f in files:
+           x=json.loads(f.read_text())
+           k=x['region']+'|'+x['station']
+           d.setdefault(k,[]).append((x['sourceDate'],f.name))
+           assert x.get('allPrizesUsed') and x.get('allPositionsUsed')
+           assert x['audit']['coveredPositions']==(107 if x['region']=='mb' else 82)
+           assert len(x['dan50'])==50 and len(x['dan60'])==60 and len(x['dan75'])==75 and len(x['three_digit'])==500
+           assert all(c[-2:] in x['dan75'] for c in x['three_digit'])
+          assert len(d)==36,('expected_36_stations',len(d),list(d))
+          print('ALL_36_STATIONS_PRIVATE_SNAPSHOTS_PASS',len(d),len(files))
+          PY
+          VPS
