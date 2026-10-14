@@ -210,7 +210,7 @@ test("official team schedule recovery accepts only verified finished matches",()
  assert.equal(form.ppg,3);
 });
 
-import {parseBongdaluTeamSchedule,formSummary} from "../lib/r55TeamSchedule.js";
+import {parseBongdaluTeamSchedule,formSummary as teamScheduleSummary} from "../lib/r55TeamSchedule.js";
 test("official team schedule rejects scores after kickoff, unfinished or unverified matches",()=>{
  const cutoff=Date.parse("2026-10-15T07:00:00Z"),team=80597;
  const payload={MatchList:[
@@ -229,7 +229,7 @@ test("official team schedule rejects scores after kickoff, unfinished or unverif
  assert.equal(x[0].teamIsHome,false);
  assert.equal(x[0].teamGoals,1);
  assert.equal(x[1].quotes.length,0);
- assert.deepEqual(formSummary(x),{n:2,ppg:2,gf:1.5,ga:1});
+ assert.deepEqual(teamScheduleSummary(x),{n:2,ppg:2,gf:1.5,ga:1});
  assert.equal(parseBongdaluTeamSchedule(payload,team,null).length,0);
  assert.equal(parseBongdaluTeamSchedule({MatchList:[]},team,cutoff).length,0);
 });
