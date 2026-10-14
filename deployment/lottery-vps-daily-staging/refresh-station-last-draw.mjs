@@ -7,13 +7,25 @@ const root='/stage';
 const seed=JSON.parse(await readFile(root+'/mtmn-35-latest-each-station-one-draw-verified.json','utf8')).draws;
 const weekdays=JSON.parse(await readFile(root+'/mtmn-station-weekly-draw-days.json','utf8')).stationWeekdays;
 const stateFile=root+'/mtmn-one-draw-actual-latest.json';
-let previous;
-try{previous=JSON.parse(await readFile(stateFile,'utf8')).draws}catch(e){if(e.code!=='ENOENT')throw e;previous=seed;}
+let previous,previousHistory;
+try{
+ const state=JSON.parse(await readFile(stateFile,'utf8'));
+ previous=state.draws;previousHistory=state.history||previous;
+}catch(e){if(e.code!=='ENOENT')throw e;previous=seed;previousHistory=seed;}
 const fixed=(r)=>r.region+'|'+r.station;
 const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9]/g,'');
 const alias=x=>{const k=norm(x);return ['thanhphohcm','thanhphohochiminh','tphochiminh','hochiminh','tphcm'].includes(k)?'tphcm':['thuathienhue','hue'].includes(k)?'hue':k;};
 
 const rows=new Map();
+const archiveHistory=new Map();
+for(const row of previousHistory){
+ const clean=normalizedStationDraw(row);
+ const id=clean.region+'|'+clean.station+'|'+clean.draw_date;
+ const prior=archiveHistory.get(id);
+ if(prior && JSON.stringify(prior.full_results)!==JSON.stringify(clean.full_results))
+  throw Error('CONFLICTING_ARCHIVED_STATION_DRAW_'+id);
+ archiveHistory.set(id,clean);
+}
 let canonicalizedLegacy=0;
 for(const r of previous){
  const key=fixed(r);
@@ -84,13 +96,16 @@ for(const [key,stations] of grouped){
   const row={region,station,draw_date:date,special:g.special,all2:g.all2,full_results:g.full_results,
    source:'minhngoc.net.vn',source_url:g.source_url};
   rows.set(region+'|'+station,row);
+  archiveHistory.set(region+'|'+station+'|'+date,row);
   refreshed.push({region,station,source:date,prizes:g.full_results.length});
  }
 }
 const all=[...rows.values()].sort((a,b)=>a.region.localeCompare(b.region)||a.station.localeCompare(b.station));
 for(const row of all)if(nextDate(row)<=cutoff)throw Error('STALE_STATION_SOURCE_'+fixed(row)+'_'+row.draw_date);
-const content=JSON.stringify({source:'ONE_REAL_DRAW_PER_STATION_VPS_VALIDATED',updatedAt:new Date().toISOString(),draws:all});
-if(refreshed.length||previous===seed||canonicalizedLegacy){
+for(const row of all)archiveHistory.set(row.region+'|'+row.station+'|'+row.draw_date,row);
+const accumulated=[...archiveHistory.values()].sort((a,b)=>a.region.localeCompare(b.region)||a.station.localeCompare(b.station)||a.draw_date.localeCompare(b.draw_date));
+const content=JSON.stringify({source:'ONE_REAL_DRAW_PER_STATION_VPS_VALIDATED',updatedAt:new Date().toISOString(),draws:all,history:accumulated});
+if(refreshed.length||previous===seed||canonicalizedLegacy||!previousHistory.length){
  const tmp=stateFile+'.pending.'+process.pid;
  await writeFile(tmp,content,{flag:'wx'});
  await rename(tmp,stateFile);
