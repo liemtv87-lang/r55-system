@@ -1,4 +1,4 @@
-name: KQ247 One-Time Submission Entrypoint Audit
+name: KQ247 One-Time Directory Submission Form Inspection
 on:
   push:
     branches:
@@ -8,26 +8,28 @@ on:
 permissions:
   contents: write
 jobs:
-  audit:
+  inspect:
     if: github.ref == 'refs/heads/ops/backlink-entrypoints-20261014'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect real directory submission endpoints once (read only)
-        run: python3 seo-vps/submit-entrypoint-once-20261014.py
-      - name: Persist evidence to isolated branch
+      - name: Verify site forms, without posting
+        run: |
+          python3 seo-vps/submit-entrypoint-once-20261014.py
+          python3 seo-vps/inspect-submit-fields-20261014.py
+      - name: Save inspection evidence on isolated branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add reports/kq247-submission-entrypoints-20261014.json
+          git add reports/kq247-submission-entrypoints-20261014.json reports/kq247-field-inspection-20261014.json
           if ! git diff --cached --quiet; then
-            git commit -m "Record one-time directory submission form audit [skip ci]"
+            git commit -m "Record actual Telegram submission fields [skip ci]"
             git push origin HEAD:ops/backlink-entrypoints-20261014
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: kq247-one-time-entrypoint-audit
-          path: reports/kq247-submission-entrypoints-20261014.json
+          name: kq247-one-time-fields
+          path: reports/kq247-*-20261014.json
           retention-days: 14
