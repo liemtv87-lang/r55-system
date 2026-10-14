@@ -1,0 +1,61 @@
+name: KQ247 Opt-in Telegram Directory Submission VPS
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-opt-in-directory-vps.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate opt-in submitter syntax
+        run: python3 -m py_compile seo-vps/kq247-bulk-auto-submit.py
+      - name: Install SSH transport
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Deploy allowlisted no-repeat directory submission worker
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'install -d -m 0700 /opt/pwremote/kq247-backlink-background'
+          tar -czf - -C seo-vps kq247-bulk-auto-submit.py | $REMOTE
+            'tar -xzf - -C /opt/pwremote/kq247-backlink-background'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/kq247-backlink-background
+          image=pwremote/playwright:1.56.0
+          name=seo-kq247-opt-in-directory
+          python3 -m py_compile "$base/kq247-bulk-auto-submit.py"
+          docker image inspect "$image" >/dev/null
+          existing="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          if docker ps --format '{{.Names}}' | grep -Fxq "$name"; then
+            echo "OPT_IN_SUBMITTER_ALREADY_RUNNING"
+          else
+            docker run -d --init --name "$name" --restart unless-stopped
+              --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL
+              --user 0:0 --pids-limit 120 --cpus 0.5 --memory 1000m
+              --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777
+              --tmpfs /root:rw,nosuid,nodev,size=128m,mode=0700
+              --mount "type=bind,src=$base/kq247-bulk-auto-submit.py,dst=/app/post.py,readonly"
+              --mount "type=bind,src=$base,dst=/state"
+              -e KQ247_SUBMIT_MAX=20 -e KQ247_POST_POLL_S=900 -e KQ247_POST_SPACING_S=20
+              "$image" python3 -u /app/post.py --watch
+          fi
+          sleep 5
+          docker ps -a --filter "name=^/$name$" --format "{{.Names}} {{.Status}}"
+          docker logs --tail 20 "$name" || true
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          test "$existing" = "$after"
+          echo "KQ247_PRODUCTION_UNTOUCHED=YES"
+          VPS
