@@ -32,6 +32,14 @@ jobs:
           CANDIDATE=/opt/kq247/deployment/football-staging/Caddyfile.xs-all36-candidate
           test -s "$CANDIDATE"
           cp "$LIVE" "$BACKUP"
+          echo XS_CUSTOMER_502_DIAGNOSTICS
+          docker ps -a --format '{{.Names}} {{.Status}}' | grep -E 'lottery-original|football-staging|xs-36-reader'
+          docker logs --tail 35 kq247-lottery-original 2>&1 | tail -35
+          docker run --rm --network football-staging_default node:22-alpine node --input-type=module -e '
+          for(const name of ["lottery-original:3004","kq247-xs-36-reader:3019"]){
+            try{let r=await fetch("http://"+name+"/healthz",{signal:AbortSignal.timeout(5000)});console.log("XS_BACKEND",name,r.status);}
+            catch(e){console.log("XS_BACKEND_ERROR",name,String(e.message));}
+          }'
           echo XS_EXISTING_URLS_PRECHECK
           for r in xsmb xsmt xsmn; do
             curl --fail -sS -m 12 "http://127.0.0.1:18080/xoso-khach?region=$r" > "$BASE/customer-before-$r.html"
