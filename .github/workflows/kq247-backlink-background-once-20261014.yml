@@ -1,8 +1,8 @@
-name: KQ247 Background Backlink Discovery (one shot)
+name: KQ247 Background Backlink Discovery (persistent VPS worker)
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/kq247-backlink-background-once-20261014.yml']
+    paths: ['.github/workflows/kq247-backlink-background-once-20261014.yml', 'scripts/kq247-backlink-background-discovery-20261014.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +24,7 @@ jobs:
           python3 scripts/kq247-backlink-background-discovery-20261014.py --self-test
       - name: Install SSH client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Start one VPS background scan without touching production
+      - name: Start persistent VPS background source discovery without touching production
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
         shell: bash
@@ -54,8 +54,8 @@ jobs:
             echo "KQ247_BACKGROUND_ALREADY_RUNNING_PID=$(cat "$base/worker.pid")"
           else
             cd "$base"
-            nohup timeout -k 10s 10800s nice -n 15 python3 -u \
-              "$base/kq247-backlink-background-discovery-20261014.py" \
+            nohup nice -n 15 python3 -u \
+              "$base/kq247-backlink-background-discovery-20261014.py" --watch \
               >>"$base/worker.log" 2>&1 </dev/null &
             echo $! > "$base/worker.pid"
             sleep 4
@@ -81,4 +81,5 @@ jobs:
           after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
           test "$before" = "$after"
           echo "KQ247_PRODUCTION_CONTAINERS_UNCHANGED=YES"
+          echo "CONTINUOUS_DISCOVERY_WATCH_MODE=YES (idle backoff; no bulk posting in this worker)"
           VPS
