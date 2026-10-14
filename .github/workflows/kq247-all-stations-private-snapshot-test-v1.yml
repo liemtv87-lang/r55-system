@@ -23,7 +23,7 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
-          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json,verified-five-stations-full-results-20261014.json} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json,verified-five-stations-full-results-20261014.json,schema-previous-station-locked.sql,persist-previous-station-locked.py,export-previous-station-snapshots.py} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
           sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           ROOT=/opt/kq247/lottery-daily-staging
@@ -51,5 +51,21 @@ jobs:
            matching=[json.loads(p.read_text()) for p in files if json.loads(p.read_text()).get('station')==name]
            assert matching and max(x['sourceDate'] for x in matching)=='2026-10-14',('station_source_not_latest',name)
           print('ALL_36_STATIONS_PRIVATE_SNAPSHOTS_PASS',len(d),len(files))
+          PY
+          echo POSTGRES_NEW_STATION_LOCK_SCHEMA_ONLY
+          python3 -m py_compile "$ROOT/persist-previous-station-locked.py" "$ROOT/export-previous-station-snapshots.py"
+          docker exec -i kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$ROOT/schema-previous-station-locked.sql"
+          python3 "$ROOT/persist-previous-station-locked.py"
+          python3 "$ROOT/export-previous-station-snapshots.py"
+          python3 - <<'PY'
+          import pathlib,json
+          x=json.loads(pathlib.Path('/opt/kq247/lottery-daily-staging/public-locked/station-locked-index.json').read_text())
+          assert x['type']=='READ_ONLY_LOCKED_STATION_PREDICTIONS'
+          assert len(x['records'])==36,len(x['records'])
+          assert len({(r['region'],r['station']) for r in x['records']})==36
+          assert sum(r['region']=='mb' for r in x['records'])==1
+          assert sum(r['region']=='mt' for r in x['records'])==14
+          assert sum(r['region']=='mn' for r in x['records'])==21
+          print('ALL_36_VPS_PRIVATE_DATABASE_LOCKS_VERIFIED',len(x['records']))
           PY
           VPS
