@@ -5,6 +5,16 @@ import json,pathlib,subprocess,re,hashlib,sys
 root=pathlib.Path('/opt/kq247/lottery-daily-staging/station-next-private')
 files=sorted(root.glob('*.json'))
 if not files:raise SystemExit('NO_STATION_PREDICTIONS_TO_LOCK')
+# The append-only stage may contain earlier runs. Lock ONLY one newest source
+# per station, so stale snapshots cannot accidentally become a new release.
+latest={}
+for file in files:
+ x=json.loads(file.read_text())
+ key=(x.get('region'),x.get('station'))
+ if key not in latest or (x.get('sourceDate',''),str(file))>(latest[key][1].get('sourceDate',''),str(latest[key][0])):
+  latest[key]=(file,x)
+if len(latest)!=36:raise SystemExit('NOT_ALL_36_STATIONS_PRESENT_'+str(len(latest)))
+files=[f for f,_ in latest.values()]
 def quote(s):return "'"+str(s).replace("'","''")+"'"
 def js(x):return quote(json.dumps(x,ensure_ascii=False,separators=(',',':')))+'::jsonb'
 assert_sql=[]
