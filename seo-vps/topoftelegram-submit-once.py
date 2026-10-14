@@ -81,12 +81,14 @@ def do_group(page,key,spec,report):
     result={"group":key,"url":spec["url"],"at_utc":now(),"status":"inspecting"}
     response=page.goto(FORM,wait_until="domcontentloaded",timeout=22000)
     if not response or response.status!=200:return dict(result,status="site_unavailable",http=response.status if response else None)
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(1800)
     if page.locator("[data-sitekey],iframe[src*='captcha'],.g-recaptcha,.h-captcha,.cf-turnstile").count():
         return dict(result,status="human_verification_required")
     form_text=page.locator("body").inner_text(timeout=5000)
-    if "₹0" not in form_text and "Always Free" not in form_text:
-        return dict(result,status="free_option_not_verified")
+    if not ("₹0" in form_text or "Always Free" in form_text or
+            ("Directory Listing" in form_text and "Free" in form_text)):
+        return dict(result,status="free_option_not_verified",
+            diagnostics=visible_controls(page))
     group_ok,gd=pick_radio(page,["group"],"Group")
     free_ok,fd=pick_radio(page,["free","directory"],"Free Listing")
     if not group_ok or not free_ok:
@@ -134,14 +136,25 @@ def main():
         page=browser.new_page(viewport={"width":1330,"height":900})
         for key,spec in GROUPS.items():
             if key in report["groups"]:
-                print("KQ247_TOPOFTELEGRAM_SKIP_PRIOR",key,report["groups"][key].get("status"),flush=True)
-                continue
+                old=report["groups"][key]
+                # A pre-form or pre-POST failure is safe to inspect one more time.
+                # Any attempted POST, even uncertain, must never be repeated.
+                if old.get("status")=="free_option_not_verified" and not old.get("retried_dynamic_free_v2"):
+                    old["retried_dynamic_free_v2"]=True
+                    save(report)
+                else:
+                    print("KQ247_TOPOFTELEGRAM_SKIP_PRIOR",key,old.get("status"),flush=True)
+                    continue
             try: rec=do_group(page,key,spec,report)
             except Exception as e:
                 rec={"group":key,"url":spec["url"],"at_utc":now(),
                     "status":"error_or_uncertain_no_retry","error":type(e).__name__+":"+str(e)[:270]}
             report["groups"][key]=rec;save(report)
             summary={k:v for k,v in rec.items() if k not in ("controls","feedback")}
+            if "diagnostics" in summary:
+                d=summary.pop("diagnostics")
+                summary["diagnostics"]={"excerpt":d.get("excerpt","")[:850],
+                    "inputs":d.get("inputs",[])[:18],"selects":d.get("selects",[])[:4]}
             print("KQ247_TOPOFTELEGRAM_RESULT="+json.dumps(summary,ensure_ascii=False),flush=True)
         browser.close()
     print("KQ247_TOPOFTELEGRAM_SUMMARY="+json.dumps({
