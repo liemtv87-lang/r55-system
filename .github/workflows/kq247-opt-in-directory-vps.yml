@@ -29,8 +29,8 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
           $REMOTE 'install -d -m 0700 /opt/pwremote/kq247-backlink-background'
-          tar -czf - -C seo-vps kq247-bulk-auto-submit.py | $REMOTE
-            'tar -xzf - -C /opt/pwremote/kq247-backlink-background'
+          tar -czf - -C seo-vps kq247-bulk-auto-submit.py | \
+            $REMOTE 'tar -xzf - -C /opt/pwremote/kq247-backlink-background'
           $REMOTE 'bash -se' <<'VPS'
           set -euo pipefail
           base=/opt/pwremote/kq247-backlink-background
@@ -42,14 +42,14 @@ jobs:
           if docker ps --format '{{.Names}}' | grep -Fxq "$name"; then
             echo "OPT_IN_SUBMITTER_ALREADY_RUNNING"
           else
-            docker run -d --init --name "$name" --restart unless-stopped
-              --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL
-              --user 0:0 --pids-limit 120 --cpus 0.5 --memory 1000m
-              --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777
-              --tmpfs /root:rw,nosuid,nodev,size=128m,mode=0700
-              --mount "type=bind,src=$base/kq247-bulk-auto-submit.py,dst=/app/post.py,readonly"
-              --mount "type=bind,src=$base,dst=/state"
-              -e KQ247_SUBMIT_MAX=20 -e KQ247_POST_POLL_S=900 -e KQ247_POST_SPACING_S=20
+            docker run -d --init --name "$name" --restart unless-stopped \
+              --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+              --user 0:0 --pids-limit 120 --cpus 0.5 --memory 1000m \
+              --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+              --tmpfs /root:rw,nosuid,nodev,size=128m,mode=0700 \
+              --mount "type=bind,src=$base/kq247-bulk-auto-submit.py,dst=/app/post.py,readonly" \
+              --mount "type=bind,src=$base,dst=/state" \
+              -e KQ247_SUBMIT_MAX=20 -e KQ247_POST_POLL_S=900 -e KQ247_POST_SPACING_S=20 \
               "$image" python3 -u /app/post.py --watch
           fi
           sleep 5
