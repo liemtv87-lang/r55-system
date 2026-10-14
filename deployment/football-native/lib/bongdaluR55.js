@@ -72,20 +72,48 @@ function parseLeagueMeta(js){
 }
 function parseOdds(xmls){
  const originals=nativeParseBongOdds(xmls.map(z=>({name:z.name,xml:z.text})));
+ const byId=new Map();
+ for(const source of xmls){
+  for(const item of String(source.text||"").matchAll(/<m>([^<]+)<\/m>/g)){
+   const p=item[1].split(","),id=String(p[0]||"").trim();
+   const ah=Number(p[2]),ou=Number(p[10]);
+   const hp=Number(p[3]),ap=Number(p[4]),op=Number(p[11]),up=Number(p[12]);
+   if(!/^\d{5,12}$/.test(id)||![ah,ou,hp,ap,op,up].every(Number.isFinite)||
+       ![hp,ap,op,up].every(x=>x>.05&&x<=3)||ou<1.25||ou>7)continue;
+   const q={name:String(source.name||"Bongdalu"),homeLine:-ah,awayLine:ah,
+     ouLine:ou,homeHK:hp,awayHK:ap,overHK:op,underHK:up};
+   if(!byId.has(id))byId.set(id,new Map());
+   byId.get(id).set(q.name,q);
+  }
+ }
  const out=new Map();
  for(const [id,market] of originals){
-  const raw=["homePrice","awayPrice","overPrice","underPrice"].map(k=>Number(market[k]));
-  if(raw.some(n=>!Number.isFinite(n)||n<=0||n>3))continue;
-  const ah=Number(market.homeLine),ou=Number(market.ouLine);
-  if(!Number.isFinite(ah)||!Number.isFinite(ou)||ou<1.25||ou>7)continue;
-  if(Math.abs(4*ah-Math.round(4*ah))>0.01||Math.abs(4*ou-Math.round(4*ou))>0.01)continue;
-  // Bongdalu XML uses HK profit odds; dashboard stores equivalent decimal odds.
-  out.set(String(id),{...market,
-   homePrice:round(1+raw[0]),awayPrice:round(1+raw[1]),
-   overPrice:round(1+raw[2]),underPrice:round(1+raw[3]),
-   rawHongKongOdds:{home:raw[0],away:raw[1],over:raw[2],under:raw[3]},
+  const quotes=[...(byId.get(String(id))?.values()||[])];
+  if(!quotes.length)continue;
+  // A median line such as 0.125 is not a real tradable quarter-line.
+  // Always take price + AH/OU line from the SAME actual bookmaker quote.
+  const nearest=(field,value)=>[...quotes].sort((a,b)=>
+      Math.abs(a[field]-value)-Math.abs(b[field]-value)||a.name.localeCompare(b.name))[0];
+  const ahQuote=nearest("homeLine",Number(market.homeLine));
+  const ouQuote=nearest("ouLine",Number(market.ouLine));
+  const ah=ahQuote.homeLine,ou=ouQuote.ouLine;
+  if(Math.abs(ah*4-Math.round(ah*4))>.01||
+     Math.abs(ou*4-Math.round(ou*4))>.01)continue;
+  const spread=field=>{const vals=quotes.map(x=>x[field]);return round(Math.max(...vals)-Math.min(...vals),3);};
+  const homePrice=round(1+ahQuote.homeHK),awayPrice=round(1+ahQuote.awayHK);
+  const overPrice=round(1+ouQuote.overHK),underPrice=round(1+ouQuote.underHK);
+  if([homePrice,awayPrice,overPrice,underPrice].some(x=>x<=1||x>4))continue;
+  out.set(String(id),{...market,homeLine:ah,awayLine:-ah,ouLine:ou,
+   homePrice,awayPrice,overPrice,underPrice,
+   rawHongKongOdds:{home:ahQuote.homeHK,away:ahQuote.awayHK,over:ouQuote.overHK,under:ouQuote.underHK},
+   bookmakerCount:quotes.length,bookmakerNames:quotes.map(q=>q.name),
+   bookmakerQuotes:quotes.map(q=>({bookmaker:q.name,homeLine:q.homeLine,ouLine:q.ouLine,
+     homePrice:round(1+q.homeHK),awayPrice:round(1+q.awayHK),
+     overPrice:round(1+q.overHK),underPrice:round(1+q.underHK)})),
+   ahLineSpread:spread("homeLine"),ouLineSpread:spread("ouLine"),
+   ahPriceBookmaker:ahQuote.name,ouPriceBookmaker:ouQuote.name,
    originalMarketParser:"football-all-refresh-v3_v128",
-   marketSource:"Bongdalu consensus"});
+   marketSource:"Bongdalu verified bookmaker quotes"});
  }
  return out;
 }
