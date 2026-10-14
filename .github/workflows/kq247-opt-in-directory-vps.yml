@@ -29,8 +29,11 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
           $REMOTE 'install -d -m 0700 /opt/pwremote/kq247-backlink-background'
-          tar -czf - -C seo-vps kq247-bulk-auto-submit.py | \
-            $REMOTE 'tar -xzf - -C /opt/pwremote/kq247-backlink-background'
+          # Upload as a file via SFTP instead of piping gzip bytes to a
+          # remote shell, which interpreted them as Bash in the failed run.
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            seo-vps/kq247-bulk-auto-submit.py \
+            root@64.120.92.172:/opt/pwremote/kq247-backlink-background/kq247-bulk-auto-submit.py
           $REMOTE 'bash -se' <<'VPS'
           set -euo pipefail
           base=/opt/pwremote/kq247-backlink-background
