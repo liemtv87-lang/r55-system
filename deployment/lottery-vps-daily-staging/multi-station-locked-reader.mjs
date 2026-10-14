@@ -1,4 +1,4 @@
-// KQ247 MT/MN locked snapshot read-only browser. This service cannot generate predictions.
+// KQ247 3-region locked snapshot read-only browser. This service cannot generate predictions.
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -9,7 +9,7 @@ function valid(r,day){
  if(!x||!['mb','mt','mn'].includes(r.region)||r.region!==x.region||r.station!==x.station||
   x.sourceDate!==r.sourceDate||x.predictionDate!==r.predictionDate||
   x.sourcePrizes!==(r.region==='mb'?27:18)||x.digitPositions!==(r.region==='mb'?107:82)||!x.allPrizesUsed||!x.allPositionsUsed||
-  !x.exclusionsValidated||x.previousForecastsUsed!==false||x.audit?.coveredPositions!==82||
+  !x.exclusionsValidated||x.previousForecastsUsed!==false||
   x.audit?.bridgeSourceDrawCount!==1||x.audit?.bridgeSourceStation!==r.station||
   x.audit?.coveredPositions!==(r.region==='mb'?107:82)||r.predictionDate<day)throw Error('INVALID_LOCKED_SNAPSHOT');
  for(const [key,len,size] of [['lotto3',3,2],['doubles',2,2],['dan50',50,2],['dan60',60,2],['dan75',75,2],['three_digit',500,3]]){
