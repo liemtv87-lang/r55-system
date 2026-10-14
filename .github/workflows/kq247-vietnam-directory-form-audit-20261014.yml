@@ -1,0 +1,75 @@
+name: KQ247 Vietnam directory form audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietnam-directory-form-audit-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only inspection of real Vietnam-language listing forms on isolated VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/kq247-vietnam-form-audit
+          install -d "$base"
+          cat > "$base/inspect.py" <<'PY'
+          import json,re
+          from playwright.sync_api import sync_playwright
+          URLs=[
+            "https://tgramlink.com/vi",
+            "https://vi.tgdio.com/groups",
+            "https://telegram-group.org/SubmitGroup.php",
+            "https://telegram-group.com/en/publish/",
+            "https://wtgrouplinks.com/submit-your-telegram-groups/",
+            "https://tgram.vn/",
+          ]
+          with sync_playwright() as p:
+            browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
+            page=browser.new_page(viewport={"width":1300,"height":900})
+            for u in URLs:
+              try:
+                resp=page.goto(u,wait_until="domcontentloaded",timeout=23000)
+                page.wait_for_timeout(450)
+                x=page.evaluate("""() => ({
+                   title:document.title,forms:[...document.forms].slice(0,4).map(f=>({action:f.action,method:f.method})),
+                   inputs:[...document.querySelectorAll('input,textarea,select')].filter(x=>x.getBoundingClientRect().width>0).slice(0,35).map(x=>({
+                     tag:x.tagName,type:x.type,name:x.name,id:x.id,placeholder:x.placeholder,required:x.required,
+                     options:x.tagName==='SELECT'?[...x.options].slice(0,35).map(y=>y.textContent.trim()):undefined
+                   })),
+                   links:[...document.querySelectorAll('a[href]')].filter(x=>/submit|gửi link|thêm nhóm|add media|đăng nhóm|publish|liệt kê nhóm/i.test(x.innerText.trim())).slice(0,20).map(x=>({text:x.innerText.trim().slice(0,80),href:x.href})),
+                   buttons:[...document.querySelectorAll('button')].filter(x=>x.getBoundingClientRect().width>0).slice(0,15).map(x=>x.innerText.trim().slice(0,100)),
+                   page_excerpt:document.body.innerText.slice(0,1700),
+                   captcha:!!document.querySelector('iframe[src*=captcha],[data-sitekey]'),
+                 })""")
+                print("VN_FORM_AUDIT="+json.dumps({"url":u,"http":resp.status if resp else None,"final":page.url,**x},ensure_ascii=False),flush=True)
+              except Exception as e:
+                print("VN_FORM_ERROR="+json.dumps({"url":u,"error":type(e).__name__+": "+str(e)[:200]},ensure_ascii=False),flush=True)
+            browser.close()
+          PY
+          docker image inspect pwremote/playwright:1.56.0 >/dev/null
+          timeout 205s docker run --rm --init --name kq247-vietnam-form-audit \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/inspect.py,dst=/app/inspect.py,readonly" \
+            pwremote/playwright:1.56.0 python3 /app/inspect.py
+          echo 'KQ247_PRODUCTION_UNTOUCHED=YES'
+          VPS
