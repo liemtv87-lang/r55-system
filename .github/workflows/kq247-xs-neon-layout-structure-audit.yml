@@ -31,3 +31,14 @@ jobs:
             attrs={k:v for k,v in e.attrs.items() if k in ('id','class','data-region','data-station','data-kind','role')}
             print('CLASS',e.name,str(attrs)[:200],re.sub(r'\\s+',' ',e.get_text(' ',strip=True))[:70])
           PY
+
+          python3 - <<'PY'
+          import urllib.request,re
+          for r in ('xsmb','xsmt','xsmn'):
+           with urllib.request.urlopen('https://64-120-92-172.sslip.io/xoso?region='+r,timeout=20) as response:
+            h=response.read(800000).decode('utf8','replace')
+           print('HTML_REGION',r)
+           for tag in ('<div class="headline"','<div class="stations"','<article','<section class="group"','<script'):
+            i=h.find(tag)
+            if i>=0: print('HTML_FRAGMENT',tag,re.sub(r'\\s+',' ',h[i:i+(5500 if tag=='<article' else 1600)])[:(3800 if tag=='<article' else 1400)])
+          PY
