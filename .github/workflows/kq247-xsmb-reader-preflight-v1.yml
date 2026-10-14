@@ -1,0 +1,30 @@
+name: KQ247 XSMB snapshot reader networking preflight
+on:
+  push:
+    paths: ['.github/workflows/kq247-xsmb-reader-preflight-v1.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read Caddy network and XSMB snapshot only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo CADDY_NETWORKS
+          docker inspect -f '{{range $key, $value := .NetworkSettings.Networks}}{{$key}} {{end}}' kq247-football-staging
+          echo LOTTERY_NETWORKS
+          docker inspect -f '{{range $key, $value := .NetworkSettings.Networks}}{{$key}} {{end}}' kq247-lottery-original
+          echo CADDY_MOUNT_SOURCES
+          docker inspect -f '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}' kq247-football-staging
+          echo XVPS_LOCKED_COUNTS
+          docker exec kq247-r55-postgres sh -c 'psql -X -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT count(*),max(prediction_date) FROM kq247_xs_vps.customer_locked_full_snapshots;"'
+          echo CURRENT_XOSO_HEALTH
+          curl -sfS -m 8 http://127.0.0.1:18084/healthz | head -c 500
+          VPS
