@@ -1,7 +1,8 @@
 // KQ247 station-isolated actual results refresh, no history scores, no backtest.
 // Uses each station's own latest actual and fixed weekly schedule, never another station.
 import {readFile,writeFile,rename} from 'node:fs/promises';
-import {getXsDraws} from './minhngoc-draw.mjs';
+import {fetchAllOfficialDraws} from './minhngoc-all-stations.mjs';
+import {normalizedStationDraw} from './normalize-all-prizes.mjs';
 const root='/stage';
 const seed=JSON.parse(await readFile(root+'/mtmn-35-latest-each-station-one-draw-verified.json','utf8')).draws;
 const weekdays=JSON.parse(await readFile(root+'/mtmn-station-weekly-draw-days.json','utf8')).stationWeekdays;
@@ -9,6 +10,9 @@ const stateFile=root+'/mtmn-one-draw-actual-latest.json';
 let previous;
 try{previous=JSON.parse(await readFile(stateFile,'utf8')).draws}catch(e){if(e.code!=='ENOENT')throw e;previous=seed;}
 const fixed=(r)=>r.region+'|'+r.station;
+const norm=x=>String(x||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/đ/g,'d').toLowerCase().replace(/[^a-z0-9]/g,'');
+const alias=x=>{const k=norm(x);return ['thanhphohcm','thanhphohochiminh','tphochiminh','hochiminh','tphcm'].includes(k)?'tphcm':['thuathienhue','hue'].includes(k)?'hue':k;};
+
 const rows=new Map();
 for(const r of previous){
  const key=fixed(r);
@@ -49,17 +53,32 @@ for(const [key,stations] of grouped){
  const [region,date]=key.split('|');
  let got,err;
  for(let attempt=1;attempt<=3;attempt++){
-  try{got=await getXsDraws(date,region,stations);break}catch(e){err=e;}
+  try{got=await fetchAllOfficialDraws(date,region);break}catch(e){err=e;}
  }
  if(!got)throw Error('REQUIRED_ALL_STATIONS_DRAW_UNAVAILABLE_'+key+'_'+String(err?.message).slice(0,100));
+ const expected=new Map();
  for(const station of stations){
-  const g=got[station];
-  if(!g||!Array.isArray(g.full_results)||g.full_results.length!==18||g.all2.length!==18||
-     g.full_results.some((n,i)=>n.slice(-2)!==g.all2[i]))throw Error('INCOMPLETE_ACTUAL_'+key+'_'+station);
-  const old=rows.get(region+'|'+station);
+  const normalized=alias(station);
+  if(expected.has(normalized))throw Error('AMBIGUOUS_STATION_ALIAS_'+key+'_'+station);
+  expected.set(normalized,station);
+ }
+ const matched=new Map();
+ for(const source of got){
+  const station=expected.get(alias(source.source_station));
+  if(!station)continue;
+  if(matched.has(station))throw Error('DUPLICATED_SOURCE_STATION_'+key+'_'+station);
+  const clean=normalizedStationDraw({...source,region,station,draw_date:date});
+  if(clean.full_results.length!==18||clean.full_results.some((n,i)=>n.slice(-2)!==clean.all2[i]))
+   throw Error('INCOMPLETE_ACTUAL_'+key+'_'+station);
+  matched.set(station,clean);
+ }
+ if(matched.size!==stations.length)
+  throw Error('MISSING_REAL_STATIONS_'+key+'_'+stations.filter(n=>!matched.has(n)).join(','));
+ for(const station of stations){
+  const g=matched.get(station),old=rows.get(region+'|'+station);
   if(old.draw_date>=date)continue;
   const row={region,station,draw_date:date,special:g.special,all2:g.all2,full_results:g.full_results,
-   source:'minhngoc.net.vn'};
+   source:'minhngoc.net.vn',source_url:g.source_url};
   rows.set(region+'|'+station,row);
   refreshed.push({region,station,source:date,prizes:g.full_results.length});
  }
