@@ -135,6 +135,35 @@ def main():
     assert windows[-1]["hit_days"]==316, windows[-1]
     assert windows[-1]["total_nhay"] in (432,433), windows[-1]  # tie/float rounding affects one nhay
     next_picks,next_allowed=predict(N,R,P,C,head_freq,tail_freq,prefix)
+    # Cross-check against the original independently implemented 316 baseline.
+    import runpy, sys
+    original_argv=sys.argv[:]
+    try:
+        sys.argv=["research/xsmb_3lo_covariance_diversity_20261013.py","hybrid"]
+        old=runpy.run_path("research/xsmb_3lo_covariance_diversity_20261013.py")
+    finally:
+        sys.argv=original_argv
+    assert tuple(round(float(x),2) for x in old["parameters"])==(.12,.15,0.)
+    assert len(old["chosen"])==1000
+    differences=[]
+    for k in range(1000):
+        a=sorted(int(x) for x in old["chosen"][k])
+        b=[int(x) for x in results[-1000+k]["numbers"]]
+        if a!=b:
+            differences.append({"date":results[-1000+k]["date"],
+               "original":[f"{x:02d}" for x in a],
+               "independent":[f"{x:02d}" for x in b],
+               "original_nhay":int(old["target"][k]),
+               "independent_nhay":int(results[-1000+k]["nhay"])})
+    comparison={
+      "original_days_500":int((old["target"][500:]>0).sum()),
+      "independent_days_500":windows[-1]["hit_days"],
+      "original_nhay_500":int(old["target"][500:].sum()),
+      "independent_nhay_500":windows[-1]["total_nhay"],
+      "mismatch_days_last1000":len(differences),
+      "mismatch_examples":differences[:10]
+    }
+    print("XSMB_316_CROSS_IMPLEMENTATION_AUDIT="+json.dumps(comparison,ensure_ascii=False),flush=True)
     out={
       "source":SRC,"rows":N,"last_completed_draw":dates[-1],
       "rule_fixed_before_all_stress_blocks":True,
@@ -145,6 +174,7 @@ def main():
       "latest_30":summary(results[-30:]),
       "latest_60":summary(results[-60:]),
       "latest_500":windows[-1],
+      "implementation_comparison":comparison,
       "forecast_for_next_draw":{"date":str(dt.date.fromisoformat(dates[-1])+dt.timedelta(days=1)),
              "three_numbers":[f"{x:02d}" for x in sorted(next_picks)],
              "status":"RESEARCH ONLY, NOT A VERIFIED WINNING PREDICTION"},
