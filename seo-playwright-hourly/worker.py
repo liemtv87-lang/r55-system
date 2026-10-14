@@ -407,6 +407,8 @@ def main():
         "checked_at_utc": now, "verified_by_group": {
             key: val["verified_total"] for key, val in by_group.items()},
         "new_this_hour": new_links, "goal": GOAL_PER_HOUR,
+        "verified_public_urls": {k:v["published_listing_urls"] for k,v in by_group.items()},
+        "published_checks": [{k:x.get(k) for k in ("group","url","http","verified","has_target_anchor","final_url") if k in x} for x in checks],
         "daily_growth": membership_growth,
         "reach_measurement": "unavailable",
         "registration_attempts": {k:{"state":v.get("state"),"error":v.get("error"),"stage":v.get("stage")} for k,v in state["submission_attempts"].items()},
