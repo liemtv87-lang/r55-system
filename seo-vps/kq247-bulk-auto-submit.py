@@ -96,7 +96,7 @@ def inspect_fields(page):
     return page.evaluate("""() => [...document.querySelectorAll('form')].map((f,n)=>({
      formIndex:n,action:f.action,method:f.method,
      fields:[...f.querySelectorAll('input,textarea,select')].map((e,i)=>({
-       idx:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),
+       idx:i,tag:e.tagName.toLowerCase(),type:(e.type||'').toLowerCase(),name:e.name||'',value:e.value||'',
        key:[e.name||'',e.id||'',e.placeholder||'',e.getAttribute('aria-label')||'',
          e.closest('label')?.innerText||'',(e.type==='radio'?e.value:'')].join(' ').toLowerCase().slice(0,200),
        required:e.required,disabled:e.disabled,
@@ -179,6 +179,7 @@ def attempt(page, con, host, url, group_key, group):
             write_result(con,host,group_key,url,status);return
         form=page.locator("form").nth(forminfo["formIndex"])
         fields=forminfo["fields"]
+        selected_radio_names=set()
         for field in fields:
             if field["disabled"]:continue
             inp=form.locator("input,textarea,select").nth(field["idx"])
@@ -188,10 +189,25 @@ def attempt(page, con, host, url, group_key, group):
                 if not choose_option(inp,field,group):
                     write_result(con,host,group_key,url,"required_option_not_available",k);return
             elif typ=="radio":
-                if "telegram" in k and "platform" in k:
-                    inp.check(timeout=3000)
-                elif field["required"]:
-                    write_result(con,host,group_key,url,"requires_manual_radio_review",k);return
+                name=field["name"]
+                if name in selected_radio_names:continue
+                alternatives=[x for x in fields if x["type"]=="radio" and x["name"]==name and not x["disabled"]]
+                chosen=None
+                for option in alternatives:
+                    label=option["key"].lower()
+                    value=option["value"].strip().lower()
+                    if any(value==want.lower() or re.search(r"\\b"+re.escape(want.lower())+r"\\b",label)
+                           for want in group["categories"]):
+                        chosen=option
+                        break
+                if chosen is None and any(x["value"].lower()=="channel" for x in alternatives):
+                    chosen=next((x for x in alternatives if x["value"].lower()=="group"),None)
+                if chosen is None:
+                    if any(x["required"] for x in alternatives):
+                        write_result(con,host,group_key,url,"requires_manual_radio_review",name);return
+                else:
+                    form.locator("input,textarea,select").nth(chosen["idx"]).check(timeout=3000)
+                selected_radio_names.add(name)
             elif typ=="checkbox":
                 if field["required"]:
                     write_result(con,host,group_key,url,"requires_manual_terms_review",k);return
@@ -238,6 +254,10 @@ def main():
         page=context.new_page()
         while WATCH or (posted<BATCH_LIMIT and time.monotonic()<deadline):
             queue=read_queue(con)
+            print("KQ247_QUEUE="+json.dumps({"candidate_hosts":len(queue),
+                "new_pairs":sum(not con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",
+                  (h,k)).fetchone() for h,_ in queue for k in GROUPS),
+                "hosts":[h for h,_ in queue][:20]}),flush=True)
             available=[(h,u) for h,u in queue if any(not con.execute(
               "SELECT 1 FROM submissions WHERE host=? AND grp=?",(h,k)).fetchone() for k in GROUPS)]
             if not available:
