@@ -1,0 +1,18 @@
+name: KQ247 XS 505 specials import and 1000 DE proof
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-specials-505-stage.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -qq -y sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sshpass -e scp -o StrictHostKeyChecking=accept-new deployment/lottery-vps-daily-staging/{backfill-specials.py,xsmb-historical-specials-505.json,de-1000-consensus.mjs} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'python3 /opt/kq247/lottery-daily-staging/backfill-specials.py && docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --check /stage/de-1000-consensus.mjs'
