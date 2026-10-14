@@ -42,3 +42,5 @@ jobs:
           const inFeed=proof.filter(x=>!x.notInLatestFeed&&x.hasOdds);
           if(inFeed.some(x=>!x.modeled))throw Error('post_patch_unmodeled_fixture');
           JS
+
+# Live check after official team schedule fallback deployment 2026-10-15.
