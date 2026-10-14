@@ -1,0 +1,50 @@
+name: KQ247 XS One Draw 500 Station Gate
+on:
+  push:
+    paths:
+      - deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs
+      - deployment/lottery-vps-daily-staging/one-draw-500-method-gate.test.mjs
+      - .github/workflows/kq247-xs-one-draw-500-gate.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-xs-one-draw-500-method-gate
+  cancel-in-progress: false
+jobs:
+  test_and_stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove one real draw and strict 500 station-only history
+        run: |
+          set -euo pipefail
+          node --check deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs
+          node deployment/lottery-vps-daily-staging/one-draw-500-method-gate.test.mjs
+      - name: Stage new engine ONLY, keep live snapshots and containers untouched
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/one-draw-500-method-selector.mjs root@64.120.92.172:/tmp/kq247-one-draw-500-method.mjs
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          dest=/opt/kq247/lottery-daily-staging/one-draw-500-method-selector.mjs
+          test -s /tmp/kq247-one-draw-500-method.mjs
+          test -s /opt/kq247/lottery-daily-staging/normalize-all-prizes.mjs
+          install -m 0644 /tmp/kq247-one-draw-500-method.mjs "$dest"
+          docker run --rm --network none -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --check /stage/one-draw-500-method-selector.mjs
+          test -s /opt/kq247/lottery-daily-staging/public-locked/xsmb-2026-10-15.json
+          grep -Fq '"51"' /opt/kq247/lottery-daily-staging/public-locked/xsmb-2026-10-15.json
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-original
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-bot
+          echo ONE_DRAW_500_METHOD_SELECTOR_VPS_STAGING_ONLY=PASS
+          VPS
