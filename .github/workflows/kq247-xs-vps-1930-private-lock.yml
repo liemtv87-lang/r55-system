@@ -1,0 +1,85 @@
+name: KQ247 XSMB 19h30 immutable VPS staging lock
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xs-vps-1930-private-lock.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-xsmb-1930-private-lock
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install isolated XSMB 19h30 lock timer without public cutover
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=18 root@64.120.92.172"
+          $REMOTE 'install -d -m 0755 /opt/kq247/lottery-daily-staging'
+          sshpass -e scp -o StrictHostKeyChecking=yes \
+            deployment/lottery-vps-daily-staging/locked-lotto-stage.sql \
+            deployment/lottery-vps-daily-staging/persist-locked-lotto.py \
+            deployment/lottery-vps-daily-staging/run-1930.sh \
+            root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          $REMOTE 'bash -se' <<'REMOTE_SCRIPT'
+          set -euo pipefail
+          BASE=/opt/kq247/lottery-daily-staging
+          chmod 0700 "$BASE/run-1930.sh"
+          python3 -m py_compile "$BASE/persist-locked-lotto.py"
+          bash -n "$BASE/run-1930.sh"
+          docker exec -i kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$BASE/locked-lotto-stage.sql"
+          cat > /etc/systemd/system/kq247-xsmb-1930-staging.service <<'SERVICE'
+          [Unit]
+          Description=KQ247 XSMB 19h30 daily draw and immutable private snapshot
+          Wants=network-online.target
+          After=network-online.target docker.service
+          StartLimitIntervalSec=3600
+          StartLimitBurst=3
+          [Service]
+          Type=oneshot
+          ExecStart=/opt/kq247/lottery-daily-staging/run-1930.sh
+          TimeoutStartSec=240
+          Restart=on-failure
+          RestartSec=600
+          NoNewPrivileges=true
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+          cat > /etc/systemd/system/kq247-xsmb-1930-staging.timer <<'TIMER'
+          [Unit]
+          Description=KQ247 XSMB check completed result at 19:30 Asia/Ho_Chi_Minh
+          [Timer]
+          OnCalendar=*-*-* 19:30:00 Asia/Ho_Chi_Minh
+          AccuracySec=30s
+          RandomizedDelaySec=0
+          Persistent=false
+          Unit=kq247-xsmb-1930-staging.service
+          [Install]
+          WantedBy=timers.target
+          TIMER
+          systemd-analyze verify /etc/systemd/system/kq247-xsmb-1930-staging.service /etc/systemd/system/kq247-xsmb-1930-staging.timer
+          systemd-analyze calendar '*-*-* 19:30:00 Asia/Ho_Chi_Minh'
+          systemctl daemon-reload
+          systemctl enable --now kq247-xsmb-1930-staging.timer
+          echo STAGING_TIMER_NEXT
+          systemctl list-timers kq247-xsmb-1930-staging.timer --no-pager
+          echo FIRST_PRIVATE_LOCK_ATTEMPT
+          "$BASE/run-1930.sh"
+          echo PRIVATE_LOCKED_LOTTO_DB
+          docker exec kq247-r55-postgres sh -c 'psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT prediction_date,region,station,lotto3,doubles,source_last_date,locked_at FROM kq247_xs_vps.locked_lotto_daily ORDER BY prediction_date DESC LIMIT 3;"'
+          echo EXISTING_PUBLIC_XS_UNTOUCHED
+          curl -fsS -m 8 http://127.0.0.1:18084/healthz | python3 -c 'import json,sys;j=json.load(sys.stdin);assert j["ok"];print("PUBLIC_XS_HEALTH_OK",j["neonOriginalReadThrough"],j["backendMigrated"])'
+          REMOTE_SCRIPT
