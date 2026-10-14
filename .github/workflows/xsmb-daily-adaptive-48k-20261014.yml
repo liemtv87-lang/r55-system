@@ -1,0 +1,58 @@
+name: XSMB Daily Adaptive 48K Causal Expert Study
+on:
+  push:
+    branches: [main]
+    paths:
+      - research/xsmb_3lo_daily_adaptive_20261014.py
+      - .github/workflows/xsmb-daily-adaptive-48k-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  train:
+    name: Adaptive shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m pip install --quiet numpy
+      - name: Independent past-only rolling study on first 500 (6k rules)
+        run: |
+          python3 -m py_compile research/xsmb_3lo_daily_adaptive_20261014.py
+          python3 research/xsmb_3lo_daily_adaptive_20261014.py --shard ${{ matrix.shard }} --count 6000 --output research/results/xsmb_adaptive/shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-adaptive-shard-${{ matrix.shard }}
+          path: research/results/xsmb_adaptive/shard-${{ matrix.shard }}.json
+          retention-days: 14
+  holdout:
+    name: Freeze winner and score latest 500
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: train
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: xsmb-adaptive-shard-*
+          merge-multiple: true
+          path: research/results/xsmb_adaptive
+      - run: python3 -m pip install --quiet numpy
+      - run: |
+          python3 research/xsmb_3lo_daily_adaptive_20261014.py --aggregate --count 6000 --shards 8 --dir research/results/xsmb_adaptive --output research/results/xsmb_daily_adaptive_holdout_20261014.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-daily-adaptive-48k-holdout
+          path: research/results/xsmb_daily_adaptive_holdout_20261014.json
+          retention-days: 30
