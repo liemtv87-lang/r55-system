@@ -35,6 +35,14 @@ STALE_DAYS = max(7, min(90, int(os.environ.get("KQ247_STALE_DAYS", "30"))))
 PATH_RE = re.compile(r"submit|publish|add[-_/]?(?:group|channel|link|listing)|suggest|directory|register|addgroup|dang[-_/]?(?:tin|bai)|them[-_/]?nhom", re.I)
 DOMAIN_RE = re.compile(r"(telegram|telegr|tg(?:find|hub|link|mania|dir|group|radar|box)|group|directory|link|forum|listing|submit|community)", re.I)
 URL_RE = re.compile(r"https?://[^\s\"'<>\\]+", re.I)
+# Public editorial directories of directory-submission links, used for READ-ONLY discovery.
+# Do not submit to a source merely because it was linked from one of these pages.
+PUBLIC_DIRECTORY_FEEDS = [
+    "https://launchdirectories.com/free-web-directories",
+    "https://onlytraction.com/directories/free-submission",
+    "https://saalinko.com/directory-submission-sites-list/",
+]
+FEED_REFRESH_SECONDS = 86400
 SEED = [
 "https://groupsgyani.org/submit-telegram-group-and-channel-links",
 "https://telegramgroup.arkservices.in/submit",
@@ -200,6 +208,49 @@ def inspect(entry):
                 if len(suggestions) >= 3: break
     return host, final, status, reason, suggestions
 
+def refresh_public_feeds(con):
+    """Once per day, discover new opt-in candidates from public directory indexes.
+
+    Discovery only: every URL is still independently checked before the
+    submission worker considers any guest form.
+    """
+    last = int(state_get(con, "feed_last_checked", "0"))
+    if time.time() - last < FEED_REFRESH_SECONDS:
+        return
+    found = 0
+    links_seen = 0
+    per_feed = {}
+    for feed in PUBLIC_DIRECTORY_FEEDS:
+        page, error = get_page(feed)
+        if not page:
+            per_feed[feed] = error or "unavailable"
+            continue
+        final, raw = page
+        parser = HtmlScan()
+        parser.feed(raw)
+        source = host_url(feed)
+        before = con.execute("SELECT COUNT(*) FROM hosts").fetchone()[0]
+        for href in parser.links[:3000]:
+            links_seen += 1
+            absolute = urljoin(final, href)
+            entry = host_url(absolute)
+            if not entry or entry[0] == source[0]:
+                continue
+            add_url(con, absolute)
+        after = con.execute("SELECT COUNT(*) FROM hosts").fetchone()[0]
+        new_hosts = after - before
+        per_feed[feed] = new_hosts
+        found += new_hosts
+    state_set(con, "feed_last_checked", int(time.time()))
+    state_set(con, "feed_urls_examined",
+              int(state_get(con, "feed_urls_examined")) + links_seen)
+    state_set(con, "feed_hosts_added",
+              int(state_get(con, "feed_hosts_added")) + found)
+    con.commit()
+    print("KQ247_FEED_DISCOVERY=" + json.dumps({
+        "new_hosts":found, "links_examined":links_seen, "sources":per_feed
+    }, ensure_ascii=False), flush=True)
+
 def db_open():
     con = sqlite3.connect(DB, timeout=30)
     con.execute("PRAGMA journal_mode=WAL")
@@ -283,6 +334,8 @@ def write_report(con, started, scanned, sources):
       "elapsed_s":round(time.monotonic()-started,2),
       "source_inventory_exists":bool(sources), "inventory_paths":[str(s) for s in sources],
       "inventory_files_count":len(sources),
+      "public_feed_urls_examined_total":int(state_get(con,"feed_urls_examined")),
+      "public_feed_hosts_added_total":int(state_get(con,"feed_hosts_added")),
       "inventory_lines_read_total":int(state_get(con,"urls_read")),
       "url_records_actually_read_total":int(state_get(con,"urls_extracted")),
       "unique_hosts_discovered":con.execute("SELECT COUNT(*) FROM hosts").fetchone()[0],
@@ -326,11 +379,13 @@ def main():
         con = db_open()
         for u in SEED: add_url(con,u,force=True)
         con.commit()
+        refresh_public_feeds(con)
         sources = source_files()
         scanned = 0
         while WATCH or (time.monotonic()-started < MAX_SECONDS and scanned < MAX_HTTP_HOSTS):
             # Incrementally load new URL records. Never reset the cursor to inflate counts.
             sources = source_files()
+            refresh_public_feeds(con)
             budget = MAX_URL_LINES - int(state_get(con,"urls_read"))
             for source in sources:
                 if budget <= 0: break
