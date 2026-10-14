@@ -1,0 +1,60 @@
+name: KQ247 TelegramGroup Org Two Free Directory Submissions
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-telegramgroup-org-directory-submit-once.yml
+      - seo-vps/telegramgroup-org-submit-once.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-telegramgroup-org-submit-once
+  cancel-in-progress: false
+jobs:
+  submit_once:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate one-time script
+        run: python3 -m py_compile seo-vps/telegramgroup-org-submit-once.py
+      - name: SSH transport
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Run isolated one-time TelegramGroup Org submitter on VPS without touching KQ247 containers
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'mkdir -p /opt/pwremote/telegramgroup-org-directory-once/state'
+          tar -czf - -C seo-vps telegramgroup-org-submit-once.py | $REMOTE 'tar -xzf - -C /opt/pwremote/telegramgroup-org-directory-once'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/telegramgroup-org-directory-once
+          image=pwremote/playwright:1.56.0
+          docker image inspect "$image" >/dev/null
+          uid="$(docker run --rm --entrypoint id "$image" -u)"
+          gid="$(docker run --rm --entrypoint id "$image" -g)"
+          chown -R "$uid:$gid" "$base/state"
+          chmod 0644 "$base/telegramgroup-org-submit-once.py"
+          original="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          timeout 225s docker run --rm --init --name kq247-telegramgroup-org-directory-one-time \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/telegramgroup-org-submit-once.py,dst=/app/submit.py,readonly" \
+            --mount "type=bind,src=$base/state,dst=/state" \
+            "$image" python3 /app/submit.py
+          final="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          test "$original" = "$final"
+          echo 'KQ247_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          cat "$base/state/telegramgroup-org-once.json"
+          VPS
