@@ -1,0 +1,60 @@
+name: XSMB Three Lotto 80K Consecutive and Reverse Research
+on:
+  push:
+    branches: [main]
+    paths:
+      - research/xsmb_3lo_consecutive_80k_20261014.py
+      - .github/workflows/xsmb-3lo-consecutive-80k-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  train:
+    name: Search shard \${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0,1,2,3,4,5,6,7]
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+      MKL_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Numerical dependencies
+        run: python3 -m pip install --quiet numpy
+      - name: Check research source syntax and run 10k candidates on train 500 only
+        run: |
+          python3 -m py_compile research/xsmb_3lo_consecutive_80k_20261014.py
+          python3 research/xsmb_3lo_consecutive_80k_20261014.py --shard \${{ matrix.shard }} --candidates 10000 --output research/results/xsmb_consecutive/shard-\${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-consecutive-shard-\${{ matrix.shard }}
+          path: research/results/xsmb_consecutive/shard-\${{ matrix.shard }}.json
+          retention-days: 14
+  heldout500:
+    name: Frozen winner then evaluate last 500
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: train
+    env:
+      OPENBLAS_NUM_THREADS: '2'
+      OMP_NUM_THREADS: '2'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: xsmb-consecutive-shard-*
+          merge-multiple: true
+          path: research/results/xsmb_consecutive
+      - run: python3 -m pip install --quiet numpy
+      - name: Score once on holdout and compare 7 candidate-selection modes
+        run: |
+          python3 research/xsmb_3lo_consecutive_80k_20261014.py --aggregate --candidates 10000 --shards 8 --input-dir research/results/xsmb_consecutive --output research/results/xsmb_consecutive_80k_holdout.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xsmb-consecutive-80k-verified-holdout
+          path: research/results/xsmb_consecutive_80k_holdout.json
+          retention-days: 30
