@@ -53,8 +53,27 @@
   }
   redir @lottery_region_root_xsmn /xoso?{http.request.uri.query} 302
 
+  # XSMB public page reads ONLY immutable PostgreSQL-exported snapshot.
+  # XSMT/XSMN remain on existing route until their local archives are migrated.
+  @xsmb_page_path {
+    path /xoso /xoso/
+  }
+  @xsmt_page_query {
+    query region=xsmt
+  }
+  @xsmn_page_query {
+    query region=xsmn
+  }
+  handle @xsmb_page_path {
+    route {
+      reverse_proxy @xsmt_page_query lottery-original:3004
+      reverse_proxy @xsmn_page_query lottery-original:3004
+      reverse_proxy kq247-xsmb-snapshot-reader:3018
+    }
+  }
+  # Never alter licensed customer activation, existing device codes or other regions.
   @lottery_paths {
-    path /xoso /xoso/ /xoso-khach /xoso-khach/ /lottery/*
+    path /xoso-khach /xoso-khach/ /lottery/*
   }
   handle @lottery_paths {
     reverse_proxy lottery-original:3004
