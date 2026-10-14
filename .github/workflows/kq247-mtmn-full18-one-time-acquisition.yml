@@ -1,0 +1,61 @@
+name: KQ247 MT MN 500 Full18 One-time VPS Acquisition
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-mtmn-full18-one-time-acquisition.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-mtmn-history-source-import
+  cancel-in-progress: false
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start one controlled private verified-source importer, NO public sync
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          base=/opt/kq247/lottery-daily-staging
+          test -s "$base/mtmn-500-actual-targets.json"
+          test -s "$base/mtmn-500-full18-archive-backfill.mjs"
+          test -s "$base/normalize-all-prizes.mjs"
+          test -s "$base/public-locked/xsmb-2026-10-15.json"
+          if docker inspect kq247-mtmn-full18-history >/dev/null 2>&1; then
+            if [ "$(docker inspect -f '{{.State.Running}}' kq247-mtmn-full18-history)" = true ]; then
+              echo MTMN_VERIFIED_HISTORICAL_IMPORT_ALREADY_RUNNING
+              exit 0
+            fi
+            echo PRIOR_IMPORT_STOPPED_REQUIRES_REVIEW
+            docker logs --tail 15 kq247-mtmn-full18-history || true
+            exit 8
+          fi
+          docker run -d --name kq247-mtmn-full18-history --init --restart no \
+            --cpus 0.7 --memory 650m --pids-limit 100 --network bridge \
+            --security-opt no-new-privileges --cap-drop ALL \
+            -v "$base":/stage node:22-alpine sh -c '
+            set -euo pipefail
+            while :; do
+              node /stage/mtmn-500-full18-archive-backfill.mjs --max=150 2>&1 | tee -a /stage/mtmn-full18-backfill-progress.log
+              if tail -n 1 /stage/mtmn-full18-backfill-progress.log | grep -Fq "\"attempted\":0"; then
+                echo MTMN_VERIFIED_BACKFILL_INPUT_EXHAUSTED
+                break
+              fi
+              sleep 15
+            done'
+          sleep 8
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-mtmn-full18-history
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-original
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-lottery-bot
+          curl -fsS --max-time 8 http://127.0.0.1:18084/healthz | grep -Fq VPS_POSTGRES_IMMUTABLE_LOCKED
+          docker logs --tail 10 kq247-mtmn-full18-history || true
+          echo MTMN_GENUINE_HISTORY_IMPORT_RUNNING_ONLY_PRIVATE_VPS=PASS
+          VPS
