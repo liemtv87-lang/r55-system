@@ -156,6 +156,6 @@ jobs:
           curl -fsS --max-time 12 'http://127.0.0.1:18080/seo-groups-status.json' | python3 -c 'import sys,json; j=json.load(sys.stdin);assert j["ok"] and len(j["groups"])==2;print("SEO_VPS_PUBLIC_STATUS=PASS")'
           echo 'SEO_VPS_TIMER_NEXT:'
           systemctl list-timers kq247-seo-groups.timer --no-pager | tail -4
-          curl -fsS --max-time 12 'http://127.0.0.1:18080/seo-backlinks-status.json' | python3 -c 'import json,sys; s=json.load(sys.stdin);assert all(s["goals"][g]["target_verified"]==1000 for g in ("football","lottery"));print("VPS_BACKLINKS_TRACKER=PASS",{k:v["verified_published"] for k,v in s["goals"].items()})'
+          curl -fsS --max-time 12 'http://127.0.0.1:18080/seo-backlinks-status.json' | python3 -c 'import json,sys; s=json.load(sys.stdin);assert all(s["goals"][g]["target_verified"]==json.load(open("/opt/kq247/seo-groups/backlink-campaign.json"))["goals"][g]["verified_links"] for g in ("football","lottery"));print("VPS_BACKLINKS_TRACKER=PASS",{k:v["verified_published"] for k,v in s["goals"].items()})'
           echo 'SEO_VPS_NO_OLD_PROVIDER_CALLS=YES'
           VPS
