@@ -1,22 +1,24 @@
 {
-  "audited_utc": "2026-10-14T14:26:35.511313+00:00",
+  "audited_utc": "2026-10-14T14:30:34.830092+00:00",
   "discovery_worker_running": true,
   "opt_in_submitter_running": true,
-  "discovery_code_sha256": "f9dfacd6fa0e499a5e6f06d1cc34824949662bb125120b8d3e81b63aa6fd6bcc",
+  "discovery_code_sha256": "4287fc0683a84f37116f395c30080164b3a012a1b6169ff4ef54785e1dba37e8",
   "poster_code_sha256": "97bc93e4ee3ef69f281321f0ab24484f86bcef72818f456798fd45307ae6cda9",
   "discovery": {
-    "updated_utc": "2026-10-14T14:18:44.091953+00:00",
+    "updated_utc": "2026-10-14T14:30:24.798347+00:00",
     "url_records_actually_read_total": 0,
     "inventory_lines_read_total": 52,
     "inventory_files_count": 1,
-    "unique_hosts_discovered": 49,
-    "http_hosts_checked_this_run": 0,
+    "public_feed_urls_examined_total": 81,
+    "public_feed_hosts_added_total": 2,
+    "unique_hosts_discovered": 51,
+    "http_hosts_checked_this_run": 3,
     "hosts_by_status": {
       "excluded": 1,
       "form_candidate": 19,
       "manual_review": 4,
-      "no_form": 9,
-      "unavailable": 16
+      "no_form": 10,
+      "unavailable": 17
     },
     "candidate_sites": [
       "buyinoffer.com",
