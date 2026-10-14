@@ -11,8 +11,9 @@ const customer=read('deployment/football-original/public/client.html');
 const staging=read('deployment/football-staging/public/index.html');
 const api=read('deployment/football-original/api/main-football.js');
 const deploy=read('deployment/football-staging/deploy.sh');
-const scripts=html=>[...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)]
-  .map(m=>m[1]).filter(s=>s.trim());
+const scripts=html=>[...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+  .filter(m=>!/type\s*=\s*["']application\/ld\+json["']/i.test(m[1]))
+  .map(m=>m[2]).filter(s=>s.trim());
 
 test('all public inline scripts parse (main, client, staging)',()=>{
  for(const [label,html] of [['main',main],['client',customer],['staging',staging]]){
