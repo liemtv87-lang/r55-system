@@ -1,4 +1,4 @@
-name: KQ247 XSMB complete 500 plus 1000-method DE stage test
+name: KQ247 XSMB complete daily DE overnight date retest
 on:
   push:
     paths: ['.github/workflows/kq247-xs-full-stage-test.yml']
