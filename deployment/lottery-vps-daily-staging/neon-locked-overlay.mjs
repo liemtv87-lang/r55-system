@@ -12,6 +12,12 @@ function activeDay(){
 }
 function check(r,region,day){
  const p=r?.payload,num=region==='mb'?27:18,pos=region==='mb'?107:82;
+ // A prediction may only use the latest completed draw of its own station.
+ // MB's source must be the previous calendar day; provincial draws follow
+ // station-specific schedules, so their preceding draw can be up to 7 days old.
+ const gap=(Date.parse(day+'T12:00:00Z')-Date.parse(r?.sourceDate+'T12:00:00Z'))/86400000;
+ if(!Number.isInteger(gap)||(region==='mb'?gap!==1:gap<1||gap>7))
+  throw Error('SOURCE_DRAW_DATE_MISMATCH_'+r?.station);
  if(!p||r.region!==region||r.station!==p.station||p.region!==region||r.predictionDate!==day||
  p.predictionDate!==day||p.sourceDate!==r.sourceDate||r.sourceDate>=day||
  p.sourcePrizes!==num||p.digitPositions!==pos||p.allPrizesUsed!==true||p.allPositionsUsed!==true||
