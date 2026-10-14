@@ -1,0 +1,81 @@
+name: KQ247 Backlink VPS Health Audit (read-only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-backlink-audit-once.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SSH transport
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify live isolated VPS backlink processes and write public counts
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          mkdir -p seo-vps
+          $REMOTE 'python3 -' > seo-vps/kq247-backlink-live-health.json <<'PY'
+          import datetime, json, pathlib, sqlite3, subprocess, hashlib
+          root=pathlib.Path('/opt/pwremote/kq247-backlink-background')
+          def read_report(filename):
+              try:
+                  o=json.loads((root/filename).read_text())
+                  return {k:o.get(k) for k in (
+                    'updated_utc','updated_at_utc','url_records_actually_read_total',
+                    'inventory_lines_read_total','inventory_files_count',
+                    'unique_hosts_discovered','http_hosts_checked_this_run',
+                    'hosts_by_status','counts','verified_new_public_links')}
+              except (OSError,ValueError):
+                  return {'available':False}
+          pidfile=root/'worker.pid'
+          try:
+              pid=int(pidfile.read_text().strip())
+              cmdline=pathlib.Path(f'/proc/{pid}/cmdline').read_bytes().replace(b'\x00',b' ').decode()
+              worker_running='kq247-backlink-background-discovery-20261014.py' in cmdline and '--watch' in cmdline
+          except (OSError,ValueError):
+              worker_running=False
+          try:
+              container=subprocess.run(
+                  ['docker','inspect','-f','{{.State.Running}}','seo-kq247-opt-in-directory'],
+                  capture_output=True,text=True,timeout=8)
+              poster_running=container.returncode==0 and container.stdout.strip()=='true'
+          except Exception:
+              poster_running=False
+          def code_digest(file):
+              try:
+                  return hashlib.sha256((root/file).read_bytes()).hexdigest()
+              except OSError:
+                  return None
+          data={'audited_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                'discovery_worker_running':worker_running,
+                'opt_in_submitter_running':poster_running,
+                'discovery_code_sha256':code_digest('kq247-backlink-background-discovery-20261014.py'),
+                'poster_code_sha256':code_digest('kq247-bulk-auto-submit.py'),
+                'discovery':read_report('latest.json'),
+                'submissions':read_report('bulk-posts.json'),
+                'note':'Only actual public listings count as verified. No backlink total is inferred from scan count.'}
+          print(json.dumps(data,ensure_ascii=False,indent=2))
+          PY
+          python3 -m json.tool seo-vps/kq247-backlink-live-health.json >/dev/null
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add seo-vps/kq247-backlink-live-health.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'audit: publish verified isolated KQ247 backlink VPS worker counters'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+          cat seo-vps/kq247-backlink-live-health.json
