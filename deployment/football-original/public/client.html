@@ -582,7 +582,7 @@
     <script>
       const API =
           'https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/',
-        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football',
+        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1',
         PRODUCT = 'football',
         BUY = 'https://t.me/muatool_du_doan_bot?start=from_football_client';
       let current = 5000,
@@ -944,8 +944,13 @@
           : relevant;
         return [...a].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
       }
-      function copyMatch(i) {
-        cp(txt(ALL[i])).catch(e => { $('summary').textContent = '❌ ' + e.message; });
+      async function copyMatch(i) {
+        const match = ALL[i];
+        if (!match) { $('summary').textContent = '❌ Không tìm thấy trận cần copy.'; return; }
+        try {
+          await cp(txt(match));
+          $('summary').textContent = '✅ Đã copy trận ' + match.home + ' - ' + match.away;
+        } catch (e) { $('summary').textContent = '❌ ' + e.message; }
       }
       function toggleCollapse() {
         COLLAPSED = !COLLAPSED;
@@ -1077,11 +1082,11 @@
       }
       async function fetchMode(n, mode) {
         // Neon exclusively verifies existing customer codes and expiry.
-        // Predictions always come from the exact same Bongdalu R55 API as the Hatchable main site;
+        // Customer predictions use exactly the SAME data=1 endpoint as the main site;
         // before 13h it marks them provisional, then switches to the locked snapshot.
         const r = await fetch(
           PICKS_API +
-            '?mode=' + encodeURIComponent(mode) +
+            '&mode=' + encodeURIComponent(mode) +
             '&limit=' + encodeURIComponent(n) +
             '&from_ts=' + Date.now(),
           { cache: 'no-store', signal: AbortSignal.timeout(15000) }
