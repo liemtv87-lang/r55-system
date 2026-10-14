@@ -1,0 +1,37 @@
+name: KQ247 Vietnam-first SEO source scan
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietnam-first-sitemap-audit-20261014.yml
+      - seo-vps/vietnam-first-scout-20261014.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify syntax and scan Vietnam-first public sitemaps
+        run: |
+          python3 -m py_compile seo-vps/vietnam-first-scout-20261014.py
+          python3 seo-vps/vietnam-first-scout-20261014.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          j=json.loads(Path('reports/kq247-vn-first-scout.json').read_text())
+          assert j['sources_considered']>=30
+          assert all(item['sitemap_requests_attempted'] <= 8 for item in j['sites'])
+          assert j['external_backlinks_published_by_this_scan']==0
+          print('VIETNAM_FIRST_SCAN_PASS')
+          PY
+      - name: Upload report without changing other services
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kq247-vietnam-first-sitemap-report
+          path: reports/kq247-vn-first-scout.json
+          retention-days: 30
+          if-no-files-found: warn
