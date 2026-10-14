@@ -102,7 +102,7 @@ def choose_option(sel, field, group):
             if opt["v"] and opt["t"].strip().lower()==want.lower():
                 sel.select_option(value=opt["v"])
                 return True
-    return not field["required"]
+    return False if PAT_CATEGORY.search(k) else not field["required"]
 
 def check_eligible(page, url):
     p=urlsplit(page.url)
@@ -200,10 +200,8 @@ def attempt(page, con, host, url, group_key, group):
         btn.click(timeout=10000)
         page.wait_for_timeout(900)
         body=page.locator("body").inner_text(timeout=5000).lower()[-1500:]
-        pub=is_public_listing(page,group["url"]) and page.url!=url
-        if pub:
-            write_result(con,host,group_key,url,"published_verified",page.url)
-        elif re.search(r"success|thank you|submitted|received|moderation|pending|review|cảm ơn|thành công",body):
+        # A receipt page is not evidence of a published public backlink.
+        if re.search(r"success|thank you|submitted|received|moderation|pending|review|cảm ơn|thành công",body):
             write_result(con,host,group_key,url,"submitted_pending_review",page.url)
         else:
             write_result(con,host,group_key,url,"submitted_outcome_unknown",page.url)
@@ -213,30 +211,33 @@ def attempt(page, con, host, url, group_key, group):
 def main():
     BASE.mkdir(parents=True,exist_ok=True)
     con=prepare_db()
-    queue=read_queue(con)
-    print("KQ247_BULK_SUBMIT_START="+json.dumps({"candidate_hosts":len(queue),"max_attempts":BATCH_LIMIT,
-     "protected_known_submitted_hosts":sorted(ALREADY_SENT_HOSTS)},ensure_ascii=False),flush=True)
-    if not queue:
-        print("NO_CONFIRMED_AUTO_POSTABLE_SITES_IN_QUEUE",flush=True)
-        return
     deadline=time.monotonic()+TIME_LIMIT
     posted=0
+    print("KQ247_BULK_SUBMIT_READY="+json.dumps({"max_attempts":BATCH_LIMIT,"poll_seconds":30,
+        "limit_seconds":TIME_LIMIT,"skipped_previously_submitted":sorted(ALREADY_SENT_HOSTS)}),flush=True)
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
         context=browser.new_context(viewport={"width":1200,"height":900})
         page=context.new_page()
-        for host,url in queue:
-            if posted>=BATCH_LIMIT or time.monotonic()>=deadline:break
-            for key,group in GROUPS.items():
+        while posted<BATCH_LIMIT and time.monotonic()<deadline:
+            queue=read_queue(con)
+            available=[(h,u) for h,u in queue if any(not con.execute(
+              "SELECT 1 FROM submissions WHERE host=? AND grp=?",(h,k)).fetchone() for k in GROUPS)]
+            if not available:
+                time.sleep(min(30,max(0,deadline-time.monotonic())))
+                continue
+            for host,url in available:
                 if posted>=BATCH_LIMIT or time.monotonic()>=deadline:break
-                if con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",(host,key)).fetchone():continue
-                attempt(page,con,host,url,key,group)
-                posted+=1
-                time.sleep(PAUSE)
+                for key,group in GROUPS.items():
+                    if posted>=BATCH_LIMIT or time.monotonic()>=deadline:break
+                    if con.execute("SELECT 1 FROM submissions WHERE host=? AND grp=?",(host,key)).fetchone():continue
+                    attempt(page,con,host,url,key,group)
+                    posted+=1
+                    time.sleep(PAUSE)
         context.close()
         browser.close()
-    print("KQ247_BULK_SUBMIT_DONE="+json.dumps({"attempts_in_this_run":posted,
-       "counts":dict(con.execute("SELECT state,COUNT(*) FROM submissions GROUP BY state"))}),flush=True)
+    print("KQ247_BULK_SUBMIT_DONE="+json.dumps({"attempts":posted,
+        "counts":dict(con.execute("SELECT state,COUNT(*) FROM submissions GROUP BY state"))}),flush=True)
     con.close()
 
 if __name__=="__main__":main()
