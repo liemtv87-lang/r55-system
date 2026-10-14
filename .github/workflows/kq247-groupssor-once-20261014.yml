@@ -1,0 +1,57 @@
+name: KQ247 Groupsor one-time free submissions
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-groupssor-once-20261014.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-groupssor-one-time
+  cancel-in-progress: false
+jobs:
+  submit-once:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate once-only submitting code
+        run: python3 -m py_compile seo-vps/groupssor-submit-once.py
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Run one-time honest directory submission on isolated VinaHost Playwright
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'mkdir -p /opt/pwremote/group-directory'
+          tar -czf - -C seo-vps groupssor-submit-once.py | $REMOTE 'tar -xzf - -C /opt/pwremote/group-directory'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/group-directory
+          docker image inspect pwremote/playwright:1.56.0 >/dev/null
+          uid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -u)"
+          gid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -g)"
+          mkdir -p "$base/state"
+          chown "$uid:$gid" "$base/state"
+          chmod 0644 "$base/groupssor-submit-once.py"
+          timeout 215s docker run --rm --init --name kq247-groupssor-submit-once \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/groupssor-submit-once.py,dst=/app/sub.py,readonly" \
+            --mount "type=bind,src=$base/state,dst=/state" \
+            pwremote/playwright:1.56.0 python3 /app/sub.py
+          echo 'GROUPSSOR_RECEIPTS_BEGIN'
+          cat "$base/state/groupssor-attempts.json"
+          echo 'GROUPSSOR_RECEIPTS_END'
+          echo 'KQ247_PRODUCTION_CONTAINERS_UNTOUCHED=YES'
+          VPS
