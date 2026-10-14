@@ -1,4 +1,4 @@
-name: KQ247 free directory one-time VPS Playwright scout
+name: KQ247 Two New Free Telegram Directories Submit Once
 on:
   push:
     branches: [seo-wtgroup-oneoff-20261014]
@@ -10,13 +10,13 @@ concurrency:
   group: kq247-directory-once-20261014
   cancel-in-progress: false
 jobs:
-  scout:
+  submit:
     runs-on: ubuntu-latest
-    timeout-minutes: 9
+    timeout-minutes: 10
     steps:
       - name: Install SSH client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
-      - name: Scout five new free Telegram directories with isolated VPS Playwright
+      - name: Submit two KQ247 Telegram groups to two genuine free directories once on isolated VPS
         shell: bash
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
@@ -31,48 +31,144 @@ jobs:
           set -euo pipefail
           base=/opt/pwremote/seo-free-directory-batch-20261014
           install -d -m 0755 "$base"
-          cat > "$base/scout.py" <<'PY'
-          import json,re
+          install -d -m 0750 "$base/state"
+          uid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -u)"
+          gid="$(docker run --rm --entrypoint id pwremote/playwright:1.56.0 -g)"
+          chown "$uid:$gid" "$base/state"
+          cat > "$base/submit.py" <<'PY'
+          import json,re,pathlib,datetime
           from playwright.sync_api import sync_playwright
+          OUT=pathlib.Path('/state/submissions-once.json')
           targets=[
-            'https://telegramgroups.co/submit',
-            'https://www.groupssor.com/',
-            'https://www.groupverse.co.in/',
-            'https://telegramlobby.com/en/',
-            'https://www.telegram-groups.com/',
+            {'key':'football','url':'https://t.me/keochuyengia79','name':'KQ247 Bóng Đá Hôm Nay',
+             'category_groupssor':'Sports','category_co':'SPORTS',
+             'tags':'bóng đá, lịch thi đấu, kết quả bóng đá, nhận định, Việt Nam',
+             'desc':'Cộng đồng bóng đá Việt Nam: lịch thi đấu, tỷ số, nhận định kèo châu Á và tài xỉu để tham khảo.'},
+            {'key':'lottery','url':'https://t.me/xsbm999','name':'KQ247 Kết Quả Xổ Số Ba Miền',
+             'category_groupssor':'News & Media','category_co':'NEWS',
+             'tags':'XSMB, XSMT, XSMN, kết quả xổ số, Việt Nam',
+             'desc':'Cập nhật kết quả XSMB, XSMT, XSMN, thống kê và thảo luận xổ số Việt Nam.'},
           ]
+          sites=['groupssor','telegramgroups.co']
+          def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
+          try: d=json.loads(OUT.read_text()) if OUT.exists() else {}
+          except:d={}
+          def save():OUT.write_text(json.dumps(d,indent=2,ensure_ascii=False)+'\n')
+          def pick(sel,kind):
+            opts=sel.evaluate('(e)=>Array.from(e.options).map(o=>({text:o.textContent.trim(),value:o.value}))')
+            exact=[x for x in opts if x['text'].casefold()==kind.casefold()]
+            if len(exact)!=1: raise ValueError('select_mismatch_'+kind+':'+str(opts[:30]))
+            sel.select_option(value=exact[0]['value'])
+          def submit_groupssor(page,t):
+            r=page.goto('https://www.groupssor.com/submit/',wait_until='domcontentloaded',timeout=25000)
+            if not r or r.status!=200:return {'status':'page_error','http':r.status if r else None}
+            page.wait_for_timeout(500)
+            form=page.locator('form:has(input[placeholder*="t.me"])')
+            if form.count()!=1:return {'status':'form_ambiguous','count':form.count()}
+            radio=form.locator('input[type=radio][value*="telegram" i]')
+            if radio.count()==1:radio.check()
+            else:
+              alt=form.get_by_label('Telegram',exact=True)
+              if alt.count()==1:alt.check()
+              else:return {'status':'platform_telegram_option_missing','inputs':form.locator('input[type=radio]').evaluate_all('(xs)=>xs.map(x=>({value:x.value,name:x.name}))')}
+            link=form.locator('input[placeholder*="t.me"]')
+            name=form.locator('input[placeholder*="Web Dev"]')
+            desc=form.locator('textarea')
+            selects=form.locator('select')
+            if link.count()!=1 or name.count()!=1 or desc.count()!=1 or selects.count()<3:
+              return {'status':'fields_mismatch','links':link.count(),'names':name.count(),'descs':desc.count(),'selects':selects.count()}
+            link.fill(t['url'])
+            name.fill(t['name'])
+            pick(selects.nth(0),t['category_groupssor'])
+            pick(selects.nth(1),'Vietnam')
+            pick(selects.nth(2),'Vietnamese')
+            tags=form.locator('input[placeholder*="coding"]')
+            if tags.count()==1: tags.fill(t['tags'])
+            desc.fill(t['desc'])
+            if page.locator('.g-recaptcha,.h-captcha,iframe[src*="captcha"],[data-sitekey]').count():return {'status':'captcha_action_required'}
+            required=form.locator('input[required],select[required],textarea[required]').evaluate_all('(xs)=>xs.map(x=>({name:x.name,valid:x.checkValidity()}))')
+            if any(not x['valid'] for x in required):return {'status':'invalid_fields','details':required}
+            d['groupssor:'+t['key']]={'status':'click_intent_recorded','time':now()}
+            save()
+            button=form.get_by_role('button',name='Submit Group')
+            if button.count()!=1:return {'status':'submit_button_missing'}
+            button.click(timeout=16000)
+            page.wait_for_timeout(2200)
+            body=page.locator('body').inner_text()
+            if re.search(r'Group submitted!|Thank you for submitting your group',body,re.I):state='submitted_pending_review'
+            elif re.search(r'error|invalid|duplicate|blocked|failed',body[-600:],re.I):state='response_uncertain_or_rejected'
+            else:state='submit_clicked_unverified'
+            return {'status':state,'final_url':page.url,'excerpt':body[-420:]}
+          def submit_co(page,t):
+            r=page.goto('https://telegramgroups.co/submit',wait_until='domcontentloaded',timeout=25000)
+            if not r or r.status!=200:return {'status':'page_error','http':r.status if r else None}
+            inp=page.locator('#channel-link-input')
+            btn=page.locator('#verify-btn')
+            if inp.count()!=1 or btn.count()!=1:return {'status':'verification_form_missing'}
+            inp.fill(t['url'])
+            btn.click(timeout=14000)
+            page.wait_for_timeout(3700)
+            body=page.locator('body').inner_text(timeout=10000)
+            if page.locator('#upgrade-pay-btn:visible').count()>0 or 'Detected: a paid category' in body and page.locator('#category-select:visible').count()==0:
+              return {'status':'paid_category_no_submission'}
+            cat=page.locator('#category-select')
+            if cat.count()!=1:return {'status':'category_select_missing_after_verify','excerpt':body[-500:]}
+            pick(cat,t['category_co'])
+            radios=page.locator('input[name="boost_plan"]')
+            if radios.count()>0:
+              fre=page.get_by_label(re.compile(r'Free',re.I))
+              if fre.count()==1:
+                try:fre.check(timeout=3500)
+                except:pass
+            submit=page.locator('#submit-btn')
+            if submit.count()!=1 or not submit.is_visible() or not submit.is_enabled():
+              return {'status':'submit_unavailable_after_verify','body':body[-470:]}
+            d['telegramgroups.co:'+t['key']]={'status':'click_intent_recorded','time':now()}
+            save()
+            submit.click(timeout=12000)
+            page.wait_for_timeout(3500)
+            body=page.locator('body').inner_text()
+            # A paywall or automatic review is not an approved free backlink.
+            if page.locator('#upgrade-pay-btn:visible').count()>0:return {'status':'paid_category_no_submission','excerpt':body[-350:]}
+            if 'Your channel is live' in body and page.locator('a:has-text("View your listing")').count()>0:
+              anchors=page.locator('a:has-text("View your listing")')
+              listing=anchors.first.get_attribute('href')
+              if not anchors.first.is_visible():listing=None
+              return {'status':'site_claims_live_check_url','listing':listing,'excerpt':body[-300:]}
+            if 'Already in our directory' in body:return {'status':'already_listed','excerpt':body[-340:]}
+            if 'Submission declined' in body:return {'status':'submission_declined','excerpt':body[-340:]}
+            return {'status':'submit_clicked_unverified','excerpt':body[-430:]}
           with sync_playwright() as p:
             browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
-            for target in targets:
-              ctx=browser.new_context(viewport={'width':1300,'height':940})
-              page=ctx.new_page()
-              rec={'target':target}
-              try:
-                r=page.goto(target,wait_until='domcontentloaded',timeout=22000)
-                page.wait_for_timeout(1200)
-                rec['status']=r.status if r else None
-                rec['url']=page.url
-                rec['title']=page.title()
-                rec['links']=page.locator('a').evaluate_all("""xs => xs.filter(x=>/submit|add|list your|post your|publish/i.test(x.innerText||'') || /submit|add-group|add-channel|publish/i.test(x.href)).slice(0,12).map(x=>({text:x.innerText.trim().slice(0,60),href:x.href}))""")
-                rec['forms']=page.locator('form').evaluate_all("""xs => xs.slice(0,8).map(f=>({action:f.action,method:f.method,fields:[...f.querySelectorAll('input,select,textarea,button')].slice(0,35).map(x=>({tag:x.tagName.toLowerCase(),name:x.name,id:x.id,type:x.type,placeholder:x.placeholder,text:(x.innerText||'').slice(0,50),required:x.required,options:x.tagName==='SELECT'?[...x.options].map(o=>o.text).slice(0,35):undefined}))}))""")
-                rec['controls']=page.locator('input,select,textarea,button').evaluate_all("""xs => xs.slice(0,35).map(x=>({tag:x.tagName.toLowerCase(),name:x.name,id:x.id,type:x.type,placeholder:x.placeholder,text:(x.innerText||'').slice(0,50),required:x.required,options:x.tagName==='SELECT'?[...x.options].map(o=>o.text).slice(0,35):undefined}))""")
-                rec['body_excerpt']=page.locator('body').inner_text(timeout=4000)[:650].replace('\n',' ')
-              except Exception as e:
-                rec['error']=str(e)[:300]
-              print('KQ247_SCOUT_RESULT',json.dumps(rec,ensure_ascii=False),flush=True)
-              ctx.close()
+            for site in sites:
+              for t in targets:
+                key=site+':'+t['key']
+                if key in d:
+                  print('KQ247_SKIP_ALREADY_ATTEMPTED',key,json.dumps(d[key],ensure_ascii=False),flush=True)
+                  continue
+                page=browser.new_page(viewport={'width':1320,'height':920})
+                try:
+                  rec=submit_groupssor(page,t) if site=='groupssor' else submit_co(page,t)
+                except Exception as e:rec={'status':'exception_or_uncertain_no_retry','error':type(e).__name__+':'+str(e)[:450]}
+                rec['time']=now()
+                d[key]=rec;save()
+                print('KQ247_DIRECTORY_SUBMIT_RESULT',key,json.dumps(rec,ensure_ascii=False),flush=True)
+                page.close()
             browser.close()
+          print('KQ247_DIRECTORY_SUBMIT_SUMMARY',json.dumps(d,ensure_ascii=False),flush=True)
           PY
+          chmod 0644 "$base/submit.py"
           before="$(docker ps -a --format '{{.Names}}' | grep '^kq247-' | sort || true)"
-          timeout 220s docker run --rm --init --name kq247-free-dir-scout-once \
+          timeout 260s docker run --rm --init --name kq247-new-free-dir-submit-once \
             --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
-            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --user pwuser --pids-limit 150 --cpus 0.9 --memory 1300m \
             --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
             --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
-            --mount "type=bind,src=$base/scout.py,dst=/app/scout.py,readonly" \
-            pwremote/playwright:1.56.0 python3 /app/scout.py
+            --mount "type=bind,src=$base/submit.py,dst=/app/submit.py,readonly" \
+            --mount "type=bind,src=$base/state,dst=/state" \
+            pwremote/playwright:1.56.0 python3 /app/submit.py
           after="$(docker ps -a --format '{{.Names}}' | grep '^kq247-' | sort || true)"
           test "$before" = "$after"
           echo 'PRODUCTION_CONTAINERS_UNCHANGED=YES'
-          echo 'NO_NEW_TIMERS=YES'
+          echo 'ONE_TIME_ONLY_NO_TIMERS=YES'
           VPS
