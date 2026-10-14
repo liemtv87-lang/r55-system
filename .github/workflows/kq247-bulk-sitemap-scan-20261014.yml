@@ -6,6 +6,8 @@ on:
       - '.github/workflows/kq247-bulk-sitemap-scan-20261014.yml'
       - 'seo-vps/bulk-sitemap-audit.py'
   workflow_dispatch:
+  schedule:
+    - cron: '17 */4 * * *'
 permissions:
   contents: read
 jobs:
