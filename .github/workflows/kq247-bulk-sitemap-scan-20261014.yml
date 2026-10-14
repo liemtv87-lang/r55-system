@@ -1,0 +1,40 @@
+name: KQ247 Bulk Sitemap URL Scanner
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/kq247-bulk-sitemap-scan-20261014.yml'
+      - 'seo-vps/bulk-sitemap-audit.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and read-only URL scan (bounded per site)
+        env:
+          KQ247_MAX_SITEMAP_URLS: '300000'
+          KQ247_MAX_SITEMAPS: '320'
+        run: |
+          python3 -m py_compile seo-vps/bulk-sitemap-audit.py
+          python3 seo-vps/bulk-sitemap-audit.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('reports/kq247-bulk-sitemap-scan.json').read_text())
+          assert r['new_backlinks_published_by_this_job']==0
+          assert all(s['sitemaps_fetched_or_attempted']<=24 for s in r['sites'])
+          assert r['domains_probed']>=20
+          print('SCAN_VERIFICATION_PASS scanned='+str(r['scanned_sitemap_url_records']))
+          PY
+      - name: Preserve scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kq247-bulk-sitemap-audit
+          path: reports/kq247-bulk-sitemap-scan.json
+          if-no-files-found: warn
+          retention-days: 30
