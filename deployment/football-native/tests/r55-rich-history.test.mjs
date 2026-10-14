@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {extractRichBongdaluHistory} from "../lib/r55RichHistory.js";
+import {collectBongdaluPageBookmakers} from "../lib/r55BookmakerPage.js";
+import {releaseDecision} from "../../football-original/lib/r55ReleaseGate.js";
 
 const rows = n=>Array.from({length:n},(_,i)=>[101,300+i,i%4,i%2]);
 const tr = (table,n)=>Array.from({length:n},(_,i)=>
@@ -35,4 +37,22 @@ test("does not create played results when source lacks score rows",()=>{
  assert.equal(h.homeRows.length,0);
  assert.equal(h.awayRows.length,0);
  assert.equal(h.sourceCoverage.historicalPriceRows,0);
+});
+
+test("odds comparison captures all genuine company rows and ignores malformed prices",()=>{
+ const row=(id,price)=>'<tr id="tr_o_2_'+id+'"><td>Book '+id+'</td><td>Live</td>'+
+ '<td>'+price+'</td><td>0/0.5</td><td>0.91</td><td>0.90</td>'+
+ '<td>2.5</td><td>0.92</td></tr>';
+ const parsed=collectBongdaluPageBookmakers(row("31","0.90")+row("8","0.95")+row("999","bad"));
+ assert.equal(parsed.length,2);
+ assert.equal(parsed[0].homeLine,-0.25);
+ assert.equal(parsed[1].bookmaker,"8");
+});
+test("R55 ensemble v4 research-only can never pass historical release gate",()=>{
+ const m={priority:300,kickoff:new Date(Date.now()+3600000).toISOString(),
+  market:{type:"AH",method:"r55_ensemble_v4_ah",modelVersion:"ensemble_poisson_three_scenarios_v4_native_agreement",
+   researchOnly:true,expectedEV:.12,worstEV:.05,modelSpread:.11,modelAgreement:3,
+   bookmakers:5,odds:1.91,evidence:99}};
+ const methods=[{method:"r55_ensemble_v4_ah",type:"AH",eligible:true,n:100,days:10,units:4,wilsonLower:.55}];
+ assert.equal(releaseDecision(m,methods,true).ok,false);
 });
