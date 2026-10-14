@@ -1,0 +1,75 @@
+name: KQ247 XS And Sales Bot Live Readonly Sync Audit
+on:
+  push:
+    paths: ['.github/workflows/kq247-xs-sales-live-readonly-sync-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read-only VPS status and current customer catalog
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          import json,urllib.request
+          def j(port):
+           return json.load(urllib.request.urlopen(f'http://127.0.0.1:{port}/healthz',timeout=12))
+          ui=j(18084)
+          assert ui['ok'] and ui.get('predictionSource')=='VPS_POSTGRES_IMMUTABLE_LOCKED'
+          print('XS_PUBLIC_SNAPSHOT_SERVICE',ui.get('predictionSource'))
+          xs=j(18085)
+          assert xs.get('active') and xs.get('has_token')
+          print('XS_PRIMARY_BOT_ACTIVE',xs['active'],'lastError',str(xs.get('last_error'))[:60])
+          sales=j(18087)
+          assert sales['ok'] and sales.get('active') and sales.get('tokenConfigured') and sales.get('databaseConfigured')
+          assert sales.get('lastPoll') and not sales.get('lastError')
+          print('SALES_BOT_LIVE_VPS=PASS','lastPoll',sales['lastPoll'])
+          for region in ('xsmb','xsmt','xsmn'):
+           html=urllib.request.urlopen('http://127.0.0.1:18080/xoso?region='+region,timeout=15).read().decode()
+           assert 'DÀN 3 CÀNG (500 số)' in html and 'id="kq247-xs-qc"' in html
+           if region=='xsmb':
+            assert all('<span class="num">'+s+'</span>' in html for s in ('51','52','91'))
+           print('XS_MAIN_AND_CUSTOMER_SAME_LINK',region,'PASS')
+          customer=urllib.request.urlopen('http://127.0.0.1:18080/xoso-khach?region=xsmb',timeout=15)
+          assert customer.status==200 and b'iframe' in customer.read().lower()
+          print('XS_CUSTOMER_LICENSE_PATH=PASS')
+          PY
+          # No message or payment is sent; these are solely non-sensitive catalog checks.
+          docker exec -i kq247-sales-bot-primary node --input-type=module <<'JS'
+          import pg from 'pg';
+          const db=new pg.Pool({connectionString:process.env.NEON_DATABASE_URL,max:1,connectionTimeoutMillis:15000});
+          try{
+           const q=await db.query("SELECT p.product,p.duration_days,p.price_vnd,c.value AS url FROM sales_plans p LEFT JOIN sales_config c ON c.key='client_'||p.product||'_url' WHERE p.enabled=true AND p.product IN ('lottery','football','vietlott')");
+           const rows=q.rows;
+           const canon={lottery:'https://64-120-92-172.sslip.io/xoso-khach?region=xsmb',football:'https://64-120-92-172.sslip.io/client.html',vietlott:'https://vietlott.64-120-92-172.sslip.io/client.html'};
+           for(const [p,url] of Object.entries(canon)){
+            const plan=rows.filter(x=>x.product===p);
+            if(plan.length<5||!plan.some(x=>Number(x.duration_days)===10&&Number(x.price_vnd)===0)||
+             !plan.some(x=>Number(x.duration_days)===30&&Number(x.price_vnd)===1500000)||
+             plan.some(x=>x.url!==url))throw Error('SALES_CATALOG_MISMATCH_'+p);
+            console.log('SALES_PRICE_FREE10_1500000_AND_CLIENT_LINK_PASS',p,plan.length);
+           }
+           const current=await db.query("SELECT product,url FROM sales_link_history WHERE is_current=true AND link_role='client'");
+           for(const [p,url] of Object.entries(canon))
+            if(current.rows.filter(x=>x.product===p&&x.url===url).length!==1)
+             throw Error('SALES_CURRENT_LINK_HISTORY_MISMATCH_'+p);
+           const count=await db.query("SELECT count(*)::int AS n FROM sales_licenses");
+           console.log('SALES_LICENSE_RECORD_COUNT_READONLY',count.rows[0].n);
+           console.log('SALES_CURRENT_LINK_LEDGER=PASS');
+          }finally{await db.end()}
+          JS
+          docker exec kq247-sales-bot-primary node --check /app/worker.mjs
+          echo BOT_BH_MENU_FREE10_LICENSE_RECOVERY_CODE=SYNTAX_PASS
+          echo XS_SALES_BOT_FULL_READONLY_SYNC_AUDIT=PASS
+          VPS
