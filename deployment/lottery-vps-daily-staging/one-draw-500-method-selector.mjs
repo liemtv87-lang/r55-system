@@ -6,6 +6,7 @@ const tasks=['loCatch','loReject','kepCatch','kepReject','deCatch','headReject',
 const total=1000, selectedCount=150;
 const p2=x=>String(x).padStart(2,'0'),p3=x=>String(x).padStart(3,'0');
 const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const historyFingerprint=h=>sha(h.map(d=>[d.region,d.station,d.draw_date,d.full_results]));
 const delta=(a,b)=>(Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000;
 function derive(d){
  const positions=d.full_results.flatMap((v,prize)=>[...v].map((digit,column)=>({v:+digit,prize,column})));
@@ -85,7 +86,7 @@ export function calibrateStation500({history,region,station,predictionDate}){
    meanSelectedMethodHitRate:+(hit/(testN*selectedCount)).toFixed(5)};
  }
  return {region,station,predictionDate,sourceDate:h.at(-1).draw_date,
-  selected:pick,methodSelectionSHA256:sha(pick),
+  selected:pick,methodSelectionSHA256:sha(pick),historySHA256:historyFingerprint(h),
   backtest:{realCompleteDraws:500,trainTransitions:trainN,heldoutTransitions:testN,
    candidateMethodsPerTask:total,methodsSelectedPerTask:selectedCount,
    sameStationOnly:true,historyUsedForDailyVotes:false,report}};
@@ -102,9 +103,14 @@ function bannedFromHistory(history,region,station){
 }
 export function predictFromLastDrawWithCalibration({previousDraw,history,calibration,predictionDate}){
  const d=normalizedStationDraw(previousDraw),{region,station}=d,lag=delta(predictionDate,d.draw_date);
+ const checked=checkedHistory(history,region,station,predictionDate);
  if(!Number.isInteger(lag)||(region==='mb'?lag!==1:lag<1||lag>7))throw Error('WRONG_STATION_PREVIOUS_DRAW_DATE');
  if(calibration?.region!==region||calibration.station!==station||calibration.predictionDate!==predictionDate||
-    calibration.sourceDate!==d.draw_date||calibration.backtest?.realCompleteDraws!==500)
+    calibration.sourceDate!==d.draw_date||calibration.backtest?.realCompleteDraws!==500||
+    calibration.historySHA256!==historyFingerprint(checked)||
+    calibration.methodSelectionSHA256!==sha(calibration.selected)||
+    tasks.some(task=>{const ids=calibration.selected?.[task];return !Array.isArray(ids)||ids.length!==selectedCount||
+      new Set(ids).size!==selectedCount||ids.some(i=>!Number.isInteger(i)||i<0||i>=total);}))
     throw Error('UNVERIFIED_500_STATION_CALIBRATION');
  const excluded=bannedFromHistory(history,region,station);
  const methods=derive(d),vote=tasks.map((_,i)=>new Float64Array(i===6?1000:i===5||i===7?10:100));
@@ -142,7 +148,8 @@ export function predictFromLastDrawWithCalibration({previousDraw,history,calibra
   method:'KQ247_ONE_LAST_DRAW_WITH_500_STATION_BACKTEST_SELECTED_METHODS',
   audit:{bridgeSourceDrawCount:1,bridgeSourceStation:station,coveredPositions:totalDigitPositions(region),
    excludedNumbers:[...excluded].sort(),methodsPerTask:total,
-   calibrationSHA256:calibration.methodSelectionSHA256,backtest500:calibration.backtest}};
+   calibrationSHA256:calibration.methodSelectionSHA256,historySHA256:calibration.historySHA256,
+   backtest500:calibration.backtest}};
 }
 export function forecastOneDrawAnd500Backtest({history,region,station,predictionDate}){
  const calibration=calibrateStation500({history,region,station,predictionDate});
