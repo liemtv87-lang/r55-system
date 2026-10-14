@@ -37,8 +37,11 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
           $REMOTE 'install -d -m 0700 /opt/pwremote/kq247-backlink-background'
-          tar -czf - -C scripts kq247-backlink-background-discovery-20261014.py |
-            $REMOTE 'tar -xzf - -C /opt/pwremote/kq247-backlink-background'
+          # Use SFTP-backed SCP for source transfer. Some VPS shells treated
+          # streamed gzip bytes as shell input and never extracted the archive.
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            scripts/kq247-backlink-background-discovery-20261014.py \
+            root@64.120.92.172:/opt/pwremote/kq247-backlink-background/kq247-backlink-background-discovery-20261014.py
           $REMOTE 'bash -se' <<'VPS'
           set -euo pipefail
           base=/opt/pwremote/kq247-backlink-background
