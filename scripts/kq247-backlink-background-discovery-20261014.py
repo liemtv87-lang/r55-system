@@ -226,26 +226,23 @@ def add_url(con, raw, force=False):
     if PATH_RE.search(urlsplit(url).path):
         con.execute("UPDATE hosts SET url=? WHERE host=? AND status='pending' AND url LIKE '%/'", (url,host))
 
-def source_file():
-    """Always provide a real, deduplicated source file; never invent scan volume.
-
-    Large inventories can be appended to this same file. If prior one-off scans
-    did not retain their URL records, bootstrap from the public submission
-    routes actually known to the crawler instead of running with no input.
-    """
-    for f in INPUTS:
-        if f.is_file() and f.stat().st_size > 0:
-            return f
+def source_files():
+    """Consume every available real inventory, each with its own durable byte cursor."""
+    extra = os.environ.get("KQ247_URL_INVENTORY", "")
+    paths = list(INPUTS) + [Path(p) for p in extra.split(os.pathsep) if p]
+    paths += sorted((ROOT / "incoming").glob("*.txt"))
+    real = list(dict.fromkeys(p for p in paths if p.is_file() and p.stat().st_size > 0))
+    if real:
+        return real
     bootstrap = INPUTS[0]
     bootstrap.parent.mkdir(parents=True, exist_ok=True)
     actual_routes = list(dict.fromkeys(SEED))
-    with bootstrap.open("x", encoding="utf-8") as stream:
-        stream.write("\n".join(actual_routes) + "\n")
+    bootstrap.write_text("\n".join(actual_routes) + "\n", encoding="utf-8")
     print("KQ247_BOOTSTRAP_INVENTORY=" + json.dumps({
         "path": str(bootstrap), "real_seed_urls": len(actual_routes),
-        "note": "Seed URL records only; not published backlinks or billions of scans."
+        "note": "Real seed records only, not millions of URLs or published links."
     }), flush=True)
-    return bootstrap
+    return [bootstrap]
 
 def ingest(con, f, max_records):
     name = "inventory:" + str(f.resolve())
@@ -253,30 +250,41 @@ def ingest(con, f, max_records):
     pos = int(state_get(con, name + ":byte", "0"))
     if pos > size: pos = 0
     count = 0
+    extracted = 0
     with f.open("rb") as reader:
         reader.seek(pos)
         while count < max_records:
             line = reader.readline()
             if not line: break
             count += 1
-            for raw in URL_RE.findall(line.decode("utf-8","ignore")):
+            decoded = line.decode("utf-8", "ignore").strip()
+            urls = URL_RE.findall(decoded)
+            if not urls and re.fullmatch(r"[a-zA-Z0-9.-]{4,253}", decoded):
+                urls = ["https://" + decoded]
+            for raw in urls:
                 add_url(con, raw.rstrip(".,;)"))
+            extracted += len(urls)
             if count % BATCH == 0:
                 state_set(con, name + ":byte", reader.tell())
                 state_set(con, "urls_read", int(state_get(con, "urls_read")) + BATCH)
+                state_set(con, "urls_extracted", int(state_get(con, "urls_extracted")) + extracted)
+                extracted = 0
                 con.commit()
         rem = count % BATCH
         state_set(con, name + ":byte", reader.tell())
         state_set(con, "urls_read", int(state_get(con, "urls_read")) + rem)
+        state_set(con, "urls_extracted", int(state_get(con, "urls_extracted")) + extracted)
         con.commit()
     return count
 
-def write_report(con, started, scanned, source):
+def write_report(con, started, scanned, sources):
     groups = dict(con.execute("SELECT status,COUNT(*) FROM hosts GROUP BY status").fetchall())
     out = {"updated_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),
       "elapsed_s":round(time.monotonic()-started,2),
-      "source_inventory_exists":bool(source), "inventory_path":str(source) if source else None,
-      "url_records_actually_read_total":int(state_get(con,"urls_read")),
+      "source_inventory_exists":bool(sources), "inventory_paths":[str(s) for s in sources],
+      "inventory_files_count":len(sources),
+      "inventory_lines_read_total":int(state_get(con,"urls_read")),
+      "url_records_actually_read_total":int(state_get(con,"urls_extracted")),
       "unique_hosts_discovered":con.execute("SELECT COUNT(*) FROM hosts").fetchone()[0],
       "http_hosts_checked_this_run":scanned,
       "hosts_by_status":groups,
@@ -318,12 +326,16 @@ def main():
         con = db_open()
         for u in SEED: add_url(con,u,force=True)
         con.commit()
-        src = source_file()
+        sources = source_files()
         scanned = 0
         while WATCH or (time.monotonic()-started < MAX_SECONDS and scanned < MAX_HTTP_HOSTS):
             # Incrementally load new URL records. Never reset the cursor to inflate counts.
-            if src and int(state_get(con,"urls_read")) < MAX_URL_LINES:
-                ingest(con,src,min(100000, MAX_URL_LINES-int(state_get(con,"urls_read"))))
+            sources = source_files()
+            budget = MAX_URL_LINES - int(state_get(con,"urls_read"))
+            for source in sources:
+                if budget <= 0: break
+                read = ingest(con, source, min(100000, budget))
+                budget -= read
             if WATCH and scanned >= MAX_HTTP_HOSTS:
                 # Budget per scan window, not an attempt to fetch unlimited hosts at once.
                 time.sleep(IDLE_SECONDS)
@@ -331,7 +343,7 @@ def main():
             remaining = MAX_HTTP_HOSTS-scanned
             entries=con.execute("SELECT host,url FROM hosts WHERE status='pending' LIMIT ?", (min(WORKERS*5,remaining),)).fetchall()
             if not entries:
-                write_report(con,started,scanned,src)
+                write_report(con,started,scanned,sources)
                 if not WATCH:
                     break
                 # Periodically requalify previously unavailable sources, not submissions.
@@ -340,9 +352,9 @@ def main():
                 con.execute("UPDATE hosts SET status='pending' WHERE status IN ('unavailable','no_form') AND checked != '' AND checked < ?",(cutoff,))
                 con.commit()
                 print("KQ247_BG_IDLE="+json.dumps({"sleep_s":IDLE_SECONDS,
-                    "source_inventory_exists":bool(src),"new_hosts_pending":0}),flush=True)
+                    "source_inventory_exists":bool(sources),"new_hosts_pending":0}),flush=True)
                 time.sleep(IDLE_SECONDS)
-                src = source_file()
+                sources = source_files()
                 continue
             with futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
                 responses = list(pool.map(inspect, entries))
@@ -357,8 +369,8 @@ def main():
                       (final,status,reason,datetime.datetime.now(datetime.timezone.utc).isoformat(),host))
             scanned += len(entries)
             con.commit()
-            write_report(con,started,scanned,src)
-        write_report(con,started,scanned,src)
+            write_report(con,started,scanned,sources)
+        write_report(con,started,scanned,sources)
         print("KQ247_BG_DONE="+json.dumps({"elapsed_s":round(time.monotonic()-started,2),
           "records_read":int(state_get(con,"urls_read")),"hosts_http_checked":scanned}),flush=True)
         con.close()
