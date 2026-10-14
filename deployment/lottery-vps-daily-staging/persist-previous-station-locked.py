@@ -44,9 +44,13 @@ ON CONFLICT(region,station,source_date) DO NOTHING;""")
  IF NOT EXISTS (
   SELECT 1 FROM kq247_xs_vps.previous_station_locked
   WHERE region={quote(region)} AND station={quote(station)} AND source_date={quote(source)}::date
-    AND source_digest={quote(x['sourceSHA256'])})
- THEN NULL; END IF;
- END $verify$;""".replace(" AND lotto_unused IS NULL",""))
+    AND source_digest={quote(x['sourceSHA256'])}
+    AND payload->'lotto3'={js(x['lotto3'])}
+    AND payload->'doubles'={js(x['doubles'])}
+    AND payload->'dan75'={js(x['dan75'])}
+    AND payload->'three_digit'={js(x['three_digit'])})
+ THEN RAISE EXCEPTION 'PREEXISTING_STATION_LOCK_MISMATCH'; END IF;
+ END $verify$;""")
 # Check each conflict bytewise by comparing key immutable decisions and sources.
 sql='BEGIN;\n'+'\n'.join(assert_sql)+'\nCOMMIT;\nSELECT count(*) FROM kq247_xs_vps.latest_previous_station_locked;'
 p=subprocess.run(['docker','exec','-i','kq247-r55-postgres','sh','-c',
