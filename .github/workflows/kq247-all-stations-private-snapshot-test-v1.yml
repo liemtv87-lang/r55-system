@@ -23,7 +23,7 @@ jobs:
           install -d -m 700 "$HOME/.ssh"
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
-          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/{normalize-all-prizes.mjs,previous-station-draw-only.mjs,station-previous-draw-runner.mjs,minhngoc-all-stations.mjs,mtmn-35stations-prior-draw-samples.json,verified-five-stations-full-results-20261014.json} root@64.120.92.172:/opt/kq247/lottery-daily-staging/
           sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           ROOT=/opt/kq247/lottery-daily-staging
