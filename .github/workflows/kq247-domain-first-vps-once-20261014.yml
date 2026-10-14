@@ -1,0 +1,60 @@
+name: KQ247 Domain-First Backlink Sources - VPS Once
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/kq247-domain-first-vps-once-20261014.yml'
+      - 'scripts/kq247-domain-first-scan-20261014.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-domain-first-one-shot
+  cancel-in-progress: false
+jobs:
+  scan-vps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python syntax
+        run: python3 -m py_compile scripts/kq247-domain-first-scan-20261014.py
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Run domain-first qualifier on isolated VinaHost directory
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'install -d -m 0755 /opt/pwremote/kq247-domain-first'
+          tar -czf - -C scripts kq247-domain-first-scan-20261014.py | $REMOTE 'tar -xzf - -C /opt/pwremote/kq247-domain-first'
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/kq247-domain-first
+          chmod 0644 "$base/kq247-domain-first-scan-20261014.py"
+          echo 'PREVIOUS_URL_INDEX_FILES:'
+          find /opt/pwremote /opt/kq247/seo-groups/reports -maxdepth 4 -type f \( -iname '*urls*.txt' -o -iname '*url*inventory*' -o -iname '*sitemap*scan*.json' \) -printf '%p %s bytes\n' 2>/dev/null | head -30 || true
+          timeout 155s python3 "$base/kq247-domain-first-scan-20261014.py"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('/opt/pwremote/kq247-domain-first/latest.json').read_text())
+          assert r['domains_probed']>=20
+          assert r['published_backlinks_by_job']==0
+          print('VPS_DOMAIN_FIRST_REPORT',json.dumps({
+            'domains_probed':r['domains_probed'],
+            'records_read':r['records_read_this_run'],
+            'eligible_form_candidates':len(r['candidate_forms']),
+            'candidate_urls':[x['url'] for x in r['candidate_forms']],
+            'inventory_present':r['inventory_file_present']
+          },ensure_ascii=False))
+          PY
+          echo 'KQ247_PRODUCTION_UNTOUCHED=YES'
+          VPS
