@@ -1,5 +1,6 @@
 import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
+import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
 import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseFormTable as nativeParseFormTable,parseH2HTable as nativeParseH2HTable,parseAsianHistory as nativeParseAsianHistory,parseBongOdds as nativeParseBongOdds,parseBongFeed as nativeParseBongFeed,parseBongLeagueMeta as nativeParseBongLeagueMeta,discoverBongdaluRoots as nativeDiscoverBongdaluRoots,bongNeighborRoots as nativeBongNeighborRoots} from "lib/original-bongdalu/r55-core-verbatim-transpiled.js";
 // Port of the production football-all-refresh-v3 Bongdalu ingestion/model layer.
 // No Goaloo/NowGoal, ESPN, Livescore or synthetic odds may contribute market input.
@@ -145,21 +146,45 @@ function parseH2HTable(html){
  }return{n,edge:n?edge/n:0,total:n?total/n:0};
 }
 function parseHistoryHtml(html){
- if(!html.includes("table_v1")||!html.includes("table_v2")||!html.includes("table_v3"))return null;
- const home=nativeParseFormTable(html,"table_v1","team-home-f"),
-       away=nativeParseFormTable(html,"table_v2","team-away-f"),
-       h2h=nativeParseH2HTable(html);
+ const rich=extractRichBongdaluHistory(html);
+ if(!rich||!rich.sourceCoverage.hasRenderedTables&&
+   !rich.homeRows.length&&!rich.awayRows.length&&!rich.h2hRows.length)return null;
+ let home=nativeParseFormTable(html,"table_v1","team-home-f"),
+     away=nativeParseFormTable(html,"table_v2","team-away-f"),
+     h2h=nativeParseH2HTable(html);
+ // Real embedded h_data/a_data can contain 20 results while only 10 are rendered.
+ // Never describe the match as lacking history merely because the short table was parsed.
+ if(rich.homeSummary.n>Number(home.n||0))home=rich.homeSummary;
+ if(rich.awaySummary.n>Number(away.n||0))away=rich.awaySummary;
  const hi=Number((html.match(/var\s+h2h_home\s*=\s*(\d+)/i)||[])[1]),
        ai=Number((html.match(/var\s+h2h_away\s*=\s*(\d+)/i)||[])[1]);
  const homeAsian=nativeParseAsianHistory(html,1,hi),awayAsian=nativeParseAsianHistory(html,2,ai),
        h2hAsian=nativeParseAsianHistory(html,3,hi);
- return{bongdalu:true,home,away,h2h,home_asian:homeAsian,away_asian:awayAsian,h2h_asian:h2hAsian,
-    history_games:Math.min(20,home.n,away.n),history_home_games:home.n,history_away_games:away.n,partial_history:!home.n||!away.n};
+ // Retain genuine individual AH/OU historical lines for every published bookmaker.
+ return {bongdalu:true,home,away,h2h,home_asian:homeAsian,away_asian:awayAsian,
+    h2h_asian:h2hAsian,individualHistory:{
+     home:rich.homeRows,away:rich.awayRows,h2h:rich.h2hRows},
+    sourceCoverage:rich.sourceCoverage,
+    history_games:Math.min(20,home.n,away.n),
+    history_home_games:home.n,history_away_games:away.n,
+    partial_history:!home.n||!away.n};
 }
-async function history(base,id){try{
- const html=await get(base,"match/h2h-"+encodeURIComponent(id),"text/html",14000);
- return parseHistoryHtml(html);
- }catch{return null}
+async function history(base,id){
+ let result=null;
+ for(let attempt=1;attempt<=3;attempt++){
+  try{
+   const html=await get(base,"match/h2h-"+encodeURIComponent(id),"text/html",16000);
+   const parsed=parseHistoryHtml(html);
+   if(parsed){
+    result={...parsed,fetchAttempts:attempt,sourcePage:"match/h2h-"+id};
+    if(Number(parsed.home?.n)>0&&Number(parsed.away?.n)>0)return result;
+   }
+  }catch(e){if(attempt===3&&result)return {...result,fetchAttempts:attempt};}
+  if(attempt<3)await new Promise(resolve=>setTimeout(resolve,400*attempt));
+ }
+ // A verified empty page is NOT proof of "thin data"; callers record a fetch/
+ // extraction issue separately rather than fabricating results or odds.
+ return result;
 }
 function makeMarket(row,h,learned){
  const mk=row.market;if(!mk||!h||h.home.n<1||h.away.n<1)return null;
