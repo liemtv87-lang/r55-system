@@ -229,7 +229,10 @@ async function history(base,id){
  return result;
 }
 function makeMarket(row,h,learned){
- if(!row?.market||!h||h.home.n<1||h.away.n<1)return null;
+ // Do not drop a legitimately priced fixture solely because Bongdalu reports
+ // zero form matches for one side. The evidence gate below keeps it research-only.
+ // Neither H2H nor a fixed number of form matches is needed to model a fixture.
+ if(!row?.market||!h?.home||!h?.away)return null;
  // Merge every valid company shown on Bongdalu's comparison page, while keeping
  // the actual betting price tied to the separately verified XML bookmaker line.
  const extras=Array.isArray(h.oddscompCompanies)?h.oddscompCompanies:[];
