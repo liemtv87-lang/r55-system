@@ -32,6 +32,9 @@ DOMAINS = [
     "telegradia.com", "tgfind.io", "telehub.to", "search-t.me",
     "telegramchannels.me", "groupda.com", "tgden.com", "tg.app",
     "tgram.vn", "televerse.click", "tgram.com.vn",
+    # Additional publicly identified, independent Telegram discovery catalogs.
+    "tgcompass.com", "open.tg", "telegramtop.com", "linequn.com",
+    "tgkit.io", "view.tg", "metricgram.com",
 ]
 TARGETS = {
     "football": "https://t.me/keochuyengia79",
@@ -42,6 +45,8 @@ KNOWN_LISTINGS = [
     ("lottery", "https://tgfind.net/en/resource/xsbm999"),
     ("football", "https://telejoiner.com/invite/1002315121695"),
     ("lottery", "https://telejoiner.com/invite/1004320899120"),
+    ("football", "https://vi.tgdio.com/group/%40keochuyengia79"),
+    ("lottery", "https://vi.tgdio.com/group/%40xsbm999"),
 ]
 MAX_URLS = int(os.getenv("KQ247_MAX_SITEMAP_URLS", "300000"))
 MAX_SITEMAPS_GLOBAL = int(os.getenv("KQ247_MAX_SITEMAPS", "320"))
@@ -58,7 +63,7 @@ def read_url(url, limit=MAX_BYTES):
         data = response.read(limit + 1)
         if len(data) > limit:
             raise ValueError("response_too_big")
-        if url.endswith(".gz") or data[:2] == b"\\x1f\\x8b":
+        if url.endswith(".gz") or data[:2] == bytes([31, 139]):
             data = gzip.decompress(data)
             if len(data) > MAX_BYTES * 6:
                 raise ValueError("expanded_data_too_big")
