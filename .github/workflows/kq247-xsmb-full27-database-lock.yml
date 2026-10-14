@@ -1,0 +1,25 @@
+name: KQ247 XS full27 verified snapshot database lock
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-full27-database-lock.yml']
+permissions:
+  contents: read
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install and run validated isolated VPS snapshot locking
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -o StrictHostKeyChecking=yes deployment/lottery-vps-daily-staging/persist-full27-locked.py root@64.120.92.172:/opt/kq247/lottery-daily-staging/
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'python3 /opt/kq247/lottery-daily-staging/persist-full27-locked.py'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'docker exec kq247-r55-postgres sh -c '\''psql -X -At -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT prediction_date,station,lotto3,doubles,source_last_date FROM kq247_xs_vps.customer_locked_full_snapshots ORDER BY prediction_date DESC LIMIT 1;"'\'''
