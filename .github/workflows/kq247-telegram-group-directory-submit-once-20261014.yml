@@ -64,10 +64,21 @@ jobs:
               page=browser.new_page(viewport={"width":1270,"height":900})
               for group in GROUPS:
                   gid=group["id"]
+                  repeat_invalid=False
                   if gid in report["groups"]:
-                      print("PREVIOUS_ATTEMPT_NOT_REPEATED",gid,report["groups"][gid].get("status"),flush=True)
-                      continue
-                  receipt={"target":group["url"],"time_utc":now(),"status":"inspection"}
+                      old=report["groups"][gid]
+                      if (old.get("status")=="declined_or_validation_failed"
+                          and old.get("form_status")=="invalid"
+                          and not old.get("retried_validation_once")):
+                          old["retried_validation_once"]=True
+                          report["groups"][gid]=old
+                          save(report)
+                          repeat_invalid=True
+                      else:
+                          print("PREVIOUS_ATTEMPT_NOT_REPEATED",gid,old.get("status"),flush=True)
+                          continue
+                  receipt={"target":group["url"],"time_utc":now(),"status":"inspection",
+                           "retried_validation_once":repeat_invalid}
                   try:
                       r=page.goto(FORM,wait_until="domcontentloaded",timeout=30000)
                       if not r or r.status!=200:
@@ -109,7 +120,9 @@ jobs:
                                           feedback=form.locator(".wpcf7-response-output")
                                           message=feedback.inner_text(timeout=4000) if feedback.count() else ""
                                           status=form.get_attribute("data-status") or ""
-                                          receipt.update(form_status=status,feedback=message[:1200],final_url=page.url)
+                                          field_errors=form.evaluate("""(f)=>[...f.querySelectorAll('[aria-invalid="true"],.wpcf7-not-valid-tip')].map(e=>({tag:e.tagName,name:e.name||'',text:(e.innerText||e.getAttribute('data-error')||'').slice(0,180),outer:e.outerHTML.slice(0,220)})).slice(0,12)""")
+                                          receipt.update(form_status=status,feedback=message[:1200],
+                                                         invalid_fields=field_errors,final_url=page.url)
                                           if status=="sent" or re.search("thank you|successfully|has been sent|תודה",message,re.I):
                                               receipt["status"]="submitted_pending_publication"
                                           elif status in ("invalid","spam","failed","aborted"):
