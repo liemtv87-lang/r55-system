@@ -85,7 +85,7 @@ export async function applyLockedOverlay(html,region,requestedStation){
  '<div id="notice" class="notice">Snapshot đã khóa trên VPS. Đổi đài không tính lại số.</div>','NOTICE');
  replace(/<article>[\s\S]*?<\/article>/,article,'ARTICLE');
  replace(/<script>const d=\{[\s\S]*?\};/,'<script>const d='+JSON.stringify(data)+';','COPY_DATA');
- if(!html.includes('XỔ SỐ BA MIỀN BẢN CHÍNH')||!html.includes('data-copy="lotto3"')||
+ if(!html.includes('<h1>XỔ SỐ BA MIỀN <span')||!html.includes('BẢN CHÍNH</span>')||!html.includes('data-copy="lotto3"')||
  !html.includes('id="kq247-xs-qc"')||!html.includes('DÀN 3 CÀNG (500 số)'))
  throw Error('NEON_LAYOUT_INCOMPLETE_'+JSON.stringify({title:html.includes('XỔ SỐ BA MIỀN BẢN CHÍNH'),copyall:html.includes('id="copyall"'),qc:html.includes('id="kq247-xs-qc"'),three:html.includes('DÀN 3 CÀNG (500 số)')}));
  return html;
