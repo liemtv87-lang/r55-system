@@ -14,11 +14,15 @@ const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').repl
 const alias=x=>{const k=norm(x);return ['thanhphohcm','thanhphohochiminh','tphochiminh','hochiminh','tphcm'].includes(k)?'tphcm':['thuathienhue','hue'].includes(k)?'hue':k;};
 
 const rows=new Map();
+let canonicalizedLegacy=0;
 for(const r of previous){
  const key=fixed(r);
- if(rows.has(key)||!weekdays[key]||r.full_results?.length!==18||r.all2?.length!==18||
-    r.full_results.some((n,i)=>!(/^\d{2,6}$/.test(n))||n.slice(-2)!==r.all2[i]))throw Error('INVALID_LATEST_SOURCE_'+key);
- rows.set(key,r);
+ if(rows.has(key)||!weekdays[key])throw Error('INVALID_LATEST_SOURCE_'+key);
+ // Old exports mixed DB-first and G8-first physical positions. Preserve leading
+ // zeroes; all station inputs must be canonical before any positional bridge.
+ const clean=normalizedStationDraw(r);
+ if(JSON.stringify(clean.full_results)!==JSON.stringify(r.full_results))canonicalizedLegacy++;
+ rows.set(key,clean);
 }
 if(rows.size!==35)throw Error('NEED_EXACT_35_MT_MN_STATIONS');
 const nowparts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',
@@ -86,9 +90,9 @@ for(const [key,stations] of grouped){
 const all=[...rows.values()].sort((a,b)=>a.region.localeCompare(b.region)||a.station.localeCompare(b.station));
 for(const row of all)if(nextDate(row)<=cutoff)throw Error('STALE_STATION_SOURCE_'+fixed(row)+'_'+row.draw_date);
 const content=JSON.stringify({source:'ONE_REAL_DRAW_PER_STATION_VPS_VALIDATED',updatedAt:new Date().toISOString(),draws:all});
-if(refreshed.length||previous===seed){
+if(refreshed.length||previous===seed||canonicalizedLegacy){
  const tmp=stateFile+'.pending.'+process.pid;
  await writeFile(tmp,content,{flag:'wx'});
  await rename(tmp,stateFile);
 }
-console.log('STATION_ACTUALS_ONE_PREVIOUS_DRAW_REFRESHED',JSON.stringify({cutoff,stations:all.length,refreshed,totalFetched:targets.length,details:refreshed}));
+console.log('STATION_ACTUALS_ONE_PREVIOUS_DRAW_REFRESHED',JSON.stringify({cutoff,stations:all.length,refreshed,canonicalizedLegacy,totalFetched:targets.length,details:refreshed}));
