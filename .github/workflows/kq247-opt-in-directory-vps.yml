@@ -2,7 +2,7 @@ name: KQ247 Opt-in Telegram Directory Submission VPS
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/kq247-opt-in-directory-vps.yml']
+    paths: ['.github/workflows/kq247-opt-in-directory-vps.yml', 'seo-vps/kq247-bulk-auto-submit.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,8 +40,10 @@ jobs:
           docker image inspect "$image" >/dev/null
           existing="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
           if docker ps --format '{{.Names}}' | grep -Fxq "$name"; then
-            echo "OPT_IN_SUBMITTER_ALREADY_RUNNING"
+            echo "RESTARTING_ONLY_DEDICATED_OPT_IN_SUBMITTER"
+            docker restart "$name"
           else
+            docker rm "$name" >/dev/null 2>&1 || true
             docker run -d --init --name "$name" --restart unless-stopped \
               --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
               --user 0:0 --pids-limit 120 --cpus 0.5 --memory 1000m \
