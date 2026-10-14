@@ -67,7 +67,7 @@
   # All three XS regions read immutable 36-station VPS snapshot data.
   # Same /xoso and /xoso-khach URLs; licensed customer path unchanged.
   handle @xsmb_page_path {
-    reverse_proxy kq247-xs-36-reader:3019
+    reverse_proxy lottery-original:3004
   }
   # Never alter licensed customer activation, existing device codes or other regions.
   @lottery_paths {
