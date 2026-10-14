@@ -1,6 +1,7 @@
 import {db} from "hatchable";
 import {chooseR55Ensemble} from "lib/r55EnsembleV3.js";
 import {extractRichBongdaluHistory} from "lib/r55RichHistory.js";
+import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus} from "lib/r55BookmakerConsensus.js";
 import {collectBongdaluPageBookmakers} from "lib/r55BookmakerPage.js";
 import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseFormTable as nativeParseFormTable,parseH2HTable as nativeParseH2HTable,parseAsianHistory as nativeParseAsianHistory,parseBongOdds as nativeParseBongOdds,parseBongFeed as nativeParseBongFeed,parseBongLeagueMeta as nativeParseBongLeagueMeta,discoverBongdaluRoots as nativeDiscoverBongdaluRoots,bongNeighborRoots as nativeBongNeighborRoots} from "lib/original-bongdalu/r55-core-verbatim-transpiled.js";
 // Port of the production football-all-refresh-v3 Bongdalu ingestion/model layer.
@@ -9,7 +10,7 @@ import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseF
 // never alternative data providers. All newly found hosts must pass feed verification.
 const BASES=["https://www.bongdalu812.com/","https://www.bongdalu.com/","https://www.bongdalu802.com/","https://www.bongdalu811.com/","https://www.bongdalu628.com/","https://www.bongdalu800.com/","https://www.bongdalu128.com/","https://www.bongdalu618.com/"];
 const VALID_BONG_HOST=/^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$|^(?:www\.)?bongdalu\.com\.vn$/i;
-const BOOKS=[["Bet365","8"],["Sbobet","31"],["12Bet","24"],["Crown","3"],["Easybets","12"]];
+const BOOKS=BONGDALU_BOOKMAKERS;
 const MAX_SOURCE_BYTES=1800000,DAY_MS=86400000;
 const qn=(x)=>Number.isFinite(Number(x))?Number(x):NaN;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -81,7 +82,7 @@ function parseOdds(xmls){
    const hp=Number(p[3]),ap=Number(p[4]),op=Number(p[11]),up=Number(p[12]);
    if(!/^\d{5,12}$/.test(id)||![ah,ou,hp,ap,op,up].every(Number.isFinite)||
        ![hp,ap,op,up].every(x=>x>.05&&x<=3)||ou<1.25||ou>7)continue;
-   const q={name:String(source.name||"Bongdalu"),homeLine:-ah,awayLine:ah,
+   const q={name:String(source.name||"Bongdalu"),bookmakerId:String(source.id||""),homeLine:-ah,awayLine:ah,
      ouLine:ou,homeHK:hp,awayHK:ap,overHK:op,underHK:up};
    if(!byId.has(id))byId.set(id,new Map());
    byId.get(id).set(q.name,q);
@@ -108,10 +109,11 @@ function parseOdds(xmls){
    homePrice,awayPrice,overPrice,underPrice,
    rawHongKongOdds:{home:ahQuote.homeHK,away:ahQuote.awayHK,over:ouQuote.overHK,under:ouQuote.underHK},
    bookmakerCount:quotes.length,bookmakerNames:quotes.map(q=>q.name),
-   bookmakerQuotes:quotes.map(q=>({bookmaker:q.name,homeLine:q.homeLine,ouLine:q.ouLine,
+   bookmakerQuotes:quotes.map(q=>({bookmaker:q.name,bookmakerId:q.bookmakerId,homeLine:q.homeLine,ouLine:q.ouLine,
      homePrice:round(1+q.homeHK),awayPrice:round(1+q.awayHK),
      overPrice:round(1+q.overHK),underPrice:round(1+q.underHK)})),
-   ahLineSpread:spread("homeLine"),ouLineSpread:spread("ouLine"),
+   bookmakerConsensus:bookmakerMarketConsensus(quotes),
+    ahLineSpread:spread("homeLine"),ouLineSpread:spread("ouLine"),
    ahPriceBookmaker:ahQuote.name,ouPriceBookmaker:ouQuote.name,
    originalMarketParser:"football-all-refresh-v3_v128",
    marketSource:"Bongdalu verified bookmaker quotes"});
@@ -254,7 +256,10 @@ function makeMarket(row,h,learned){
  const selected=chooseR55Ensemble(row,h,result);
  if(!selected)return null;
  return {...row,market:{type:selected.type,pick:selected.pick,line:selected.line,odds:round(selected.odds),
-    confidence:null,bookmaker:mk.bookmakerNames?.[0]||"Bongdalu",bookmakers:mk.bookmakerCount,
+    confidence:null,bookmaker:mk.ahPriceBookmaker||mk.bookmakerNames?.[0]||"Bongdalu",bookmakers:mk.bookmakerCount,
+     bookmakerQuotes:mk.bookmakerQuotes,bookmakerConsensus:mk.bookmakerConsensus,
+     ahPriceBookmaker:mk.ahPriceBookmaker,ouPriceBookmaker:mk.ouPriceBookmaker,
+     bookmakerSideAgreement:selected.bookmakerSideAgreement,historicalSupport:selected.historicalSupport,
     bookmakerNames:mk.bookmakerNames||[],
     method:selected.method,evidence:selected.evidence,source:"bongdalu_verified_three_scenario_ensemble",
     expectedEV:selected.ev,worstEV:selected.worstEV,modelSpread:selected.modelSpread,
@@ -274,7 +279,7 @@ function makeMarket(row,h,learned){
     modelRisk:result.market_risk,modelEngine:selected.modelVersion};
 }
 export async function inspectBongdaluHistoryProbe(futureWindowOnly=false){
- const rr=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,text:await get(rr.base,"gf/data/odds/en/goal"+id+".xml","text/xml",8500).catch(()=>"")})));
+ const rr=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,id,text:await get(rr.base,"gf/data/odds/en/goal"+id+".xml","text/xml",8500).catch(()=>"")})));
  const odds=parseOdds(xmls),records=parseFeed(rr.js,odds).filter(x=>x.market);
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000;
  const eligible=futureWindowOnly?records.filter(x=>x.ts>=start&&x.ts<=end&&!excluded(x.league+" "+x.home+" "+x.away)):records;
@@ -286,7 +291,7 @@ export async function inspectBongdaluHistoryProbe(futureWindowOnly=false){
  prediction:h?makeMarket(x,h,[]):null})).map(x=>({...x,prediction:x.prediction?{type:x.prediction.market.type,pick:x.prediction.market.pick,line:x.prediction.market.line,odds:x.prediction.market.odds,method:x.prediction.method,expectedEV:x.prediction.market.expectedEV,researchOnly:x.prediction.market.researchOnly,filterReason:x.prediction.market.filterReason}:null}))};
 }
 export async function inspectBongdalu(){
- const r=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,text:await get(r.base,"gf/data/odds/en/goal"+id+".xml","text/xml",8500).catch(()=>"")})));
+ const r=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,id,text:await get(r.base,"gf/data/odds/en/goal"+id+".xml","text/xml",8500).catch(()=>"")})));
  const odds=parseOdds(xmls),all=parseFeed(r.js,odds);
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000,now=Date.now();
   const inWindow=all.filter(x=>x.ts>=Math.max(start,now-5*60000)&&x.ts<=end);
@@ -313,7 +318,7 @@ async function buildBongdaluR55(publish,stage=false){
    replacingInvalidLegacy=true;
   }
  }
- const r=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,text:await get(r.base,"gf/data/odds/en/goal"+id+".xml","text/xml",9000).catch(()=>"")})));
+ const r=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,id,text:await get(r.base,"gf/data/odds/en/goal"+id+".xml","text/xml",9000).catch(()=>"")})));
  const odds=parseOdds(xmls);if(odds.size<50)throw Error("bongdalu_odds_insufficient");
  const all=parseFeed(r.js,odds);
  // 13:00 VN through 13:05 tomorrow VN; never include already-played matches or invent odds.

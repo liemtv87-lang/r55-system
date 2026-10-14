@@ -52,6 +52,7 @@ function estimates(row,h,native){
  const anchorH=bounded((total+diff)/2,.2,4.3),anchorA=bounded((total-diff)/2,.2,4.3);
  return [[mh,ma],[formH,formA],[anchorH,anchorA]];
 }
+import {bookmakerSideAgreement} from "lib/r55BookmakerConsensus.js";
 // Historical AH/OU evidence is measured from the individual matches and every
 // bookmaker's published line, with each past match weighted only once.
 function historicalEvidence(history,option){
@@ -122,9 +123,10 @@ export function chooseR55Ensemble(row,h,native){
   // Huge modeled returns are often caused by stale form or market misalignment.
   // Quarantine them rather than advertising implausibly certain outcomes.
   const modelStable=worst>.025&&best-worst<.25&&ev>.085&&ev<.24;
+   const bookAgreement=bookmakerSideAgreement(mk.bookmakerQuotes||[],x);
   // Release only where independent R55 source-direction and scenario EV agree.
   // Keep other picks visible as research-only; never fabricate coverage/accuracy.
-  const accept=q.ok&&modelStable&&sameNative===true&&signal>=64&&!risk&&Number(row.priority)>=175&&
+  const accept=q.ok&&modelStable&&sameNative===true&&signal>=64&&!risk&&!bookAgreement.strongOpposition&&Number(row.priority)>=175&&
        !(x.type==="AH"&&Math.abs(x.line)>1.25)&&!(x.type==="OU"&&x.line>=4);
   // Model-only edges above 24% and very deep Asian lines caused the
   // unverified 12-Oct losses. For shadow picks, prefer less fragile markets
@@ -133,10 +135,10 @@ export function chooseR55Ensemble(row,h,native){
   const historyConflict=hist.matches>=12&&hist.score<-.35;
   const fragile=(x.type==="AH"&&Math.abs(x.line)>1.25?10:0)+
    (ev>.24?6:0)+(worst<-.05?4:0)+(best-worst>.25?3:0)+
-   (x.type==="OU"&&x.line>=4?4:0)+(risk?10:0)+(historyConflict?3:0);
+   (x.type==="OU"&&x.line>=4?4:0)+(risk?10:0)+(historyConflict?3:0)+(bookAgreement.strongOpposition?4:0);
   return {...x,ev:round(ev,4),worstEV:round(worst,4),spreadEV:round(best-worst,4),
-   fragility:fragile,historicalSupport:hist,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
-   researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":Number(row.priority)<175?"competition_below_priority_floor":!modelStable?"ensemble_edge_not_robust":
+   fragility:fragile,bookmakerSideAgreement:bookAgreement,historicalSupport:hist,agree:evs.filter(n=>n>.015).length,nativeAligned:sameNative,nativeSignal:signal,
+   researchOnly:!accept,reason:!q.ok?q.reasons[0]:risk?"low_175_over_blocked":bookAgreement.strongOpposition?"bookmaker_price_lean_conflict":Number(row.priority)<175?"competition_below_priority_floor":!modelStable?"ensemble_edge_not_robust":
       x.type==="AH"&&Math.abs(x.line)>1.25?"deep_ah":x.type==="OU"&&x.line>=4?"extreme_total":"accepted"};
  });
  if(!scored.length)return null;
@@ -150,6 +152,7 @@ export function chooseR55Ensemble(row,h,native){
   researchOnly:chosen.researchOnly,reason:chosen.reason,bookmakers:q.books,
   evidence:chosen.nativeSignal,modelVersion:"ensemble_poisson_three_scenarios_v4_native_agreement",
   sample:{home:q.nh,away:q.na,h2h:q.nH2H},
-  candidateCount:scored.length,historicalSupport:chosen.historicalSupport,confidence:null};
+  candidateCount:scored.length,historicalSupport:chosen.historicalSupport,
+   bookmakerSideAgreement:chosen.bookmakerSideAgreement,confidence:null};
 }
 export {expectedReturn};

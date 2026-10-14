@@ -56,3 +56,26 @@ test("R55 ensemble v4 research-only can never pass historical release gate",()=>
  const methods=[{method:"r55_ensemble_v4_ah",type:"AH",eligible:true,n:100,days:10,units:4,wilsonLower:.55}];
  assert.equal(releaseDecision(m,methods,true).ok,false);
 });
+
+import {BONGDALU_BOOKMAKERS,bookmakerMarketConsensus,bookmakerSideAgreement} from "../lib/r55BookmakerConsensus.js";
+test("18 candidate Bongdalu bookmaker source IDs are unique",()=>{
+ assert.equal(BONGDALU_BOOKMAKERS.length,18);
+ assert.equal(new Set(BONGDALU_BOOKMAKERS.map(x=>x[1])).size,18);
+ assert.equal(bookmakerMarketConsensus([]).AH.availableBookmakers,0);
+});
+test("counts line agreement only for identical published AH/OU quotes",()=>{
+ const q=[
+ {bookmaker:"A",bookmakerId:"8",homeLine:-.5,ouLine:2.5,homePrice:1.80,awayPrice:2.02,overPrice:1.9,underPrice:1.97},
+ {bookmaker:"B",bookmakerId:"31",homeLine:-.5,ouLine:2.5,homePrice:1.82,awayPrice:2.01,overPrice:1.91,underPrice:1.99},
+ {bookmaker:"C",bookmakerId:"24",homeLine:-.5,ouLine:2.75,homePrice:1.81,awayPrice:2.00,overPrice:1.95,underPrice:1.94},
+ {bookmaker:"D",bookmakerId:"3",homeLine:-.25,ouLine:2.75,homePrice:1.72,awayPrice:2.1,overPrice:1.96,underPrice:1.93}
+ ];
+ const c=bookmakerMarketConsensus(q);
+ assert.equal(c.AH.availableBookmakers,4);assert.equal(c.AH.consensusLine,-.5);
+ assert.equal(c.AH.lineVotes,3);assert.equal(c.AH.lineShare,.75);
+ const ah=bookmakerSideAgreement(q,{type:"AH",pick:"HOME",line:-.5});
+ assert.equal(ah.sameLineBookmakers,3);assert.equal(ah.priceLeanForPick,3);
+ const ou=bookmakerSideAgreement(q,{type:"OU",pick:"UNDER",line:2.75});
+ assert.equal(ou.sameLineBookmakers,2);assert.equal(ou.priceLeanAgainstPick,2);
+ assert.equal(bookmakerSideAgreement(q,{type:"AH",pick:"HOME",line:-1}).sameLineBookmakers,0);
+});
