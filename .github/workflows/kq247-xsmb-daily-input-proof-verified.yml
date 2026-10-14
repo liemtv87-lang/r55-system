@@ -1,0 +1,47 @@
+name: KQ247 XS day15 uses day14 actual 500-draw verification
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-xsmb-daily-input-proof-verified.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Hash and print FIVE fresh daily 500-draw inputs inside VPS Docker
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          docker run -i --rm --network none --read-only -v /opt/kq247/lottery-daily-staging:/stage:ro node:22-alpine node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {predictIndependentDaily} from '/stage/independent500.mjs';
+          const rows=JSON.parse(fs.readFileSync('/stage/xsmb-505-actual-through-20261014.json','utf8'));
+          const checks=[];
+          for(const date of ['2026-10-11','2026-10-12','2026-10-13','2026-10-14','2026-10-15']){
+            const source=rows.filter(x=>x.draw_date<date&&x.region==='mb'&&x.station==='XSMB')
+              .sort((a,b)=>b.draw_date.localeCompare(a.draw_date)).slice(0,500);
+            if(source.length!==500)throw Error('missing_500_for_'+date);
+            const r=predictIndependentDaily({predictionDate:date,region:'mb',station:'XSMB',draws:source,ganDaysLimit:10});
+            const inputFingerprint=createHash('sha256').update(JSON.stringify(source.map(x=>[x.draw_date,x.all2]))).digest('hex');
+            const latestFingerprint=createHash('sha256').update(JSON.stringify(source[0].all2)).digest('hex');
+            checks.push({date,sourceDate:source[0].draw_date,previousSourceDate:source[1].draw_date,
+              fingerprint500:inputFingerprint,latest27Hash:latestFingerprint,
+              picks:r.picks,doubles:r.doubles,draws:source.length});
+          }
+          if(checks[4].sourceDate!=='2026-10-14')throw Error('day15_needs_day14');
+          if(checks.some((d,i)=>checks.some((e,j)=>i!==j&&d.fingerprint500===e.fingerprint500)))throw Error('reused_previous_history');
+          if(checks[0].picks.join(',')!=='35,51,75')throw Error('day11_replay_mismatch');
+          console.log('INDEPENDENT_500_DRAW_INPUT_BY_DATE='+JSON.stringify(checks));
+          JS
+          echo VERIFIED_15_OCT_BASED_ON_14_OCT_WITH_500_UNIQUE_DAY_INPUT
+          REMOTE
