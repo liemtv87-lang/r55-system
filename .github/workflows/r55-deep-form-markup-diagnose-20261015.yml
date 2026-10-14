@@ -45,6 +45,6 @@ jobs:
             const teamIds=[...new Set([...h.matchAll(/(?:teamId|homeId|awayId|h2h_home|h2h_away)\\s*[:=]\\s*["\\x27]?(\\d{2,12})/gi)].map(m=>m[1]))].slice(0,12);
             const rawVars=[...new Set([...h.matchAll(/\\b(?:var|let|const)\\s+([A-Za-z_][A-Za-z0-9_]{1,35})\\s*=/g)].map(m=>m[1]))].filter(x=>/team|data|form|h2h|odds|match/i.test(x)).slice(0,50);
             const parsed=V.parseHistoryHtml(h);
-            console.log('R55_RAW_FORM_MARKUP',JSON.stringify({id,url:r.base+'match/h2h-'+id,bytes:h.length,title:(h.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)||[])[1]?.slice(0,180),vars,tables,teamIds,rawVars,teamLinks:matches,parsed:{home:parsed?.home?.n,away:parsed?.away?.n,h2h:parsed?.h2h?.n,sourceCoverage:parsed?.sourceCoverage}}));
+            console.log('R55_RAW_FORM_MARKUP',JSON.stringify({id,url:r.base+'match/h2h-'+id,bytes:h.length,title:h.slice(h.indexOf('<title'),h.indexOf('</title>')+8).slice(0,180),vars,tables,teamIds,rawVars,teamLinks:matches,parsed:{home:parsed?.home?.n,away:parsed?.away?.n,h2h:parsed?.h2h?.n,sourceCoverage:parsed?.sourceCoverage}}));
           }
           JS
