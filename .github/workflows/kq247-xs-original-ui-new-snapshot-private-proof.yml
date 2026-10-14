@@ -11,6 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      # Verification only: leave /xoso, /xoso-khach and the running Caddy route untouched.
       - name: Test current original UI with immutable VPS snapshots without public changes
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
