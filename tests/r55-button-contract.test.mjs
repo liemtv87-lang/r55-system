@@ -64,3 +64,9 @@ test('staging history shows started games only; preview is a separate switch',()
  assert.ok(staging.includes("state.history?'all':state.count"));
  assert.ok(staging.includes("root.innerHTML=showing.map(card)"));
 });
+
+test('client always queries exact canonical main prediction API and reports single COPY outcomes',()=>{
+ assert.ok(customer.includes("PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1'"));
+ assert.ok(customer.includes("'&mode=' + encodeURIComponent(mode)"));
+ assert.ok(customer.includes("'✅ Đã copy trận '"));
+});

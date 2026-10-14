@@ -20,4 +20,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
-      - run: node --test tests/r55-button-contract.test.mjs
+      - run: node --test tests/r55-button-contract.test.mjs tests/r55-customer-click-runtime.test.mjs
