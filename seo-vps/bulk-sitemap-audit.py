@@ -47,6 +47,10 @@ KNOWN_LISTINGS = [
     ("lottery", "https://telejoiner.com/invite/1004320899120"),
     ("football", "https://vi.tgdio.com/group/%40keochuyengia79"),
     ("lottery", "https://vi.tgdio.com/group/%40xsbm999"),
+    # KQ247 branded public URLs discovered in the 675,922 URL scan;
+    # NOT counted until each HTML page is fetched and its exact t.me href verified.
+    ("football", "https://toptglinks.com/group/kq247-b-ng-h-m-nay"),
+    ("lottery", "https://toptglinks.com/group/kq247-k-t-qu-x-s-ba-mi-n"),
 ]
 MAX_URLS = int(os.getenv("KQ247_MAX_SITEMAP_URLS", "300000"))
 MAX_SITEMAPS_GLOBAL = int(os.getenv("KQ247_MAX_SITEMAPS", "320"))
