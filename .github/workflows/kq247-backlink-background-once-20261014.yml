@@ -92,6 +92,7 @@ jobs:
           import json
           from pathlib import Path
           r=json.loads(Path('/opt/pwremote/kq247-backlink-background/latest.json').read_text())
+          print('KQ247_CANDIDATE_FORM_ROUTES',json.dumps(r.get('candidate_forms',[])[:30],ensure_ascii=False))
           print('KQ247_BG_REPORT',json.dumps({k:r.get(k) for k in (
             'url_records_actually_read_total','unique_hosts_discovered',
             'http_hosts_checked_this_run','hosts_by_status',
