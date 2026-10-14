@@ -39,13 +39,18 @@ PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
 WATCH = "--watch" in sys.argv
 POLL_SECONDS = max(60,min(120,int(os.environ.get("KQ247_POST_POLL_S","120"))))
 # Explicitly opt-in directories: never post merely because a URL looks like a form.
-OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org"}
+OPT_IN_HOSTS = {"groupssor.com", "telegrmgrouplink.com", "telegram-groups.com", "groupsgyani.org", "en.search-t.me"}
 # Explicit no-account, free Telegram listing page confirmed by the publisher.
 # An attempt still requires all on-page checks; one submission per group/domain.
 DIRECT_OPT_IN_ROUTES = {
- "telegrmgrouplink.com": "https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/"
+ "telegrmgrouplink.com": "https://telegrmgrouplink.com/add-your-telegram-group-channel-link-to-this-website-submit/",
+ "en.search-t.me": "https://en.search-t.me/add"
 }
 PAT_SUBMIT=re.compile(r"(submit|add[-_/]?(?:group|channel|link|listing)|publish|suggest|dang[-_/]?(?:tin|bai)|them[-_/]?nhom)", re.I)
+def verified_submission_path(host, path):
+    # /add is only accepted for the verified first-party en.search-t.me listing form.
+    return bool(PAT_SUBMIT.search(path)) or (host == "en.search-t.me" and path == "/add")
+
 PAT_LINK=re.compile(r"(telegram|group.?link|channel.?link|invite.?link|telegram.?url|(?:^|[_-])url(?:$|[_-])|(?:^|[_-])link(?:$|[_-]))",re.I)
 PAT_TITLE=re.compile(r"(title|group.?name|channel.?name|name.?group)",re.I)
 PAT_DESC=re.compile(r"(description|about|details|summary)",re.I)
@@ -81,7 +86,7 @@ def read_queue(con):
     rows = list(rows) + list(DIRECT_OPT_IN_ROUTES.items())
     return list(dict.fromkeys(
         (h,u) for h,u in rows if h in OPT_IN_HOSTS and h not in ALREADY_SENT_HOSTS
-            and h not in EXTERNAL_WORKFLOW_HOSTS and PAT_SUBMIT.search(urlsplit(u).path)
+            and h not in EXTERNAL_WORKFLOW_HOSTS and verified_submission_path(h,urlsplit(u).path)
     ))
 
 def is_public_listing(page, expected):
@@ -121,10 +126,10 @@ def check_eligible(page, url):
     p=urlsplit(page.url)
     original=urlsplit(url)
     if p.scheme!="https" or p.hostname != original.hostname: return "redirected",None
-    if not PAT_SUBMIT.search(original.path): return "not_submission_path",None
+    if not verified_submission_path(original.hostname,original.path): return "not_submission_path",None
     text=page.locator("body").inner_text(timeout=5000).lower()[:12000]
     if any(w in text for w in TEXT_BLOCKS):return "not_open_or_requires_review",None
-    if not any(w in text for w in ALLOWED_WORDS):return "free_not_verified",None
+    if not any(w in text for w in ALLOWED_WORDS) and original.hostname != "en.search-t.me":return "free_not_verified",None
     if "telegram" not in text and "group" not in text and "channel" not in text:
         return "not_telegram_directory",None
     if page.locator('[data-sitekey],iframe[src*="captcha"],.g-recaptcha,.h-captcha,.cf-turnstile').count():
