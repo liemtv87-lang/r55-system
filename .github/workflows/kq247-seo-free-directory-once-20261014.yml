@@ -1,0 +1,160 @@
+name: KQ247 One-Time Free Telegram Directory Submission
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-seo-free-directory-once-20261014.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-seo-telegramgroups-one-time
+  cancel-in-progress: false
+jobs:
+  submit-once:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Use isolated Playwright on VinaHost, respect directory classification and verify links
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          base=/opt/pwremote/seo-free-directory-once-20261014
+          install -d -m 0755 "$base"
+          install -d -m 0777 "$base/state"
+          cat > "$base/task.py" <<'PY'
+          import datetime, json, pathlib, re, time
+          from playwright.sync_api import sync_playwright
+          OUT=pathlib.Path('/state/receipts.json')
+          URL='https://telegramgroups.co/submit'
+          targets=[
+              ('football','https://t.me/keochuyengia79',r'(?i)^sports?($|\s|&)',),
+              ('lottery','https://t.me/xsbm999',r'(?i)^lottery($|\s|&)|^news($|\s|&)',),
+          ]
+          def stamp(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
+          def save(result):
+              OUT.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+          def visible(locator):
+              return [x for x in locator.all() if x.is_visible()]
+          def excerpt(page):
+              try:return page.locator('body').inner_text(timeout=5000)[-850:]
+              except:return ''
+          def verified(page, group):
+              expected=group.lower().replace('https://','').rstrip('/')
+              links=page.locator('a[href]').evaluate_all('(as)=>as.map(a=>a.href)')
+              return any(x.lower().replace('https://','').rstrip('/') == expected for x in links)
+          report={'time_utc':stamp(),'directory':URL,'groups':[],'notes':'single genuine free submission per group; never bypass paid classification, CAPTCHA or login'}
+          if OUT.exists():
+              try:
+                  old=json.loads(OUT.read_text())
+                  if old.get('groups'):
+                      print('PREVIOUS_RECEIPTS_EXIST_NO_RETRY',json.dumps(old,ensure_ascii=False))
+                      raise SystemExit(0)
+              except json.JSONDecodeError: pass
+          with sync_playwright() as p:
+              browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
+              page=browser.new_page(viewport={'width':1280,'height':900})
+              for key,target,catpattern in targets:
+                  info={'group':key,'target':target,'at_utc':stamp(),'state':'not_started'}
+                  try:
+                      resp=page.goto(URL,wait_until='domcontentloaded',timeout=30000)
+                      if not resp or resp.status != 200:
+                          info.update(state='page_unavailable',http=resp.status if resp else None);report['groups'].append(info);save(report);continue
+                      page.wait_for_timeout(1300)
+                      if visible(page.locator('iframe[src*="captcha"],[data-sitekey]')):
+                          info['state']='captcha_requires_user';report['groups'].append(info);save(report);continue
+                      inputs=visible(page.locator('input[placeholder*="t.me"],input[placeholder*="@channel"]'))
+                      if not inputs:
+                          info.update(state='form_changed',stage='link_field',excerpt=excerpt(page))
+                          report['groups'].append(info);save(report);continue
+                      inputs[-1].fill(target)
+                      buttons=visible(page.get_by_role('button',name='Verify',exact=True))
+                      if not buttons:
+                          info.update(state='form_changed',stage='verify_button',excerpt=excerpt(page))
+                          report['groups'].append(info);save(report);continue
+                      buttons[-1].click(timeout=12000)
+                      page.wait_for_timeout(2300)
+                      b=excerpt(page)
+                      already=visible(page.get_by_text('Already in our directory',exact=False))
+                      if already:
+                          info.update(state='already_listed',excerpt=b);report['groups'].append(info);save(report);continue
+                      if visible(page.get_by_text('Detected: a paid category',exact=False)):
+                          info.update(state='paid_category_refused',excerpt=b);report['groups'].append(info);save(report);continue
+                      selects=visible(page.locator('select'))
+                      candidates=[]
+                      for select in selects:
+                          opts=select.locator('option').evaluate_all('(xs)=>xs.map(x=>({v:x.value,t:x.textContent.trim()}))')
+                          matches=[o for o in opts if re.search(catpattern,o['t']) and o['v']]
+                          if matches:candidates.append((select,matches[0],opts))
+                      if not candidates:
+                          info.update(state='category_not_found',options=[x.locator('option').all_text_contents() for x in selects],excerpt=b)
+                          report['groups'].append(info);save(report);continue
+                      field,category,_=candidates[-1]
+                      field.select_option(value=category['v'])
+                      info['selected_category']=category['t']
+                      page.wait_for_timeout(1200)
+                      if visible(page.get_by_text('Detected: a paid category',exact=False)) or visible(page.get_by_text('one-time listing fee',exact=False)):
+                          info.update(state='paid_category_refused',excerpt=excerpt(page));report['groups'].append(info);save(report);continue
+                      submit=visible(page.get_by_role('button',name=re.compile(r'^Submit\s*[—-]\s*live',re.I)))
+                      if not submit:
+                          info.update(state='form_changed',stage='free_submit',excerpt=excerpt(page))
+                          report['groups'].append(info);save(report);continue
+                      # Persist the intent before any POST. Do not retry an uncertain submission.
+                      info['state']='submit_attempted'
+                      report['groups'].append(info);save(report)
+                      submit[-1].click(timeout=14000)
+                      page.wait_for_timeout(2700)
+                      info['page_url']=page.url
+                      info['excerpt']=excerpt(page)
+                      if visible(page.get_by_text('Your channel is live',exact=False)):
+                          info['state']='site_reports_live_unverified'
+                      elif visible(page.get_by_text('Submission declined',exact=False)):
+                          info['state']='declined'
+                      elif visible(page.get_by_text('Detected: a paid category',exact=False)):
+                          info['state']='paid_category_refused'
+                      else:info['state']='outcome_uncertain_no_retry'
+                      listing=visible(page.get_by_role('link',name=re.compile('View your listing|View the listing',re.I)))
+                      if listing:
+                          href=listing[-1].get_attribute('href')
+                          if href:
+                              from urllib.parse import urljoin
+                              public=urljoin(page.url,href)
+                              info['candidate_listing_url']=public
+                              r=page.goto(public,wait_until='domcontentloaded',timeout=25000)
+                              info['listing_http']=r.status if r else None
+                              if r and r.status==200 and verified(page,target):
+                                  info['state']='verified_published'
+                                  info['listing_url']=public
+                      save(report)
+                  except Exception as e:
+                      info.update(state='error_or_uncertain_no_retry',error=type(e).__name__+': '+str(e)[:230])
+                      if info not in report['groups']:report['groups'].append(info)
+                      save(report)
+                  print('ONE_TIME_DIRECTORY_RESULT',json.dumps(info,ensure_ascii=False),flush=True)
+              browser.close()
+          print('FINAL_RESULTS',json.dumps(report,ensure_ascii=False))
+          PY
+          chmod 0644 "$base/task.py"
+          docker image inspect pwremote/playwright:1.56.0 >/dev/null
+          timeout 250s docker run --rm --init --name kq247-seo-free-directory-once \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user pwuser --pids-limit 150 --cpus 0.8 --memory 1200m \
+            --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /home/pwuser:rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0700 \
+            --mount "type=bind,src=$base/task.py,dst=/app/task.py,readonly" \
+            --mount "type=bind,src=$base/state,dst=/state" \
+            pwremote/playwright:1.56.0 python3 /app/task.py
+          echo 'SUBMISSION_RESULT_JSON:'
+          cat "$base/state/receipts.json"
+          echo 'EXISTING_KQ247_PRODUCTION_UNTOUCHED=YES'
+          VPS
