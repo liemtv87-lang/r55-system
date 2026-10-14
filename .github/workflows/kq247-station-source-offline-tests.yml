@@ -20,5 +20,7 @@ jobs:
           node --check deployment/lottery-vps-daily-staging/minhngoc-all-stations.mjs
           node --check deployment/lottery-vps-daily-staging/station-previous-draw-runner.mjs
           node --check deployment/lottery-vps-daily-staging/multi-station-locked-reader.mjs
+          python3 -m py_compile deployment/lottery-vps-daily-staging/persist-previous-station-locked.py
+          python3 -m py_compile deployment/lottery-vps-daily-staging/export-previous-station-snapshots.py
       - name: 35 independent source station unit proofs
         run: node deployment/lottery-vps-daily-staging/station-source-tests.mjs
