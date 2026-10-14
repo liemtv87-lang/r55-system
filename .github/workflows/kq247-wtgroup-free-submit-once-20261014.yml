@@ -1,4 +1,4 @@
-name: KQ247 Two New Free Telegram Directories Submit Once
+name: KQ247 Groupsor Fix Hidden Radio Submit Once
 on:
   push:
     branches: [seo-wtgroup-oneoff-20261014]
@@ -49,7 +49,7 @@ jobs:
              'tags':'XSMB, XSMT, XSMN, kết quả xổ số, Việt Nam',
              'desc':'Cập nhật kết quả XSMB, XSMT, XSMN, thống kê và thảo luận xổ số Việt Nam.'},
           ]
-          sites=['groupssor','telegramgroups.co']
+          sites=['groupssor']
           def now():return datetime.datetime.now(datetime.timezone.utc).isoformat()
           try: d=json.loads(OUT.read_text()) if OUT.exists() else {}
           except:d={}
@@ -66,7 +66,7 @@ jobs:
             form=page.locator('form:has(input[placeholder*="t.me"])')
             if form.count()!=1:return {'status':'form_ambiguous','count':form.count()}
             radio=form.locator('input[type=radio][value*="telegram" i]')
-            if radio.count()==1:radio.check()
+            if radio.count()==1:\n              radio.locator('xpath=ancestor::label').click(timeout=8000) if radio.locator('xpath=ancestor::label').count()==1 else page.get_by_text('Telegram',exact=True).first.click(timeout=8000)\n              if not radio.is_checked():return {'status':'platform_radio_not_checked'}
             else:
               alt=form.get_by_label('Telegram',exact=True)
               if alt.count()==1:alt.check()
