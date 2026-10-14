@@ -21,16 +21,17 @@ from collections import deque
 from html.parser import HTMLParser
 
 DOMAINS = [
-    "tgfind.net", "toptglinks.com", "telejoiner.com",
-    "telegramgroups.co", "groupmandi.com", "tgmania.com",
-    "telegramhub.org", "groupverse.co.in", "groupssor.com",
-    "telegram-group.com", "tglinks.net", "telegramchannels.io",
-    "telegramgroup.arkservices.in", "telegram-group.org",
-    "groupsgyani.org", "tg-hub.com", "telegramhub.app",
-    "tgcamp.com", "telegramradar.com", "tgfinder.net",
-    "telekit.link", "telegram-groups.net", "telegramgroup.link",
-    "telegram-group-links.com",
-    "telegroups.org", "telegram-groups.com", "tdirectory.me", "telegram-group.com", "telxplorer.com", "tgramlink.com", "tgbox.cc", "togather.in", "tgstat.com", "telegradia.com",
+    "tgfind.net", "toptglinks.com", "telejoiner.com", "telegramgroups.co",
+    "groupmandi.com", "tgmania.com", "telegramhub.org", "groupverse.co.in",
+    "groupssor.com", "telegram-group.com", "tglinks.net", "telegramchannels.io",
+    "telegramgroup.arkservices.in", "telegram-group.org", "groupsgyani.org", "tg-hub.com",
+    "telegramhub.app", "tgcamp.com", "telegramradar.com", "tgfinder.net",
+    "telekit.link", "telegram-groups.net", "telegramgroup.link", "telegram-group-links.com",
+    "telegroups.org", "telegram-groups.com", "tdirectory.me", "telxplorer.com",
+    "tgramlink.com", "tgbox.cc", "togather.in", "tgstat.com",
+    "telegradia.com", "tgfind.io", "telehub.to", "search-t.me",
+    "telegramchannels.me", "groupda.com", "tgden.com", "tg.app",
+    "tgram.vn", "televerse.click", "tgram.com.vn",
 ]
 TARGETS = {
     "football": "https://t.me/keochuyengia79",
