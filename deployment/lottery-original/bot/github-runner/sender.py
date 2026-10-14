@@ -107,8 +107,55 @@ def read_vps_locked_snapshot(day,region,index_path):
     fp=hashlib.sha256(json.dumps(sorted(digests),ensure_ascii=False,sort_keys=True).encode("utf-8")).hexdigest()
     return found,fp
 
-def read_snapshot(day,region):
+def locked_predraw_cache_path(day,region):
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}",day) or region not in REGIONS:
+        raise ValueError("bad predraw cache metadata")
+    return STORE/day/("locked-"+region+"-predraw.json")
+
+def save_locked_predraw(day,region,stations,fp):
+    path=locked_predraw_cache_path(day,region)
+    path.parent.mkdir(parents=True,exist_ok=True)
+    data={"day":day,"region":region,"stations":stations,"fingerprint":fp,
+          "saved_at":datetime.now(VN).isoformat()}
+    if path.exists():
+        prior=json.loads(path.read_text(encoding="utf8"))
+        if any(prior.get(x)!=data[x] for x in ("day","region","stations","fingerprint")):
+            raise ValueError("IMMUTABLE_PREDRAW_CACHE_CONFLICT_"+region)
+        return
+    try:
+        with path.open("x",encoding="utf8") as out:
+            json.dump(data,out,ensure_ascii=False,sort_keys=True)
+            out.flush()
+            os.fsync(out.fileno())
+    except FileExistsError:
+        return save_locked_predraw(day,region,stations,fp)
+
+def read_locked_predraw(day,region):
+    path=locked_predraw_cache_path(day,region)
+    if not path.is_file():return None
+    d=json.loads(path.read_text(encoding="utf8"))
+    saved=datetime.fromisoformat(d["saved_at"]).astimezone(VN)
+    if (d.get("day")!=day or d.get("region")!=region or saved.date().isoformat()!=day
+        or saved.time().replace(tzinfo=None)>=REGIONS[region]["after"]):
+        raise ValueError("PREDRAW_CACHE_NOT_BEFORE_RESULT_"+region)
+    stations=d.get("stations")
+    if not isinstance(stations,dict) or not (1 if region=="mb" else 2)<=len(stations)<=(1 if region=="mb" else 4):
+        raise ValueError("PREDRAW_CACHE_STATIONS_INVALID_"+region)
+    if re.fullmatch(r"[0-9a-f]{64}",str(d.get("fingerprint",""))) is None:
+        raise ValueError("PREDRAW_CACHE_FINGERPRINT_INVALID")
+    for pick in stations.values():
+        if (len(pick.get("three_lotto",[]))!=3 or len(pick.get("doubles",[]))!=2
+            or any(len(pick.get("de",{}).get(key,[]))!=n for key,n in
+                   (("dan50",50),("dan60",60),("dan75",75),("three_digit",500)))
+            or any(z[-2:] not in pick["de"]["dan75"] for z in pick["de"]["three_digit"])):
+            raise ValueError("PREDRAW_CACHE_POOLS_INVALID")
+    return stations,d["fingerprint"]
+
+def read_snapshot(day,region,phase=None):
     if os.environ.get('KQ247_LOCKED_INDEX_PATH'):
+        if phase=="result":
+            original=read_locked_predraw(day,region)
+            if original:return original
         return read_vps_locked_snapshot(day,region,os.environ['KQ247_LOCKED_INDEX_PATH'])
     source=http_json(NEON_READONLY_SNAPSHOT+"?date="+day)
     if not (source.get("ok") is True and source.get("found") is True and source.get("locked") is True
@@ -325,7 +372,9 @@ def main():
             if dry and not forced_phase and not due(now,region,phase): continue
             print("CHECK",region,phase)
             try:
-                stations,fp=read_snapshot(day,region)
+                stations,fp=read_snapshot(day,region,phase)
+                if phase=="pre" and not dry and os.environ.get("KQ247_LOCKED_INDEX_PATH"):
+                    save_locked_predraw(day,region,stations,fp)
                 draws=draw_results(day,region,stations) if phase=="result" else None
                 for st,pick in stations.items():
                     matched=next((v for k,v in draws.items() if station_name(k)==station_name(st)),None) if draws else None
