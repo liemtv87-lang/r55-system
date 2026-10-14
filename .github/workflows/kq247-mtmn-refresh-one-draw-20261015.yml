@@ -2,7 +2,7 @@ name: KQ247 MT MN refresh each station full actual prizes safe stage
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/kq247-mtmn-refresh-one-draw-20261015.yml']
+    paths: ['.github/workflows/kq247-mtmn-refresh-one-draw-20261015.yml', 'deployment/lottery-vps-daily-staging/refresh-station-last-draw.mjs']
   workflow_dispatch:
 permissions:
   contents: read
