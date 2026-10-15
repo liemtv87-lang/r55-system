@@ -394,6 +394,9 @@ def evaluate_publisher_form(forms, url, page_title="", html_body=""):
  forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\s+"
                           r"(?:online\s+)?(?:gambling|betting|casino)|"
                           r"(?:gambling|betting|casino)\s+(?:is\s+)?(?:not\s+allowed|prohibited)",body[:150000]))
+ # Explicit Vietnamese publisher bans override apparent submission-form suitability.
+ forbidden_vn=bool(re.search(r"(?:cấm|không|nghiêm cấm|không được).{0,50}(?:cá cược|đánh bạc|cờ bạc|gambling|betting)|(?:cá cược|đánh bạc|cờ bạc).{0,40}(?:bị cấm|không được|cấm đăng)",body[:150000]))
+ forbidden=forbidden or forbidden_vn
  has_captcha=bool(re.search(r'(?:g-recaptcha|h-captcha|cf-turnstile|captcha\.php|captcha\.png|captcha\.jpg|captcha\.jpeg|captcha\.gif)',body))
  no_email_form=any(not f["requires_owner_email"] for f in suitable)
  reviewable=any(not f["requires_owner_email"] and not f["requires_terms_review"] for f in suitable)
@@ -523,6 +526,8 @@ def main():
   comment={"action":"/wp-comments-post.php","method":"post","fields":[{"name":"url"},{"name":"comment"}]}
   assert evaluate_publisher_form([comment],"https://example.vn/guest-post/")["credible_site_submission_forms"]==0
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="No gambling allowed")["publisher_form_status"]=="blocked_topic_policy"
+  assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="Nghiêm cấm quảng cáo cá cược")["publisher_form_status"]=="blocked_topic_policy"
+  assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="Không được đăng thông tin đánh bạc")["publisher_form_status"]=="blocked_topic_policy"
   assert candidate_page_intent("https://example.vn/submit-your-website/")==0
   assert candidate_page_intent("https://example.vn/gioi-thieu.html")==99
   assert candidate_page_intent("https://example.vn/gui-bai-viet/")==0
