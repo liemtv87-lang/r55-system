@@ -1,0 +1,75 @@
+{
+  "campaign": "kq247-google-web-only",
+  "checked_on": "2026-10-15",
+  "targets": [
+    "https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html",
+    "https://64-120-92-172.sslip.io/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html"
+  ],
+  "policy": "No bulk link spam. One truthful submission per independently eligible publisher and only after its terms are checked. HTML link verification required before published count.",
+  "publishers": [
+    {
+      "host": "sportsweb.us",
+      "url": "https://sportsweb.us/terms/submission/",
+      "status": "excluded_content_prohibited",
+      "reason": "Submission terms disallow gambling/betting, English version required, homepage only",
+      "auto_submit": false
+    },
+    {
+      "host": "directory-index.com",
+      "url": "https://directory-index.com/",
+      "status": "excluded_content_prohibited",
+      "reason": "Site disallows gambling; homepage-only, required screenshot and contact email",
+      "auto_submit": false
+    },
+    {
+      "host": "zearches.com",
+      "url": "https://zearches.com/submit-website-free.php",
+      "status": "excluded_content_prohibited",
+      "reason": "Prior content audit found betting/gambling not allowed, do not submit gambling-linked pages",
+      "auto_submit": false
+    },
+    {
+      "host": "fcd.football",
+      "url": "https://fcd.football/submit",
+      "status": "ineligible_topic_login",
+      "reason": "Only coaching tools; Google sign-in required",
+      "auto_submit": false
+    },
+    {
+      "host": "e-soccer.com",
+      "url": "https://e-soccer.com/add-site",
+      "status": "ineligible_topic_recipient",
+      "reason": "Only English Premiership/related sites; demands reciprocal link",
+      "auto_submit": false
+    },
+    {
+      "host": "sportsweb.us",
+      "url": "https://sportsweb.us/directory/add/",
+      "status": "blocked_by_submissions_terms",
+      "reason": "Disallows betting content and English-only requirement",
+      "auto_submit": false
+    },
+    {
+      "host": "develif.com",
+      "url": "https://develif.com/",
+      "status": "potential_opt_in_but_not_submitted",
+      "reason": "No-login free directory POST /api/submit, but requires genuine owner email, one listing per domain; verify acceptable category before single submission",
+      "auto_submit": false
+    },
+    {
+      "host": "exchangetraffic.net",
+      "url": "https://exchangetraffic.net/",
+      "status": "potential_review_not_verified",
+      "reason": "Publishes general sites after review; current form and content eligibility not independently confirmed for KQ247",
+      "auto_submit": false
+    }
+  ],
+  "submitted_count": 0,
+  "approved_count": 0,
+  "new_verified_public_web_backlinks": 0,
+  "notes": [
+    "The rows are research evidence, NOT completed submissions",
+    "Website sources and backlink Google Web are separate from Telegram directory t.me targets",
+    "Avoid submitting inappropriate content to editorial directories"
+  ]
+}
