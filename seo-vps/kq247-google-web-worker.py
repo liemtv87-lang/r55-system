@@ -343,6 +343,9 @@ def candidate_funnel_counts():
   stats["matching_submission_intent"]=len(matched)
   stats["matching_vn_intent"]=sum((urllib.parse.urlsplit(uri).hostname or "").endswith(".vn") for uri in matched)
   stats["unique_candidate_hosts"]=len({urllib.parse.urlsplit(uri).hostname for uri in matched})
+  stats["matched_url_samples"]=matched[:30]
+  stats["vn_matched_url_samples"]=[u for u in matched if (urllib.parse.urlsplit(u).hostname or "").endswith(".vn")][:12]
+  stats["discarded_url_samples"]=[u for u in urls[:5000] if candidate_page_intent(u)==99][:12]
  except (sqlite3.Error,OSError,ValueError):
   stats["error"]="candidate_ledger_unavailable"
  return stats
