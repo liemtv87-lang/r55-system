@@ -1,13 +1,13 @@
 // Source-verified, full-27 XSMB results only. Never infer winning digits.
 const specifications=[
-  [/G\.?\s*(?:ĐB|Đặc\s*Biệt)|Giải\s*(?:ĐB|Đặc\s*Biệt)/i,1,5],
-  [/G\.?\s*1\b|Giải\s*nhất/i,1,5],
-  [/G\.?\s*2\b|Giải\s*nhì/i,2,5],
-  [/G\.?\s*3\b|Giải\s*ba/i,6,5],
-  [/G\.?\s*4\b|Giải\s*tư/i,4,4],
-  [/G\.?\s*5\b|Giải\s*năm/i,6,4],
-  [/G\.?\s*6\b|Giải\s*sáu/i,3,3],
-  [/G\.?\s*7\b|Giải\s*bảy/i,4,2]
+  [/(?:^|\s)(?:G\.?\s*ĐB|ĐB|Giải\s*(?:ĐB|Đặc\s*Biệt))(?=\s|\d)/i,1,5],
+  [/(?:^|\s)(?:G\.?\s*1|Nhất|Giải\s*nhất)(?=\s|\d)/i,1,5],
+  [/(?:^|\s)(?:G\.?\s*2|Nhì|Giải\s*nhì)(?=\s|\d)/i,2,5],
+  [/(?:^|\s)(?:G\.?\s*3|Ba|Giải\s*ba)(?=\s|\d)/i,6,5],
+  [/(?:^|\s)(?:G\.?\s*4|Tư|Giải\s*tư)(?=\s|\d)/i,4,4],
+  [/(?:^|\s)(?:G\.?\s*5|Năm|Giải\s*năm)(?=\s|\d)/i,6,4],
+  [/(?:^|\s)(?:G\.?\s*6|Sáu|Giải\s*sáu)(?=\s|\d)/i,3,3],
+  [/(?:^|\s)(?:G\.?\s*7|Bảy|Giải\s*bảy)(?=\s|\d)/i,4,2]
 ];
 function plain(html){
  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ')
@@ -46,7 +46,9 @@ function siteUrls(date){
  return [
   ['xosodaiphat','https://xosodaiphat.com/xsmb-'+dmy+'.html'],
   ['minhngoc','https://www.minhngoc.net/ket-qua-xo-so/mien-bac/'+dmy+'.html'],
-  ['ketqua','https://ketqua.vn/xsmb/'+dmy]
+  ['ketqua','https://ketqua.vn/xsmb/'+dmy],
+  ['xsmienbac','https://xsmienbac.vn/'],
+  ['az24','https://az24.vn/xsmb-'+dmy+'.html']
  ];
 }
 export async function fetchValidatedXsmbDay(date){
