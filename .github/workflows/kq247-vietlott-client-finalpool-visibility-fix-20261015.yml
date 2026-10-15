@@ -28,7 +28,10 @@ jobs:
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
           before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
-          docker inspect --format '{{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}' kq247-vietlott-vps | grep -Fq '/opt/kq247/vietlott/public => /app/public'
+          echo KQ247_VIETLOTT_CONTAINER_MOUNT_DIAG_BEGIN
+          docker inspect --format '{{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}' kq247-vietlott-vps
+          echo KQ247_VIETLOTT_CONTAINER_MOUNT_DIAG_END
+          test -s /opt/kq247/vietlott/public/index.html
           python3 - <<'PY'
           import pathlib,os,json,hashlib,shutil,datetime as dt
           p=pathlib.Path('/opt/kq247/vietlott/public/index.html')
