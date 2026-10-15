@@ -182,9 +182,9 @@ def get_page(url, allow_truncated=False):
 
 def inspect(entry):
     host, route = entry
-    page, error = get_page(route)
+    page, error = get_page(route, allow_truncated=True)
     if not page and urlsplit(route).path != "/":
-        page, error = get_page("https://" + host + "/")
+        page, error = get_page("https://" + host + "/", allow_truncated=True)
     if not page:
         return host, route, "unavailable", error or "request_failure", []
     final, raw = page
@@ -388,6 +388,16 @@ def main():
             return
         started = time.monotonic()
         con = db_open()
+        # Prior workers rejected oversized public HTML entirely. Recheck ONLY
+        # those previously classified too_big with the bounded-prefix reader.
+        # This never erases submission records or retries a completed POST.
+        rescan = con.execute(
+            "UPDATE hosts SET status='pending',reason='bounded_html_retry' "
+            "WHERE status='unavailable' AND reason='too_big'"
+        ).rowcount
+        if rescan:
+            print("KQ247_RECHECK_PREVIOUSLY_TOO_BIG="+str(rescan),flush=True)
+            con.commit()
         for u in SEED: add_url(con,u,force=True)
         con.commit()
         refresh_public_feeds(con)
