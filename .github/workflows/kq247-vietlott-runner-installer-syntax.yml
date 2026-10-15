@@ -1,0 +1,24 @@
+name: KQ247 Vietlott VPS Runner Installer Syntax
+on:
+  push:
+    paths:
+      - ops/install-vietlott-selfhosted-runner.sh
+      - .github/workflows/kq247-vietlott-runner-installer-syntax.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate installer only; never execute VPS root actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n ops/install-vietlott-selfhosted-runner.sh
+          grep -Fq 'label="kq247-vietlott-ci"' ops/install-vietlott-selfhosted-runner.sh
+          grep -Fq 'for forbidden in docker sudo wheel' ops/install-vietlott-selfhosted-runner.sh
+          grep -Fq 'sha256sum --check --status' ops/install-vietlott-selfhosted-runner.sh
+          echo KQ247_VIETLOTT_RUNNER_INSTALLER_SYNTAX=PASS
