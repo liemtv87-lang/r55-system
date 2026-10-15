@@ -48,6 +48,11 @@ TIMEOUT = 9
 MAX_WORKERS = 24
 SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
 MAX_SEEDS = 400
+VN_NON_DOT_VN_HOSTS={"vietnamnavigation.com","xosodaiphat.com","ketqua.net","vncapitals.com"}
+
+def vietnam_audience_host(h):
+ h=(h or "").lower().removeprefix("www.")
+ return h.endswith(".vn") or h in VN_NON_DOT_VN_HOSTS
 
 def source_seeds():
  """Rotate the discovered hosts by last REAL audit; do not repeatedly verify the same 400.
@@ -86,13 +91,13 @@ def source_seeds():
   seen.add(host)
   result.append(uri)
   return True
- for uri in sorted(curated,key=lambda u:0 if (urllib.parse.urlsplit(u).hostname or "").endswith(".vn") else 1):
+ for uri in sorted(curated,key=lambda u:0 if vietnam_audience_host(urllib.parse.urlsplit(u).hostname) else 1):
   append_valid(uri)
- # Reserve some scan capacity for non-.vn hosts rather than starving all of them.
+ # Reserve some scan capacity for global publishers; keep known VN-facing .com sites first.
  space=max(0,MAX_SEEDS-len(result))
  vn_budget=int(space*0.8)
- vn=[r[0] for r in discovered if (r[1] or "").endswith(".vn")]
- elsewhere=[r[0] for r in discovered if not (r[1] or "").endswith(".vn")]
+ vn=[r[0] for r in discovered if vietnam_audience_host(r[1])]
+ elsewhere=[r[0] for r in discovered if not vietnam_audience_host(r[1])]
  vn_added=0
  for uri in vn:
   if vn_added>=vn_budget:break
@@ -490,6 +495,9 @@ def main():
   assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
+  assert vietnam_audience_host("xosodaiphat.com")
+  assert vietnam_audience_host("www.vncapitals.com")
+  assert not vietnam_audience_host("global-directory.com")
   honeypot=Links();honeypot.feed('<form method="post"><input name="name"><input name="website" style="position:absolute;left:-9999px" tabindex="-1" aria-hidden="true"></form>')
   assert evaluate_publisher_form(honeypot.forms,"https://test.vn/submit-site/")["credible_site_submission_forms"]==0
   service=Links();service.feed('<form method="post"><input name="serviceURL"><input name="description"></form>')
@@ -553,8 +561,8 @@ def main():
          "five_minute_discovery_ledger_consumed":(ROOT/"google-web-discovery.sqlite3").is_file(),
          "sources_checked_this_run":len(sources),
          "sources_http200_this_run":sum(s.get("http")==200 for s in sources),
-         "scan_host_mix":{"vn":sum((s.get("host") or "").endswith(".vn") for s in sources),
-                          "other":sum(not (s.get("host") or "").endswith(".vn") for s in sources)},
+         "scan_host_mix":{"vn_audience":sum(vietnam_audience_host(s.get("host")) for s in sources),
+                          "other":sum(not vietnam_audience_host(s.get("host")) for s in sources)},
          "new_web_contribution_candidates_this_run":sum(s.get("candidate_count",0) for s in sources),
          "source_pages_with_forms_this_run":sum(bool(s.get("forms_observed_on_source_page")) for s in sources),
          "source_pages_with_post_forms_this_run":sum(bool(s.get("post_forms_observed_on_source_page")) for s in sources),
