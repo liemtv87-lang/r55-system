@@ -247,7 +247,10 @@ def candidate_page_intent(uri):
          "submit-url","submit-link","submit-article","submit-post","submit-guest-post",
          "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
          "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
-         "guest-post-submission","contributor-guidelines"}
+         "guest-post-submission","contributor-guidelines",
+         "gui-bai-viet","gui-tin-bai","gui-bai-cong-tac","dang-website",
+         "gui-website","them-trang-web","dang-ky-cong-tac-vien",
+         "cong-tac-vien","tro-thanh-cong-tac-vien"}
   if leaf in ("submit-service","submit-listing","submit-a-listing","submit-your-company","submit-your-business","submit-your-product"):return 0
   if leaf=="suggest.php" and "/directory/" in path:return 1
   if leaf in exact:return 0
@@ -448,6 +451,8 @@ def main():
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="No gambling allowed")["publisher_form_status"]=="blocked_topic_policy"
   assert candidate_page_intent("https://example.vn/submit-your-website/")==0
   assert candidate_page_intent("https://example.vn/gioi-thieu.html")==99
+  assert candidate_page_intent("https://example.vn/gui-bai-viet/")==0
+  assert candidate_page_intent("https://example.vn/cong-tac-vien/")==0
   assert candidate_page_intent("https://example.com/submit-your-site-for-review/")==1
   assert candidate_page_intent("https://example.org/news/study-contributes-to-care/")==99
   assert candidate_page_intent("https://example.org/wp-content/img/submit-spin.svg")==99
