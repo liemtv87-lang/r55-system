@@ -25,3 +25,10 @@
 3. Check BD post-13:00 native locked snapshot, full AH/OU fixtures/form/odds/history and no duplicate bot; XS post-19:30 36-station last-draw source and private immutable snapshot, then main/customer/bot parity.
 4. Port *actually active* R55 GitHub-hosted jobs to independent VPS-local systemd timers/services where no equivalent already exists, with health verification and idempotence. Unused one-off GitHub workflows can remain archived source/manual tests.
 5. Disable old sources only after local replacement is proven and backed up. Never change existing public URLs; production migration is NOT complete at this checkpoint.
+
+## Verified follow-up ~03:29 VN
+
+- Self-hosted VPS CI run `38802173134` SUCCESS: 290 R55 workflow files still have GitHub-hosted `ubuntu-latest`, but **0 scheduled GitHub workflows remain** after the two cron removals; BD and XS worker source syntax checks passed on VPS Runner. This only means recurring GitHub cron was eliminated, not all one-shot/PR/push GitHub CI workflows or external Neon data dependencies.
+- Live VPS confirmed BD core 18080 HTTP 200 but current payload `locked=false` (pre-13h), 145 fixtures; BD group bot active primary sender; XS main HTTP 200 and still Neon read-through; XS bot active. Sales bot port 18086 active=false; separately check any active sales port/service before asserting entire bot offline.
+- User insists every operational task must be local to VPS and all URLs preserved. Do NOT announce that XS DB/codes/device migration or all 290 workflow executions completed.
+
