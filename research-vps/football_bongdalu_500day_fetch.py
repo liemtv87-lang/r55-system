@@ -3,7 +3,7 @@
 Historical results are POST-MATCH EVIDENCE, never retroactively pre-match odds.
 No interaction with production database/containers, no fake dates or fixture results.
 """
-import datetime as dt,gzip,hashlib,json,os,pathlib,re,sys,time,urllib.error,urllib.parse,urllib.request
+import datetime as dt,gzip,hashlib,json,os,pathlib,re,sys,time,urllib.error,urllib.parse,urllib.request,zlib
 from common import ROOT,VN,load,save,now
 BASE=os.environ.get("KQ247_BONGDALU_BASE","https://www.bongdalu812.com/")
 VALID_HOSTS={"www.bongdalu812.com","www.bongdalu.com","www.bongdalu802.com","www.bongdalu811.com"}
@@ -34,7 +34,18 @@ def fetch_for_day(day):
   target=urllib.parse.urlsplit(response.url)
   if target.scheme!="https" or target.hostname not in VALID_HOSTS:raise ValueError("untrusted redirect")
   raw=response.read(2500001)
+  encoding=(response.headers.get("Content-Encoding") or "").lower()
  if not raw or len(raw)>2500000:raise ValueError("invalid response size")
+ # Historical SoccerAjax mirrors can deliver compressed bytes without urllib's
+ # transparent gzip handling. Decode BEFORE trying JSON or A[] JavaScript.
+ compressed_magic=raw[:4].hex()
+ try:
+  if raw[:2]==bytes.fromhex("1f8b") or "gzip" in encoding:
+   raw=gzip.decompress(raw)
+  elif "deflate" in encoding or raw[:2] in (bytes.fromhex("789c"),bytes.fromhex("78da")):
+   raw=zlib.decompress(raw)
+ except (OSError,zlib.error) as e:raise ValueError("invalid compressed response:"+type(e).__name__)
+ if len(raw)>2500000:raise ValueError("expanded response too large")
  body=raw.decode("utf-8-sig","replace").strip()
  try:d=json.loads(body)
  except json.JSONDecodeError:
@@ -43,7 +54,7 @@ def fetch_for_day(day):
    return uri,raw,body
   # Keep a bounded, non-sensitive response prefix for fixing bad/moved endpoints.
   prefix=re.sub(r"[^a-zA-Z0-9_ .<>/=-]","?",body[:95])
-  raise ValueError("non-JSON historical endpoint prefix:"+prefix)
+  raise ValueError("non-JSON historical endpoint encoding="+encoding+" magic="+compressed_magic+" prefix:"+prefix)
  if not isinstance(d,dict):raise ValueError("non-object historical response")
  if str(d.get("ErrCode",0)) not in ("0","None"):raise ValueError("unexpected Bongdalu error:"+str(d.get("ErrCode"))[:30])
  data=d.get("Data")
@@ -123,6 +134,7 @@ def test():
  assert len(wanted(dt.date(2026,10,15)))==500
  assert wanted(dt.date(2026,10,15))[0]=="2025-06-03"
  assert MAX_AGE==500
+ assert json.loads(gzip.decompress(gzip.compress(b'{"ErrCode":0,"Data":"A[1]=[1];"}')))["ErrCode"]==0
  assert bool(re.search(r"A\[\d+\]\s*=\s*\[","A[19]=[123];"))
  assert parse_ft('A[1]=[3000123,1,1,0,"Home","Away","2025,9,17,00,00,00",-1,3,2,0];',"2025-10-17")[0]["fixture_id"]=="3000123"
  print("KQ247_R55_BONGDALU_FETCH_SELFTEST=PASS")
