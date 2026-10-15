@@ -72,7 +72,7 @@ jobs:
                 if [[ "$verified" == *"$base/kq247-backlink-background-discovery-20261014.py"* && "$verified" == *"--watch"* ]]; then
                   owned_running=1
                   pid="$candidate"
-                  printf '%s\\n' "$pid" > "$base/worker.pid"
+                  printf '%s\n' "$pid" > "$base/worker.pid"
                   echo "KQ247_DISCOVERY_PID_ADOPTED=$pid"
                   break
                 fi
@@ -144,7 +144,7 @@ jobs:
                 if [[ "$checked" == *"$script"* && "$checked" == *"--watch"* ]]; then
                   pid="$candidate"
                   healthy=1
-                  printf '%s\\n' "$pid" > "$base/worker.pid"
+                  printf '%s\n' "$pid" > "$base/worker.pid"
                   echo "KQ247_DISCOVERY_WATCHDOG_ADOPTED_PID=$pid"
                   break
                 fi
@@ -156,7 +156,7 @@ jobs:
             cd "$base"
             nohup nice -n 15 python3 -u "$script" --watch >>"$base/worker.log" 2>&1 </dev/null &
             pid="$!"
-            printf '%s\\n' "$pid" > "$base/worker.pid"
+            printf '%s\n' "$pid" > "$base/worker.pid"
             sleep 3
             if ! kill -0 "$pid" 2>/dev/null; then
               echo "KQ247_DISCOVERY_WATCHDOG_RECOVERY=FAILED"
@@ -177,7 +177,7 @@ jobs:
           poster=subprocess.run(['docker','inspect','-f','{{.State.Running}}','seo-kq247-opt-in-directory'],capture_output=True,text=True,timeout=12)
           running=(poster.returncode==0 and poster.stdout.strip()=='true')
           data={'checked_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                'discovery_pid':int((root/'worker.pid').read_text().strip()),
+                'discovery_pid':int((root/'worker.pid').read_text().strip().replace('\\n','').strip()),
                 'discovery_status':'running',
                 'poster_running':running,
                 'scanner':report('latest.json'),
