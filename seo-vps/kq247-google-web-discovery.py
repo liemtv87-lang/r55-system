@@ -162,9 +162,12 @@ def discover_directories(db):
   db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
              (base,category,None,None))
  db.commit()
+ # The frontier can contain thousands of pages from ONE source host.
+ # Do not LIMIT before applying per-host quotas or later hosts starve.
+ # 8k-20k short SQLite rows are cheap relative to network requests.
  candidates=db.execute("""SELECT url,category FROM index_frontier
                      ORDER BY CASE WHEN last_checked IS NULL THEN 0 ELSE 1 END,
-                              COALESCE(last_checked,'') ASC LIMIT 128""").fetchall()
+                              COALESCE(last_checked,'') ASC""").fetchall()
  groups={}
  page_count={}
  selected=[]
@@ -333,6 +336,8 @@ def run():
          "source_ordering":"Vietnam-related and .vn first; round-robin via last_scanned",
          "source_indexes_seeded":len(SEARCH_PAGES),
          "source_index_pages_checked_this_run":index_pages_checked,
+         "index_page_selection_strategy":"fair_cross_host_frontier_v2",
+         "candidate_match_strategy":"explicit_editorial_slug_v2",
          "index_pages_per_host_cap":MAX_INDEX_PAGES_PER_HOST,
          "index_parallel_host_workers":MAX_INDEX_WORKERS,
          "index_frontier_total_pages":index_frontier_count,
@@ -366,6 +371,8 @@ def selftest():
  assert not https_on_host("https://evil.com/a","abc.vn")
  assert host("https://www.test.com.vn/foo")=="test.com.vn"
  assert len(load_candidates())>=40
+ assert INDEX_PAGE_BUDGET>=MAX_INDEX_PAGES_PER_HOST
+ assert MAX_INDEX_WORKERS>=1
  assert editorial_submission_candidate("https://xoso.vn/submit-your-website/") is True
  assert editorial_submission_candidate("https://news.com/2024/submit-a-false-tip-to-police/") is False
  assert editorial_submission_candidate("https://wordpress.com/wp-content/plugins/forms/submit-spin.svg") is False
