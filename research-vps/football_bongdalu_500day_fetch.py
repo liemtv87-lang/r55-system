@@ -91,7 +91,9 @@ def run():
  states=old.get("dates") if isinstance(old.get("dates"),dict) else {}
  due=[day for day in days if states.get(day,{}).get("state")!="verified_ft_archive"]
  # Never retry the same broken earliest dates forever: first visit all 500 days.
- due.sort(key=lambda day:(int(states.get(day,{}).get("attempts",0)),day))
+ # Probe most recent verified dates first to distinguish expired historical feeds
+ # from a broken parser, then cover the rest of 500 days without repeats.
+ due.sort(key=lambda day:(int(states.get(day,{}).get("attempts",0)),-int(day.replace("-",""))))
  tried=0;success=0;problems=[]
  for day in due[:BATCH]:
   tried+=1
