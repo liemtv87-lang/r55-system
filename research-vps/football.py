@@ -127,6 +127,7 @@ def research(previous):
  baseline=pct(total,BOOTSTRAP) if sample else None
  feature_rows=prematch_feature_rows(load(FEATURE_FILE))
  study=model_grid(feature_rows)
+ result_archive=load(ROOT/"football-bongdalu-results/status.json") or {}
  return {"status":"research_active" if len(covered)==BACKTEST_DAYS and study.get("status")=="model_research" else "blocked_incomplete_500_day_backtest",
          "source":"verified R55 graded fixtures; prematch xG only when independently sourced",
          "backtest_window":{"days_required":BACKTEST_DAYS,"first_day":first.isoformat(),
@@ -134,6 +135,14 @@ def research(previous):
                              "days_missing_count":len(missing),"missing_days_sample":missing[:14],
                              "full_window_verified":len(covered)==BACKTEST_DAYS},
          "settlement_days":len(rates),"settled_fixtures":len(valid),
+         "historical_result_backfill":{"requested_days":500,
+          "source_checked_at_utc":result_archive.get("checked_at_utc"),
+          "dates_with_verifiable_ft":result_archive.get("days_with_verified_FT_archives",0),
+          "dates_remaining_ft":result_archive.get("days_remaining_without_verified_FT",500),
+          "dates_attempted_last_cycle":result_archive.get("days_attempted_this_run",0),
+          "last_source_errors":result_archive.get("error_samples",[])[:6],
+          "pre_match_market_verified":False,
+          "do_not_count_as_trained_model_days":True},
          "baseline":rates,"bootstrap_uncertainty_estimate":baseline,
          "bootstrap_repetitions_not_independent_games":BOOTSTRAP if sample else 0,
          "model_search":study,"evaluations":BOOTSTRAP if sample else 0,
