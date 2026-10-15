@@ -3,8 +3,7 @@ on:
   workflow_dispatch:
   push:
     paths: ['.github/workflows/kq247-vietlott-nightly-33-contract.yml']
-  schedule:
-    - cron: '45 13,15 * * *'
+  # Scheduled GitHub-hosted execution retired; VPS owns recurring runtime.
 permissions:
   contents: read
 jobs:
