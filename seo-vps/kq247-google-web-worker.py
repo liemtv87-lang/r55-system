@@ -198,10 +198,32 @@ def inspect_source(url):
              "html_checked":True})
  return out
 
+def candidate_page_intent(uri):
+ """Return a conservative URL-path signal, NOT authorization to publish.
+ Ignore arbitrary articles mentioning 'submit' and technical assets.
+ """
+ try:
+  p=urllib.parse.urlsplit(uri)
+  path=urllib.parse.unquote(p.path).lower().rstrip("/")
+  leaf=path.rsplit("/",1)[-1]
+  if p.scheme!="https" or not p.hostname or len(uri)>1200 or not leaf:return 99
+  if "/wp-content/" in path or leaf.endswith((".svg",".png",".jpg",".jpeg",".webp",".pdf",".css",".js",".xml")):return 99
+  exact={"submit-site","submit-website","submit-your-site","submit-your-website",
+         "submit-url","submit-link","submit-article","submit-post","submit-guest-post",
+         "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
+         "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
+         "guest-post-submission","contributor-guidelines"}
+  if leaf in exact:return 0
+  if leaf.startswith(("submit-your-site-","submit-your-website-","submit-guest-post-",
+                      "submit-article-","add-your-site-","write-for-us-",
+                      "guest-post-guidelines-","guest-post-submission-")):return 1
+  if leaf in ("guest-post","become-a-contributor","contribute","submit-content"):return 2
+  return 99
+ except (ValueError,UnicodeError):return 99
+
 def candidate_pages_to_inspect(limit=240):
- """Prioritize real submission-intent pages, rotating through unreviewed URLs.
- Persist a durable audit cursor: do not inspect the same latest 120 forever.
- No form presence grants permission to submit content.
+ """Rotate only editorial submission-intent pages; not arbitrary keyword articles.
+ Reading or finding a POST form never authorizes submitting content.
  """
  try:
   with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as db:
@@ -209,16 +231,13 @@ def candidate_pages_to_inspect(limit=240):
   with sqlite3.connect(ROOT/"google-web-seo.sqlite3",timeout=2) as audit:
    audit.execute("CREATE TABLE IF NOT EXISTS candidate_audits (url TEXT PRIMARY KEY,checked_at TEXT NOT NULL,http INTEGER,post_forms INTEGER,forms INTEGER,error TEXT)")
    last_checked=dict(audit.execute("SELECT url,checked_at FROM candidate_audits").fetchall())
-  strong=("dang-bai","dang-tin","gui-bai","gui-tin","submit","add-url","add-site","them-website","contribute","guest-post")
+  candidates=[row[0] for row in rows if candidate_page_intent(row[0])<99]
   def rank(uri):
-   p=urllib.parse.urlsplit(uri)
-   host=(p.hostname or "").lower()
-   path=p.path.lower()
-   return (1 if uri in last_checked else 0,
-           0 if any(k in path for k in strong) else 1,
+   host=(urllib.parse.urlsplit(uri).hostname or "").lower()
+   return (candidate_page_intent(uri),
            0 if host.endswith(".vn") else 1,
+           1 if uri in last_checked else 0,
            last_checked.get(uri,""),uri)
-  candidates=[row[0] for row in rows if urllib.parse.urlsplit(row[0]).scheme=="https"]
   candidates.sort(key=rank)
   return candidates[:limit]
  except (sqlite3.Error,OSError,ValueError):
@@ -236,6 +255,18 @@ def inspect_candidate_page(url):
  result["post_forms_observed"]=sum(f["method"]=="post" for f in parser.forms)
  result["form_details"]=parser.forms[:3]
  result["permission_status"]="manual_or_explicit_site_policy_verification_required"
+ result["candidate_intent_score"]=candidate_page_intent(url)
+ result["page_title"]=parser.title.strip()[:180]
+ result["form_has_website_field"]=any(
+  any(any(t in (f.get("name","").lower()) for t in ("website","site_url","url","link"))
+      for f in form.get("fields",[])) for form in parser.forms)
+ # A backlink may live in an inner contributor page, not on a site's homepage.
+ # Require the same exact HTTPS landing URL match as homepage verification.
+ targets=[]
+ for href in parser.links[:5000]:
+  found=normalize_target_anchor(page.get("final_url",url),href)
+  if found and found not in targets:targets.append(found)
+ result["verified_target_hrefs"]=targets[:5]
  return result
 
 def store_and_report(landing, sources, status):
@@ -259,6 +290,15 @@ def store_and_report(landing, sources, status):
    if not prior:
     db.execute("INSERT OR IGNORE INTO verified VALUES(?,?,?)",(row["source"],target,now))
     new_links.append({"source":row["source"],"target":target})
+ # Record exact public third-party links on audited internal pages too.
+ for page in status.get("candidate_page_inspections",[]):
+  origin=page.get("url")
+  for target in page.get("verified_target_hrefs",[]):
+   if not origin or target not in TARGETS.values():continue
+   prior=db.execute("SELECT 1 FROM verified WHERE source_url=? AND target_url=?",(origin,target)).fetchone()
+   if not prior:
+    db.execute("INSERT OR IGNORE INTO verified VALUES(?,?,?)",(origin,target,now))
+    new_links.append({"source":origin,"target":target})
  counts={}
  for key,target in TARGETS.items():
   rows=db.execute("SELECT source_url FROM verified WHERE target_url=?",(target,)).fetchall()
@@ -291,6 +331,10 @@ def main():
   assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
+  assert candidate_page_intent("https://example.vn/submit-your-website/")==0
+  assert candidate_page_intent("https://example.com/submit-your-site-for-review/")==1
+  assert candidate_page_intent("https://example.org/news/study-contributes-to-care/")==99
+  assert candidate_page_intent("https://example.org/wp-content/img/submit-spin.svg")==99
   assert normalize_target_anchor("https://example.org/page","https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html")==TARGETS["football"]
   assert normalize_target_anchor("https://example.org/page","https://t.me/keochuyengia79") is None
   assert normalize_target_anchor(TARGETS["football"],TARGETS["football"]) is None
