@@ -31,7 +31,7 @@ MAX_URL_LINES = max(1000, min(2000000000, int(os.environ.get("KQ247_MAX_URL_LINE
 BATCH = 25000
 WATCH = ("--watch" in sys.argv)
 IDLE_SECONDS = max(60, min(1800, int(os.environ.get("KQ247_IDLE_SECONDS", "600"))))
-STALE_DAYS = max(7, min(90, int(os.environ.get("KQ247_STALE_DAYS", "30"))))
+STALE_DAYS = max(7, min(90, int(os.environ.get("KQ247_STALE_DAYS", "7"))))
 PATH_RE = re.compile(r"submit|publish|add[-_/]?(?:group|channel|link|listing)|suggest|directory|register|addgroup|dang[-_/]?(?:tin|bai)|them[-_/]?nhom", re.I)
 DOMAIN_RE = re.compile(r"(telegram|telegr|tg(?:find|hub|link|mania|dir|group|radar|box)|group|directory|link|forum|listing|submit|community)", re.I)
 URL_RE = re.compile(r"https?://[^\s\"'<>\\]+", re.I)
@@ -41,8 +41,11 @@ PUBLIC_DIRECTORY_FEEDS = [
     "https://launchdirectories.com/free-web-directories",
     "https://onlytraction.com/directories/free-submission",
     "https://saalinko.com/directory-submission-sites-list/",
+    "https://telegramdirectory.tech/",
+    "https://telegramgroups.co/",
+    "https://groupverse.co.in/",
 ]
-FEED_REFRESH_SECONDS = 86400
+FEED_REFRESH_SECONDS = 21600
 SEED = [
 "https://groupsgyani.org/submit-telegram-group-and-channel-links",
 "https://telegramgroup.arkservices.in/submit",
@@ -72,6 +75,7 @@ SEED = [
 "https://togather.in/submit",
 "https://www.wtgrouplinks.com/submit-your-telegram-groups/",
 "https://telegramhub.app/submit",
+"https://telegramdirectory.tech/submit-channel",
 "https://telxplorer.com/en/create_group",
 "https://tgfind.io/en/inclusion-link",
 "https://worldtelegramdirectory.com/submit",
