@@ -1,4 +1,4 @@
-name: KQ247 Telegram free directory submit protocol read-only
+name: KQ247 SEO relevant directory form protocol read-only
 on:
   push:
     paths: ['.github/workflows/kq247-directory-submit-protocol-check.yml']
@@ -15,13 +15,17 @@ jobs:
           python3 - <<'PY'
           import re,urllib.request
           from urllib.parse import urljoin
-          sites=['https://groupmandi.com','https://groupverse.co.in/submit-your-group.html','https://telegramgroup.arkservices.in/submit']
+          sites=['https://groupmandi.com','https://groupverse.co.in/submit-your-group.html','https://telegramgroup.arkservices.in/submit',
+            'https://veri.bet/submit-service','https://www.alllister.com/directory/suggest.php',
+            'https://theigamingpeople.com/submit-your-company/',
+            'https://www.gamingpk.com/directory/?wpbdp_view=submit_listing',
+            'https://sportbettingdirectory.com/submit-your-site/']
           for site in sites:
            try:
             with urllib.request.urlopen(urllib.request.Request(site,headers={'user-agent':'Mozilla/5.0'}),timeout=14) as r:
              txt=r.read(450000).decode('utf8','replace')
             print('SUBMIT_PAGE',site,'bytes',len(txt))
-            for term in ['fetch(','XMLHttpRequest','/api/','method:','FormData(','submitGroup','addGroup','captcha','csrf','onsubmit=','form id=','type="submit"']:
+            for term in ['<form','fetch(','XMLHttpRequest','/api/','method:','FormData(','captcha','csrf','name="website"','name="url"','onsubmit=','form id=','type="submit"']:
              positions=[m.start() for m in re.finditer(re.escape(term),txt,re.I)]
              for i in positions[:3]:
               block=re.sub(r'\s+',' ',txt[max(0,i-105):i+245])
