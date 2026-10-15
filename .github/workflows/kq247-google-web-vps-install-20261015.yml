@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - seo-vps/kq247-google-web-worker.py
+      - seo-vps/google-web-source-seeds.json
       - .github/workflows/kq247-google-web-vps-install-20261015.yml
   workflow_dispatch:
 permissions:
@@ -21,6 +22,7 @@ jobs:
         run: |
           python3 -m py_compile seo-vps/kq247-google-web-worker.py
           python3 seo-vps/kq247-google-web-worker.py --self-test
+          python3 -m json.tool seo-vps/google-web-source-seeds.json >/dev/null
       - name: Install SSH client and pinned host fingerprint
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
       - name: Deploy separate timer, run now, and verify without modifying production containers
@@ -39,6 +41,8 @@ jobs:
             'mkdir -p /opt/kq247/google-web-seo'
           sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
             seo-vps/kq247-google-web-worker.py "$REMOTE:/opt/kq247/google-web-seo/worker.py"
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            seo-vps/google-web-source-seeds.json "$REMOTE:/opt/kq247/google-web-seo/google-web-source-seeds.json"
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'bash -se' <<'VPS'
           set -euo pipefail
           old="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
@@ -80,7 +84,8 @@ jobs:
           d=json.loads(p.read_text())
           assert d['campaign']=='google_web_independent',d
           assert len(d['landing_pages'])==2,d
-          assert d['sources_checked_this_run']>=10,d
+          assert d['sources_checked_this_run']>=40,d
+          assert d['configured_unique_source_hosts']>=40,d
           assert d['google_indexation']['indexed_pages'] is None
           assert d['automatic_submission']['enabled'] is False
           age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(d['checked_at_utc'])).total_seconds()
@@ -88,6 +93,7 @@ jobs:
           print('KQ247_GOOGLE_WEB_INSTALLED=PASS')
           print('KQ247_GOOGLE_WEB_LIVE_METRICS='+json.dumps({
              'at':d['checked_at_utc'],
+             'configured_unique_source_hosts':d['configured_unique_source_hosts'],
              'sources_checked_this_run':d['sources_checked_this_run'],
              'sources_http200_this_run':d['sources_http200_this_run'],
              'web_backlinks':d['web_backlinks'],
