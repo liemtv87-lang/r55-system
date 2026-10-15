@@ -10,7 +10,7 @@ CANDIDATE_HOSTS=(
  "www.bongdalu811.com","www.bongdalu628.com","www.bongdalu800.com",
  "www.bongdalu128.com","www.bongdalu618.com")
 ALLOW=re.compile(r"^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$",re.I)
-DEPTH_DAYS=(0,1,2,3,5,7,10,14,21,28,35,45,60,75,90,120,150,180,270,365,499)
+DEPTH_DAYS=tuple(range(0,16))+(21,28,35,45,60,75,90,120,150,180,270,365,499)
 MAX_CANDIDATES=max(2,min(12,int(os.environ.get("KQ247_BONG_SOURCE_CANDIDATES","7"))))
 DEST=ROOT/"bongdalu-source-depth"
 def domain(u):
@@ -91,7 +91,13 @@ def research_probe(base):
  result["verified_max_age_days"]=max((age+1 for age,_ in available),default=0)
  result["sampled_dates_with_matches"]=len(available)
  result["sampled_dates_total"]=len(DEPTH_DAYS)
- result["fully_contiguous_days_verified"]=0 # Not proven until every date checked.
+ observed={v["age_days_from_yesterday"]:v["count"] for v in result["archives"].values()}
+ consecutive=0
+ for i in range(16):
+  if observed.get(i,0)<=0:break
+  consecutive+=1
+ result["fully_contiguous_days_verified"]=consecutive
+ result["daily_probe_window_days"]=16
  return result
 def run():
  DEST.mkdir(parents=True,exist_ok=True)
@@ -108,6 +114,7 @@ def run():
   saved={"base":best["base"],"verified_at_utc":now(),
          "current_football_feed_verified":True,"current_odds_verified":True,
          "max_sampled_history_age_days":best["verified_max_age_days"],
+         "contiguous_daily_result_days_verified":best["fully_contiguous_days_verified"],
          "oldest_sampled_date":best["verified_oldest_date"],
          "source_label":"bongdalu_native_feed"}
   save(DEST/"last_verified.json",saved)
@@ -117,6 +124,8 @@ def run():
          "cached_last_verified_base":saved.get("base") if isinstance(saved,dict) else None,
          "date_probe_ages":list(DEPTH_DAYS),"results":results,
          "max_sampled_history_age_days":best["verified_max_age_days"] if best else None,
+         "contiguous_api_history_days":best["fully_contiguous_days_verified"] if best else 0,
+         "history_target_basis":"verified_consecutive_calendar_dates_not_claimed_site_wide_maximum",
          "actual_max_available_days_unproven":True,
          "prematch_market_history_unproven":True,"production_changed":False}
  save(DEST/"status.json",report)
