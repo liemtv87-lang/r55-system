@@ -187,7 +187,12 @@ jobs:
           WATCHDOGTIMER
           systemctl daemon-reload
           systemctl enable --now kq247-backlink-discovery-watchdog.timer
-          systemctl start kq247-backlink-discovery-watchdog.service
+          if ! systemctl start kq247-backlink-discovery-watchdog.service; then
+            systemctl status --no-pager -l kq247-backlink-discovery-watchdog.service || true
+            journalctl -u kq247-backlink-discovery-watchdog.service -n 35 --no-pager || true
+            /bin/bash -n "$base/ensure-worker.sh" || true
+            exit 1
+          fi
           systemctl is-active --quiet kq247-backlink-discovery-watchdog.timer
           test -s /opt/kq247/deployment/football-original/public/seo-backlink-worker-status.json
           echo "KQ247_DISCOVERY_WATCHDOG_ACTIVE=YES"
