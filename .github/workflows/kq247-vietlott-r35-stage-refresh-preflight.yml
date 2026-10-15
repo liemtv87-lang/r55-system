@@ -28,15 +28,15 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          name=kq247-vietlott-r35-sourcefix-stage
+          name=kq247-vietlott-r35-regionbackup-stage
           test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
-          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:e9aae8c58857'
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:aa7b460afa42'
           before=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
           echo KQ247_R35_STAGE_REFRESH_DATE=$(TZ=Asia/Ho_Chi_Minh date +%F)
           # REFRESH_ONLY does not write pools, guest files, or snapshots.
           timeout 300 docker exec -e REFRESH_ONLY=1 "$name" node scripts/update-data.mjs
           echo KQ247_R35_STAGE_SOURCE_REFRESH=PASS
-          docker exec "$name" node --input-type=module - <<'JS'
+          docker exec -i "$name" node --input-type=module - <<'JS'
           import {readFileSync} from 'node:fs';
           for (const p of ['mega645','power655']) {
             const h=JSON.parse(readFileSync('data/history-'+p+'.json','utf8'));
