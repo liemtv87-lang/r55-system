@@ -97,11 +97,52 @@ def collect(now,services,discovery_pids,discovery_recovery):
   "note":"Source candidates and submitted forms are not published backlinks. Automatic submissions only on opt-in, free/public, eligible directories."
  }
 
+def accumulate_real_hourly_growth(hour, payload):
+ """Count newly OBSERVED records, never infer publications from scan volume.
+
+ Uses per-metric high water across hours to avoid recounting old postings after
+ a source temporarily becomes unavailable. The first run establishes baseline.
+ """
+ p=ROOT/"verified-hourly-counters.json"
+ prior=json_file(p)
+ current={
+  "hosts":int(payload["discovery"]["unique_hosts_discovered"] or 0),
+  "attempt_records":sum(int(v or 0) for v in payload["submission"]["counts"].values()),
+  "football_verified":int(payload["verification"]["football_verified_published"] or 0),
+  "lottery_verified":int(payload["verification"]["lottery_verified_published"] or 0),
+ }
+ if not prior.get("high_water"):
+  growth={k:0 for k in current}
+  initialized=True
+  high=current.copy()
+ else:
+  peak=prior["high_water"]
+  growth={k:max(0,v-int(peak.get(k,0))) for k,v in current.items()}
+  high={k:max(v,int(peak.get(k,0))) for k,v in current.items()}
+  initialized=False
+ previous_growth=prior.get("hour_growth",{}) if prior.get("hour")==hour else {}
+ total={k:int(previous_growth.get(k,0))+v for k,v in growth.items()}
+ state={"hour":hour,"high_water":high,"hour_growth":total,
+        "baseline_created_now":initialized,
+        "updated_at_utc":utcnow().isoformat()}
+ atomic_json(p,state)
+ return {
+  "hour_utc":hour,
+  "new_source_hosts_observed":total["hosts"],
+  "new_submission_records_observed":total["attempt_records"],
+  "new_verified_public_backlinks":total["football_verified"]+total["lottery_verified"],
+  "verified_public_backlinks_by_group":{"football":total["football_verified"],
+                                       "lottery":total["lottery_verified"]},
+  "baseline_created_now":initialized,
+  "counting_policy":"Only positive increases over previously observed high-water counts; not claimed scan volume, pending moderation or click counts."
+ }
+
 def main():
  if "--self-test" in sys.argv:
   assert len(SERVICES)==5 and len(set(SERVICES))==5
   assert GROUPS==("football","lottery")
   assert "kq247-football" not in " ".join(SERVICES)
+  assert "hosts" in {"hosts":0}
   print("SEO_UNIFIED_OFFLINE_SELFTEST=PASS")
   return
  ROOT.mkdir(parents=True,exist_ok=True)
@@ -142,6 +183,7 @@ def main():
  payload["hourly_window_utc"]=hour
  payload["supervisor_active"]=bool(discovery_pids)
  payload["one_vps_timer"]="kq247-seo-unified.timer"
+ payload["hourly_delta"]=accumulate_real_hourly_growth(hour,payload)
  # An older installer might be invoked after a source update. Keep one SEO
  # schedule by reconciling exact known legacy timers on each healthy tick.
  old_timers=(
