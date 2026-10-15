@@ -1,0 +1,73 @@
+name: KQ247 Three Independent Research VPS Preflight
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-three-research-vps-preflight-20261015.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect host resources and read-only historical data access
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'python3 -' <<'PY'
+          import os,pathlib,subprocess,json,shutil
+          def command(*args):
+              try:
+                  p=subprocess.run(args,capture_output=True,text=True,timeout=12)
+                  return {'code':p.returncode,'text':p.stdout.strip()[:3800]}
+              except Exception as e:return {'error':type(e).__name__}
+          root=pathlib.Path('/opt/kq247')
+          locations=[
+           '/opt/kq247/deployment/football-staging',
+           '/opt/kq247/deployment/football-staging/data',
+           '/opt/kq247/deployment/lottery-vps-daily-staging',
+           '/opt/kq247/lottery',
+           '/opt/kq247/vietlott',
+           '/opt/kq247/vietlott/public/backtest-60.json',
+           '/opt/kq247/vietlott/data',
+           '/opt/kq247/football-history',
+           '/opt/kq247/deployment/football-staging/compose.yaml',
+          ]
+          found={}
+          for item in locations:
+              p=pathlib.Path(item)
+              if not p.exists():found[item]={'exists':False};continue
+              entry={'exists':True,'directory':p.is_dir()}
+              if p.is_dir():
+                  try:entry['children']=[{'name':c.name,'dir':c.is_dir(),'bytes':c.stat().st_size if c.is_file() else None} for c in list(p.iterdir())[:24] if not c.is_symlink()]
+                  except OSError:pass
+              elif p.suffix=='.json':
+                  try:
+                      d=json.loads(p.read_text())
+                      entry['keys']=list(d)[:14] if isinstance(d,dict) else None
+                      if 'products' in d:entry['product_keys']=list(d['products'])[:4]
+                  except Exception:pass
+              found[item]=entry
+          cs=command('docker','ps','--format','{{.Names}}|{{.Image}}|{{.Status}}')
+          details={}
+          for name in [r.split('|')[0] for r in cs.get('text','').splitlines() if any(k in r.lower() for k in ('vietlott','football','lottery','xs','r55'))][:12]:
+              v=command('docker','inspect','--format','{{json .Mounts}}',name)
+              try:
+                  mounts=json.loads(v.get('text','[]'))
+                  details[name]=[{'source':m.get('Source'),'destination':m.get('Destination'),'mode':m.get('Mode')} for m in mounts][:12]
+              except Exception:details[name]=[]
+          result={'cpu_count':os.cpu_count(),'memory':command('free','-m'),'disk':command('df','-h','/opt/kq247'),
+                  'containers':cs,'container_mounts':details,'locations':found,
+                  'existing_research_timers':command('systemctl','list-timers','--all','--no-pager')}
+          print('KQ247_RESEARCH_PREFLIGHT='+json.dumps(result,ensure_ascii=False))
+          print('KQ247_RESEARCH_PREFLIGHT_READ_ONLY=YES')
+          PY
