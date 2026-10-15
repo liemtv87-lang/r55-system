@@ -28,7 +28,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          expected=35404d0f27f713441bce8f0ae7570828aa9e14db
+          expected=e9aae8c58857c5f8760909c82d31e052c4765592
           base=/opt/kq247/vietlott/versions
           key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
           known=/opt/kq247/ops/deploy/keys/github_known_hosts
@@ -73,6 +73,7 @@ jobs:
             node --check scripts/merge-backtest-60.mjs
             node --check scripts/vps-release-gate.mjs
             node scripts/r35-contract.test.mjs
+            node scripts/xsmb-verified-daily.mjs
             node test-snapshot.mjs
             node scripts/reduce-coverage.test.mjs
             node scripts/verify-fast-pool-filter.mjs
@@ -81,7 +82,7 @@ jobs:
           before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
           tag="kq247-vietlott-r35-stage:${expected:0:12}"
           docker build -q -f "$dest/deploy/Dockerfile.vps" -t "$tag" "$dest" >/dev/null
-          name=kq247-vietlott-r35-stage
+          name=kq247-vietlott-r35-sourcefix-stage
           if docker ps -a --format '{{.Names}}' | grep -qx "$name";then
             test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
             test "$(docker inspect -f '{{.Config.Image}}' "$name")" = "$tag"
@@ -89,11 +90,11 @@ jobs:
           else
             docker run -d --name "$name" --restart=no --cpus=1 --memory=2g \
               -e VIETLOTT_STAGE_READONLY=1 -e PORT=8080 -e TZ=Asia/Ho_Chi_Minh \
-              -p 127.0.0.1:18141:8080 "$tag" >/dev/null
+              -p 127.0.0.1:18142:8080 "$tag" >/dev/null
             echo 'KQ247_VIETLOTT_NEW_STAGE_CONTAINER=STARTED'
           fi
           for i in $(seq 1 15);do
-            if curl -fsS --max-time 5 http://127.0.0.1:18141/health >/tmp/kq247-r35-stage-health.json;then break;fi
+            if curl -fsS --max-time 5 http://127.0.0.1:18142/health >/tmp/kq247-r35-stage-health.json;then break;fi
             sleep 2
           done
           python3 - <<'PY'
@@ -101,7 +102,7 @@ jobs:
           with open('/tmp/kq247-r35-stage-health.json') as f: d=json.load(f)
           assert d.get('ok') is True and str(d.get('runtime','')).startswith('R41_VPS_USER35'),d
           for path in ('/','/guest-snapshot.html','/client.html'):
-            r=urllib.request.urlopen('http://127.0.0.1:18141'+path,timeout=5)
+            r=urllib.request.urlopen('http://127.0.0.1:18142'+path,timeout=5)
             assert r.status==200,(path,r.status)
           print('KQ247_VIETLOTT_R35_STAGE_HTTP_SMOKE=PASS')
           PY
