@@ -1,0 +1,53 @@
+name: KQ247 Vietlott R35 Isolated Data Refresh Preflight
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-stage-refresh-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r35-data-stage
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Refresh histories and 3-region source ONLY inside isolated R35 candidate
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=kq247-vietlott-r35-sourcefix-stage
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:e9aae8c58857'
+          before=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
+          echo KQ247_R35_STAGE_REFRESH_DATE=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          # REFRESH_ONLY does not write pools, guest files, or snapshots.
+          timeout 300 docker exec -e REFRESH_ONLY=1 "$name" node scripts/update-data.mjs
+          echo KQ247_R35_STAGE_SOURCE_REFRESH=PASS
+          docker exec "$name" node --input-type=module - <<'JS'
+          import {readFileSync} from 'node:fs';
+          for (const p of ['mega645','power655']) {
+            const h=JSON.parse(readFileSync('data/history-'+p+'.json','utf8'));
+            console.log('KQ247_R35_STAGE_HISTORY '+p+' count='+h.length+' latest='+h.at(-1)?.date);
+          }
+          const x=JSON.parse(readFileSync('data/xsmb200.json','utf8'));
+          const day=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+          const row=x.find(v=>v.date===day);
+          console.log('KQ247_R35_STAGE_XSMB='+JSON.stringify({date:day,count:row?.full?.length||0,confirmations:row?.confirmations||0,sources:row?.sources||[]}));
+          JS
+          after=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
+          test "$before" = "$after"
+          echo KQ247_VIETLOTT_PRODUCTION_CONTAINER_UNCHANGED=YES
+          VPS
