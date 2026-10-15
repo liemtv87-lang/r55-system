@@ -1,0 +1,105 @@
+name: KQ247 Google Web SEO Separate VPS Installer
+on:
+  push:
+    branches: [main]
+    paths:
+      - seo-vps/kq247-google-web-worker.py
+      - .github/workflows/kq247-google-web-vps-install-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-google-web-vps-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate dedicated Google Web worker
+        run: |
+          python3 -m py_compile seo-vps/kq247-google-web-worker.py
+          python3 seo-vps/kq247-google-web-worker.py --self-test
+      - name: Install SSH client and pinned host fingerprint
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Deploy separate timer, run now, and verify without modifying production containers
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE='root@64.120.92.172'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" \
+            'mkdir -p /opt/kq247/google-web-seo'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            seo-vps/kq247-google-web-worker.py "$REMOTE:/opt/kq247/google-web-seo/worker.py"
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'bash -se' <<'VPS'
+          set -euo pipefail
+          old="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
+          python3 -m py_compile /opt/kq247/google-web-seo/worker.py
+          python3 /opt/kq247/google-web-seo/worker.py --self-test
+          cat > /etc/systemd/system/kq247-google-web-seo.service <<'SERVICE'
+          [Unit]
+          Description=KQ247 Google WEB SEO separate first-party and external backlink audit
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          WorkingDirectory=/opt/kq247/google-web-seo
+          ExecStart=/usr/bin/python3 /opt/kq247/google-web-seo/worker.py
+          TimeoutStartSec=420
+          NoNewPrivileges=true
+          SERVICE
+          cat > /etc/systemd/system/kq247-google-web-seo.timer <<'TIMER'
+          [Unit]
+          Description=Independent KQ247 Google WEB SEO hourly timer
+          [Timer]
+          OnCalendar=hourly
+          RandomizedDelaySec=0
+          AccuracySec=1min
+          Persistent=true
+          Unit=kq247-google-web-seo.service
+          [Install]
+          WantedBy=timers.target
+          TIMER
+          systemctl daemon-reload
+          systemctl enable --now kq247-google-web-seo.timer
+          systemctl start kq247-google-web-seo.service
+          systemctl is-active --quiet kq247-google-web-seo.timer
+          systemctl is-active --quiet kq247-seo-unified.timer
+          python3 - <<'PY'
+          import json,datetime,pathlib
+          p=pathlib.Path('/opt/kq247/deployment/football-original/public/google-web-seo-status.json')
+          assert p.is_file(),p
+          d=json.loads(p.read_text())
+          assert d['campaign']=='google_web_independent',d
+          assert len(d['landing_pages'])==2,d
+          assert d['sources_checked_this_run']>=10,d
+          assert d['google_indexation']['indexed_pages'] is None
+          assert d['automatic_submission']['enabled'] is False
+          age=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(d['checked_at_utc'])).total_seconds()
+          assert 0<=age<=500,age
+          print('KQ247_GOOGLE_WEB_INSTALLED=PASS')
+          print('KQ247_GOOGLE_WEB_LIVE_METRICS='+json.dumps({
+             'at':d['checked_at_utc'],
+             'sources_checked_this_run':d['sources_checked_this_run'],
+             'sources_http200_this_run':d['sources_http200_this_run'],
+             'web_backlinks':d['web_backlinks'],
+             'auto_submission':d['automatic_submission']},ensure_ascii=False))
+          PY
+          test -s /opt/kq247/deployment/football-original/public/google-web-seo-status.json
+          curl -fsS --max-time 12 http://127.0.0.1:18080/google-web-seo-status.json | \
+            python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["campaign"]=="google_web_independent";print("KQ247_GOOGLE_WEB_PUBLIC_JSON=PASS")'
+          new="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
+          test "$old" = "$new"
+          echo 'KQ247_ALL_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          echo 'KQ247_GOOGLE_WEB_TIMER_ACTIVE=YES'
+          echo 'KQ247_TELEGRAM_TIMER_PRESERVED=YES'
+          systemctl list-timers --all kq247-google-web-seo.timer kq247-seo-unified.timer --no-pager
+          VPS
