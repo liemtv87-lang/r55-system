@@ -517,6 +517,12 @@ def main():
   assert normalize_target_anchor(TARGETS["football"],TARGETS["football"]) is None
   assert 10<=len(source_seeds())<=MAX_SEEDS
   assert "https://github.com/liemtv87-lang/r55-system" in source_seeds()
+  if (ROOT/"google-web-discovery.sqlite3").is_file():
+   selected=candidate_pages_to_inspect()
+   stats=candidate_funnel_counts()
+   stats["selected_for_form_audit"]=len(selected)
+   stats["selected_unique_hosts"]=len({urllib.parse.urlsplit(x).hostname for x in selected})
+   print("KQ247_GOOGLE_CANDIDATE_FUNNEL="+json.dumps(stats,ensure_ascii=False))
   print("KQ247_GOOGLE_WEB_SELF_TEST=PASS")
   return
  started=time.monotonic()
