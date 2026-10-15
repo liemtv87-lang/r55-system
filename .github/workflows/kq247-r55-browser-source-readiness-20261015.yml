@@ -1,0 +1,43 @@
+name: KQ247 R55 Browser Render Source Readiness
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-r55-browser-source-readiness-20261015.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read-only inspect Playwright / Chromium already installed on VPS
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'python3 -' <<'PY'
+          import os,sys,pathlib,json,shutil,subprocess
+          def call(*cmd):
+           try:
+            p=subprocess.run(cmd,capture_output=True,text=True,timeout=8)
+            return {'exit':p.returncode,'out':p.stdout.strip()[:1200],'err':p.stderr.strip()[:250]}
+           except Exception as e:return {'error':type(e).__name__}
+          checks={'chromium':{k:shutil.which(k) for k in ['chromium','chromium-browser','google-chrome','node']},
+                  'python_playwright':call('python3','-c','import playwright;print(playwright.__path__)'),
+                  'pwremote_node_playwright':call('node','-e',"console.log(require.resolve('playwright',{paths:['/opt/pwremote']}))"),
+                  'pwremote_node_playwright_core':call('node','-e',"console.log(require.resolve('playwright-core',{paths:['/opt/pwremote']}))"),
+                  'possible_browser_locations':{}}
+          for path in ['/opt/pwremote/node_modules','/root/.cache/ms-playwright','/usr/bin/chromium',
+                       '/opt/kq247/research/inputs','/opt/kq247/football']:
+           p=pathlib.Path(path);checks['possible_browser_locations'][path]={'exists':p.exists(),
+                         'children':[x.name for x in list(p.iterdir())[:14]] if p.is_dir() else []}
+          print('KQ247_BROWSER_SOURCE_READINESS='+json.dumps(checks))
+          print('KQ247_BROWSER_SOURCE_CHECK_READ_ONLY=YES')
+          PY
