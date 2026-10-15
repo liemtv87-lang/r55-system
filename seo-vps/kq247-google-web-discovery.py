@@ -270,6 +270,11 @@ def run():
  total_sites=db.execute("SELECT COUNT(*) FROM sites").fetchone()[0]
  total_forms=db.execute("SELECT COUNT(*) FROM candidate_pages").fetchone()[0]
  index_frontier_count=db.execute("SELECT COUNT(*) FROM index_frontier").fetchone()[0]
+ # Durable accounting of reads (including repeated URLs across cycles).
+ # Not a unique-URL count and never a claimed backlink count.
+ cumulative_url_records,cumulative_host_scans,completed_cycles=db.execute(
+  "SELECT COALESCE(SUM(url_records),0),COALESCE(SUM(hosts_scanned),0),COUNT(*) FROM cycles"
+ ).fetchone()
  db.close()
  result={"campaign":"google_web_independent","checked_at_utc":now,
          "discovery_interval_minutes":5,"vietnam_priority_enabled":True,
@@ -281,6 +286,10 @@ def run():
          "source_hosts_examined_this_run":host_count,
          "host_budget_per_cycle":MAX_HOSTS,"worker_count":MAX_WORKERS,
          "sitemap_url_records_read_this_run":ur,
+         "cumulative_sitemap_url_records_read":cumulative_url_records,
+         "cumulative_source_host_scans":cumulative_host_scans,
+         "completed_scan_cycles":completed_cycles,
+         "cumulative_count_note":"Counts all sitemap URL records read, including repeats across cycles; not unique URLs or backlinks.",
          "contributor_url_candidates_new_this_run":form_new,
          "contributor_url_candidates_total":total_forms,
          "site_error_samples":sum(bool(r.get("errors")) for r in results),
