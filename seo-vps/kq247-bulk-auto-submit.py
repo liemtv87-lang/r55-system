@@ -33,6 +33,9 @@ GROUPS={
 ALREADY_SENT_HOSTS={"tgfind.net","toptglinks.com","telejoiner.com","groupmandi.com","tgmania.com","tgfinder.net","telegram-group.com","telegramhub.org","tgden.com"}
 # Separate workflows already own submission state for this domain.
 EXTERNAL_WORKFLOW_HOSTS={"buyinoffer.com","tgden.com","vi.tgdio.com"}
+# Website SEO directories belong to the independent Google/Web candidate audit,
+# NOT to the Telegram group listing submitter. Keeping them here wastes queue slots.
+WEB_ONLY_HOSTS={"freeprwebdirectory.com","sitepromotiondirectory.com","prolinkdirectory.com"}
 BATCH_LIMIT=min(400,max(1,int(os.environ.get("KQ247_SUBMIT_MAX", "120"))))
 TIME_LIMIT=min(7200,max(60,int(os.environ.get("KQ247_SUBMIT_SECONDS","2400"))))
 PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
@@ -93,6 +96,11 @@ def pair_ready(con, host, grp):
     state, timestamp=row
     if state == "unavailable":
         delay = RETRY_GET_AFTER_S
+    elif state == "inspection_started":
+        # This checkpoint is written before any submit click. Both submit paths
+        # record attempted_no_retry durably BEFORE clicking the publisher form.
+        # An interrupted read-only inspection is therefore safe to resume.
+        delay = RETRY_GET_AFTER_S
     elif state in REINSPECT_ONLY_STATES:
         # Groupsor JS form was mistakenly classified as no_eligible_form by the
         # generic HTML POST detector; that state proves no submission happened.
@@ -100,7 +108,7 @@ def pair_ready(con, host, grp):
         delay = min(RETRY_READONLY_AFTER_S, 12 * 3600) if host == "groupssor.com" and state == "no_eligible_form" else RETRY_READONLY_AFTER_S
     else:
         # This includes attempted_no_retry, posted/pending/unknown, and
-        # inspection_started (which cannot prove a POST never occurred).
+        # any state in which a submission might already have been sent.
         return False
     try:
         last=datetime.datetime.fromisoformat(timestamp)
@@ -118,6 +126,7 @@ def read_queue(con):
     return list(dict.fromkeys(
         (h,u) for h,u in rows if h not in ALREADY_SENT_HOSTS
             and h not in EXTERNAL_WORKFLOW_HOSTS
+            and h not in WEB_ONLY_HOSTS
             and urlsplit(u).scheme == "https" and urlsplit(u).hostname in (h, "www." + h)
             and (verified_submission_path(h,urlsplit(u).path) or
                  con.execute("SELECT 1 FROM hosts WHERE host=? AND url=? AND status='form_candidate'",
