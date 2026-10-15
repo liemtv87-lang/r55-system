@@ -1,0 +1,13 @@
+# KQ247 XSMB research – 2,000 genuine complete 27-prize draws
+
+Verified deployed on the user's VPS on **2026-10-15 17:38 ICT**.
+
+- **Canonical isolated research path:** `/opt/kq247/research/state/xsmb-2000-full27.json`; no production snapshot, customer tool, license, or container was modified.
+- **Dates:** 2,000 actual XSMB draw records, from **2021-04-04 through 2026-10-14** (lottery holidays/gaps are not synthesized).
+- **Source:** `khiemdoan/vietnam-lottery-xsmb-analysis` `data/xsmb.csv` pinned to immutable commit `19b86599566503b0eca5b6dc638b8d9a5d42fee7`, Git blob SHA `f1c3be4a675f14e1988332d4cd0003a85064f566`. Source held 7,583 full-27 draw records.
+- **Crucial:** 27 prizes per draw, **all digit positions** preserved. Column widths: special 5; first 5; second 2×5; third 6×5; fourth 4×4; fifth 6×4; sixth 3×3; seventh 4×2 = **107 actual digit positions per draw**. CSV integer-like fields lose leading zeros; importer restores fixed widths before any calculation.
+- **Cross-validation:** compared to the VPS's 505 independently archived XSMB full-prize draws. 504/505 initially matched exactly; upstream draw `2025-06-25` disagreed. For this one draw the import *replaced* the upstream value with the VPS's trusted local full-27 record. After reconciliation **505/505 overlap draw records match**. Audited under `/opt/kq247/research/state/xsmb-2000-import-audit.json`, file's normalized SHA-256: `2969f7a8b567a8fe8727d1e62310952f7e7b6207fbd73201652e62aa848bc768`.
+- **Worker config:** systemd `kq247-research-xs.timer` every 10 min (minutes :02, :12, ...), with `KQ247_XS_HISTORY=/opt/kq247/research/state/xsmb-2000-full27.json` and `KQ247_XS_TRIALS=256`. Independent researcher reads prior full-27 draw positions; keeps last 60 draws separate for research evaluation; monthly target gates 3 lotto 75%, DE 50/60 75%, DE75 and 3-cang 90%. The source is only XSMB, **not proof that MT/MN already have 2,000 genuine full-18 prizes per station**.
+- **Successful smoke:** GitHub Actions `38721532268`, job `116377006571`. Eight-method smoke evaluated approximately 1,594,200 score-position operations in 1.76 s. It is not a guarantee of predictions or a measurement of the 256-method scheduled run. The smoke targets were not met on the complete 2026-09 holdout month; no automatic promotion to production.
+- Research paths only; existing production containers unchanged and 3 research timers remained active. SEO was previously resumed separately and should remain active.
+- **Next action:** audit a full scheduled 256-method cycle on the 2000-draw input for wall time and date-scoped validation; expand separate MT/MN station-specific 18-full-prize datasets only with trustworthy historical records, not backfilled fabricated digits.
