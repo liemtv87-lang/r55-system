@@ -34,7 +34,10 @@ SEEDS = [
  "https://xoso.com.vn/", "https://ketqua.net/",
  "https://xosodaiphat.com/", "https://www.webtretho.com/",
  "https://medium.com/", "https://wordpress.com/",
- "https://www.reddit.com/r/VietNam/"
+ "https://www.reddit.com/r/VietNam/",
+ # Public owner-authored README already contains both exact first-party links.
+ # Count only if a fresh external HTML href check succeeds; no fabricated postings.
+ "https://github.com/liemtv87-lang/r55-system"
 ]
 KEYWORDS = ("lien-he","lien_he","gui-bai","gui-tin","dang-bai","dang-tin",
             "dang-website","them-website","them-link","them-trang-web","add-site",
@@ -513,6 +516,7 @@ def main():
   assert normalize_target_anchor("https://example.org/page","https://t.me/keochuyengia79") is None
   assert normalize_target_anchor(TARGETS["football"],TARGETS["football"]) is None
   assert 10<=len(source_seeds())<=MAX_SEEDS
+  assert "https://github.com/liemtv87-lang/r55-system" in source_seeds()
   print("KQ247_GOOGLE_WEB_SELF_TEST=PASS")
   return
  started=time.monotonic()
