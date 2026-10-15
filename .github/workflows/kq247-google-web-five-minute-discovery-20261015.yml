@@ -89,7 +89,10 @@ jobs:
             python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["discovery_interval_minutes"]==5;print("KQ247_FIVE_MINUTE_PUBLIC_REPORT=PASS")'
           after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
           if [[ "$before" != "$after" ]]; then
-            echo "Container audit mismatch; check for concurrent container lifecycle changes"
+            echo "Container audit mismatch; before and after identities follow"
+            printf "AUDIT_BEFORE=%s\n" "$before"
+            printf "AUDIT_AFTER=%s\n" "$after"
+            docker ps -a --no-trunc --format "{{.ID}} {{.Names}} {{.Status}}" | grep -E " (kq247-|r55-)" || true
             exit 1
           fi
           echo KQ247_PRODUCTION_CONTAINERS_UNCHANGED=PASS
