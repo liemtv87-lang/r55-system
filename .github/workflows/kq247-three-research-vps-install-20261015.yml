@@ -148,6 +148,8 @@ jobs:
           after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
           test "$before" = "$after"
           echo 'KQ247_ALL_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          systemctl is-active --quiet kq247-research-football-fetch.timer
+          echo 'KQ247_FOOTBALL_500DAY_FETCH_TIMER_ACTIVE=YES'
           echo 'KQ247_THREE_RESEARCH_TIMERS_ACTIVE=YES'
           systemctl list-timers --all --no-pager | grep -E 'kq247-research-(football|xs|vietlott|hourly|fourhour)'
           VPS
