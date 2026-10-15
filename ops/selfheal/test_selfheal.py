@@ -16,6 +16,8 @@ class SelfhealSafetyTests(unittest.TestCase):
             "kq247-seo-unified.timer": "seo-web",
             "kq247-sales-sync.timer": "sales",
             "kq247-vietlott-update.timer": "vietlott",
+            "kq247-r55-group-bot.timer": "bots",
+            "kq247-lottery-bot.timer": "bots",
         }
         for name, expected in cases.items():
             self.assertEqual(sh.classify_timer(name), expected, name)
