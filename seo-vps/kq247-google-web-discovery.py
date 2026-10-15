@@ -47,7 +47,11 @@ SEARCH_PAGES=[
  ("https://duonggiaphat.vn/danh-sach-cac-noi-dat-backlink-mien-phi-tot-cho-seo/","VN_public_directory_sources"),
  ("https://digicomvn.com/dien-dan-di-backlink/","VN_public_directory_sources"),
  ("https://famemedia.vn/website-dat-backlink/","VN_public_directory_sources"),
- ("https://www.thietkewebchuanseo.com/seo-offpage.htm","VN_public_directory_sources")
+ ("https://www.thietkewebchuanseo.com/seo-offpage.htm","VN_public_directory_sources"),
+ # Additional independently sourced, current web-directory indexes.
+ # Their linked sites are discovery prospects only, never permission to submit.
+ ("https://launchdirectories.com/free-web-directories","global_web_directory_sources"),
+ ("https://saalinko.com/directory-submission-sites-list/","global_web_directory_sources")
 ]
 # Only real contribution page slugs, not a substring in arbitrary news articles.
 # This is only a candidate signal, NOT publication permission.
@@ -385,6 +389,8 @@ def selftest():
  assert not https_on_host("https://evil.com/a","abc.vn")
  assert host("https://www.test.com.vn/foo")=="test.com.vn"
  assert len(load_candidates())>=40
+ assert len({u for u,_ in SEARCH_PAGES})==len(SEARCH_PAGES)
+ assert any('launchdirectories.com/free-web-directories' in url for url,_ in SEARCH_PAGES)
  assert INDEX_PAGE_BUDGET>=MAX_INDEX_PAGES_PER_HOST
  assert MAX_INDEX_WORKERS>=1
  assert editorial_submission_candidate("https://xoso.vn/submit-your-website/") is True
