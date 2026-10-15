@@ -56,5 +56,13 @@ jobs:
              echo "VPS_LOCAL_HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
              if GIT_TERMINAL_PROMPT=0 timeout 15 git ls-remote origin HEAD >/dev/null 2>&1;then echo 'VPS_GIT_ORIGIN_ACCESS=YES';else echo 'VPS_GIT_ORIGIN_ACCESS=NO';fi
           else echo 'VPS_LOCAL_GIT_CHECKOUT=NO';fi
+          echo 'PRIVATE_ORIGIN_HTTPS_CHECK'
+          if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false timeout 18 git ls-remote https://github.com/liemtv87-lang/vietlott-auto-hoc.git HEAD >/dev/null 2>&1;then
+            echo 'VPS_PRIVATE_HTTPS_ORIGIN_READ=YES'
+          else echo 'VPS_PRIVATE_HTTPS_ORIGIN_READ=NO';fi
+          echo 'GITHUB_AUTH_HELPER_METADATA'
+          if command -v gh >/dev/null 2>&1; then
+            if gh auth status >/dev/null 2>&1; then echo 'VPS_GH_CLI_AUTH=READY';else echo 'VPS_GH_CLI_AUTH=NOT_READY';fi
+          else echo 'VPS_GH_CLI=ABSENT';fi
           echo 'VIETLOTT_R35_READONLY_VPS_INVENTORY=END'
           VPS
