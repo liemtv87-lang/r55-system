@@ -4,6 +4,7 @@ import datetime as dt
 import json
 import re
 import time
+import os
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from playwright.sync_api import sync_playwright
@@ -23,6 +24,7 @@ GROUPS = {
         desc='Cong dong cap nhat ket qua xo so MB MT MN, thong ke va phan tich tham khao mien phi. Du doan khong bao dam chinh xac.',
         category='News')
 }
+EXTRA_CANDIDATES = Path(os.environ.get('KQ247_TELEGRAM_CANDIDATES','/data/telegram-directory-candidates.json'))
 SEEDS = {
     'football': [
         'https://tgfind.net/en/resource/keochuyengia79',
@@ -33,6 +35,13 @@ SEEDS = {
         'https://telejoiner.com/invite/1004320899120'
     ]
 }
+def extra_candidates():
+    """Read approved discovery inventory; discovery never grants posting permission."""
+    try:
+        payload=json.loads(EXTRA_CANDIDATES.read_text(encoding='utf-8'))
+        if not isinstance(payload,dict):return {}
+        return {key:[u for u in payload.get(key,[]) if isinstance(u,str) and u.startswith('https://')][:5000] for key in GROUPS}
+    except (OSError,ValueError,TypeError):return {}
 def read():
     try: return json.loads(STATE.read_text())
     except (OSError,ValueError): return {'attempted':{}, 'candidates':{}, 'first_verified':{}}
@@ -108,8 +117,11 @@ def main():
     attempted=state.setdefault('attempted',{})
     candidates=state.setdefault('candidates',{})
     first_verified=state.setdefault('first_verified',{})
+    discovered=extra_candidates()
     for name in GROUPS:
         candidates.setdefault(name,[])
+        for url in discovered.get(name,[]):
+            if url not in candidates[name]:candidates[name].append(url)
         for url in SEEDS[name]:
             if url not in candidates[name]:candidates[name].append(url)
         for site in ('tgfind','telejoiner','toptglinks','groupmandi'):
@@ -138,7 +150,7 @@ def main():
             verified[name]=[]
             details[name]=[]
             page=browser.new_page(viewport={'width':1000,'height':700})
-            for url in sorted(set(candidates[name]))[:80]:
+            for url in sorted(set(candidates[name]))[:min(200,int(os.environ.get('KQ247_TELEGRAM_VERIFY_CAP','200')))]:
                 ok,reason=check(page,url,spec['url'])
                 details[name].append({'listing_url':url,'verified':ok,'reason':reason})
                 if ok:
