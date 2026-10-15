@@ -28,7 +28,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          expected=2bb80d32eda0e336057abbe7922ee2b925c1564f
+          expected=22b8b5e11414d22a4b6a5f7040ac382432e18e31
           base=/opt/kq247/vietlott/versions
           key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
           known=/opt/kq247/ops/deploy/keys/github_known_hosts
