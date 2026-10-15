@@ -70,7 +70,7 @@ jobs:
           basedir='/opt/kq247/research'
           domains={'football':('00/10','110%','2000M','KQ247_FOOTBALL_BOOTSTRAP=2000000 KQ247_R55_GRADES=/opt/kq247/research/inputs/football-grades-combined.json'),
                    'xs':('02/10','110%','2200M','KQ247_XS_TRIALS=256 KQ247_XS_HISTORY=/opt/kq247/research/state/xsmb-2000-full27.json'),
-                   'vietlott':('04/10','110%','2800M','KQ247_VIETLOTT_DRAWS_PER_CYCLE=32 KQ247_VIETLOTT_DATA=/opt/kq247/research/state/vietlott-history')}
+                   'vietlott':('04/10','110%','2800M','KQ247_VIETLOTT_DRAWS_PER_CYCLE=64 KQ247_VIETLOTT_DATA=/opt/kq247/research/state/vietlott-history')}
           for d,(minute,cpu,mem,setting) in domains.items():
               service=f"""[Unit]
           Description=KQ247 isolated {d} research
