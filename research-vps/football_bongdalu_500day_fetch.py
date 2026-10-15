@@ -98,7 +98,12 @@ def run():
   try:
    uri,raw,data=fetch_for_day(day)
    fixtures=parse_ft(data,day)
-   if not fixtures:raise ValueError("no_verified_FT_rows")
+   if not fixtures:
+    matched=re.findall(r"A\[\d+\]\s*=\s*\[([^\r\n;]*)\]",data)
+    first=fields(matched[0]) if matched else []
+    excerpt=re.sub(r"[^a-zA-Z0-9_ :./=,\[\]-]","?",data[:115])
+    raise ValueError("no_verified_FT_rows;A_records="+str(len(matched))+
+                     ";first_fields="+str(first[:12])[:130]+";prefix="+excerpt)
    fingerprint=hashlib.sha256(raw).hexdigest()
    payload={"date":day,"source_url":uri,"retrieved_utc":now(),"response_sha256":fingerprint,
             "matches":fixtures,"match_count":len(fixtures),
