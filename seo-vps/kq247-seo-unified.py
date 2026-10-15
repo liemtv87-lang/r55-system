@@ -67,7 +67,7 @@ def age_minutes(path):
  try:return round((time.time()-Path(path).stat().st_mtime)/60,1)
  except OSError:return None
 
-def collect(now,services,discovery_pids):
+def collect(now,services,discovery_pids,discovery_recovery):
  base=Path("/opt/pwremote/kq247-backlink-background")
  scan=json_file(base/"latest.json")
  submission=json_file(base/"bulk-posts.json")
@@ -91,6 +91,9 @@ def collect(now,services,discovery_pids):
     "new_links_last_hour":evidence.get("new_links_last_hour",0),
     "playwright_new_verified_this_hour":playwright.get("verified_new_this_hour",0)},
   "services":services,
+  "discovery_recovery":discovery_recovery,
+  "requested_new_backlinks_per_hour":100,
+  "goal_policy":"Target, NOT attained. Never infer published backlinks from URL scan or submission counts.",
   "note":"Source candidates and submitted forms are not published backlinks. Automatic submissions only on opt-in, free/public, eligible directories."
  }
 
@@ -106,12 +109,12 @@ def main():
  hour=now.strftime("%Y-%m-%dT%H")
  try:previous=STATE.read_text().strip()
  except OSError:previous=""
- # A standalone systemd discovery service guarantees automatic process restart;
- # never rely on stale pid files, and never run a duplicate copy from this timer.
+ # A single hourly/health timer owns monitoring. Adopt the existing scanner;
+ # start only its isolated watchdog when the real exact --watch process is absent.
  discovery_pids=alive_processes()
- discovery_service=run_cmd(["systemctl","is-active","--quiet","kq247-backlink-discovery.service"],8)
- if not discovery_service["ok"]:
-  run_cmd(["systemctl","start","kq247-backlink-discovery.service"],20)
+ discovery_recovery={"ok":True,"reason":"already_running"}
+ if not discovery_pids:
+  discovery_recovery=run_cmd(["/bin/bash","/opt/pwremote/kq247-backlink-background/ensure-worker.sh"],42)
   discovery_pids=alive_processes()
  # Restore only the isolated opt-in directory submitter if it unexpectedly stopped.
  # Keep its SQLite submission dedup ledger intact; no general Docker restart.
@@ -133,12 +136,17 @@ def main():
  else:
   all_ok=True
   results={"hourly_actions":"already_completed_this_hour"}
- payload=collect(now,results,discovery_pids)
+ payload=collect(now,results,discovery_pids,discovery_recovery)
  payload["poster_running"]=bool(poster_running)
  payload["hourly_complete"]=all_ok
  payload["hourly_window_utc"]=hour
- payload["supervisor_active"]=discovery_service.get("ok") or bool(discovery_pids)
+ payload["supervisor_active"]=bool(discovery_pids)
+ payload["one_vps_timer"]="kq247-seo-unified.timer"
  atomic_json(REPORT,payload)
+ # Durable once-per-hour report: true observed counts, not claims of future reach.
+ if all_ok:
+  hour_path=ROOT/"hourly"/(hour+".json")
+  atomic_json(hour_path,payload)
  print("SEO_UNIFIED_STATUS="+json.dumps(payload,ensure_ascii=False))
  if not payload["supervisor_active"]:
   raise SystemExit("discovery service missing")
