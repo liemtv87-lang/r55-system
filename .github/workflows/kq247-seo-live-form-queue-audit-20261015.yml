@@ -18,6 +18,35 @@ jobs:
           ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
           chmod 0600 "$HOME/.ssh/known_hosts"
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+      - name: Inspect public Groupsor form DOM and JS configuration read-only
+        run: |
+          python3 - <<'PY'
+          import urllib.request,html.parser,re
+          class Extract(html.parser.HTMLParser):
+              def __init__(self):super().__init__();self.forms=[];self.current=None;self.scripts=[];self.tags=[]
+              def handle_starttag(self,tag,attrs):
+                  d=dict(attrs)
+                  if tag=='form':
+                      self.current={'action':d.get('action',''),'method':d.get('method','GET'),'id':d.get('id',''),'fields':[]}
+                      self.forms.append(self.current)
+                  elif self.current is not None and tag in ('input','textarea','select','button'):
+                      self.current['fields'].append({k:d.get(k,'') for k in ('name','type','required','id','placeholder','value')})
+                  elif tag=='script' and d.get('src'):self.scripts.append(d['src'][:150])
+              def handle_endtag(self,tag):
+                  if tag=='form':self.current=None
+          for base in ('https://www.groupssor.com/submit/','https://groupssor.com/submit/'):
+              try:
+                  req=urllib.request.Request(base,headers={'User-Agent':'Mozilla/5.0 KQ247ReadOnlyAudit/1.0'})
+                  with urllib.request.urlopen(req,timeout=12) as response:
+                      body=response.read(500000).decode('utf8','replace')
+                      dest=response.geturl()
+                  p=Extract();p.feed(body)
+                  print('GROUPSSOR_FORM_READONLY',{'url':dest,'forms':p.forms[:5],'scripts':p.scripts[:15],
+                        'captcha_markup':any(x in body.lower() for x in ('recaptcha','cf-turnstile','h-captcha')),
+                        'form_count':len(p.forms),
+                        'svelte_or_next':bool(re.search(r'__next|_app/immutable|__svelte',body,re.I))})
+              except Exception as exc:print('GROUPSSOR_READONLY_ERROR',base,type(exc).__name__)
+          PY
       - name: Read source/submit inventory, fresh reports and unique active timers; no writes
         env:
           SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
