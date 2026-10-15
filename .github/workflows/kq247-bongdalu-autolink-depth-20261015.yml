@@ -1,0 +1,60 @@
+name: KQ247 Bongdalu Link Auto-Refresh and Historical Depth
+on:
+  push:
+    branches: [main]
+    paths:
+      - research-vps/bongdalu_source_depth.py
+      - research-vps/install_bongdalu_source_depth_timer.py
+      - .github/workflows/kq247-bongdalu-autolink-depth-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-bongdalu-link-depth
+  cancel-in-progress: false
+jobs:
+  verify-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Offline validation and safety checks
+        run: |
+          set -euo pipefail
+          python3 -m py_compile research-vps/bongdalu_source_depth.py research-vps/install_bongdalu_source_depth_timer.py
+          PYTHONPATH=research-vps python3 research-vps/bongdalu_source_depth.py --self-test
+          python3 research-vps/install_bongdalu_source_depth_timer.py --self-test
+      - name: SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Audit source depth and install isolated discovery timer
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE=root@64.120.92.172
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes "$REMOTE" 'install -d -m 0755 /opt/kq247/research/bin; install -d -m 0700 /opt/kq247/research/state'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes research-vps/{bongdalu_source_depth,install_bongdalu_source_depth_timer}.py "$REMOTE:/opt/kq247/research/bin/"
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes "$REMOTE" 'bash -se' <<'VPS'
+          set -euo pipefail
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          export KQ247_RESEARCH_ROOT=/opt/kq247/research/state
+          python3 /opt/kq247/research/bin/bongdalu_source_depth.py --self-test
+          python3 /opt/kq247/research/bin/install_bongdalu_source_depth_timer.py
+          # Probe directly, independent of any production football code.
+          python3 /opt/kq247/research/bin/bongdalu_source_depth.py
+          systemctl is-active --quiet kq247-research-bongdalu-source.timer
+          for t in kq247-research-football.timer kq247-research-xs.timer kq247-research-vietlott.timer kq247-research-football-fetch.timer kq247-google-web-discovery.timer kq247-google-web-seo.timer kq247-seo-unified.timer; do
+            systemctl is-active --quiet "$t"
+          done
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          test "$before" = "$after"
+          echo KQ247_VERIFIED_BONGDALU_AUTO_REFRESH=YES
+          echo KQ247_ALL_EXISTING_RESEARCH_AND_SEO_TIMERS_ACTIVE=YES
+          echo KQ247_PRODUCTION_DOCKER_IDS_UNCHANGED=YES
+          VPS
