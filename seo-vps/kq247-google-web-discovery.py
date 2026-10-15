@@ -24,8 +24,8 @@ import xml.etree.ElementTree as ET
 ROOT=Path(os.environ.get("KQ247_GOOGLE_ROOT","/opt/kq247/google-web-seo"))
 PUBLIC=Path(os.environ.get("KQ247_PUBLIC_ROOT","/opt/kq247/deployment/football-original/public"))
 SEEDS_FILE=Path(__file__).resolve().parent/"google-web-source-seeds.json"
-MAX_HOSTS=130
-MAX_WORKERS=14
+MAX_HOSTS=min(600,max(40,int(os.environ.get('KQ247_GOOGLE_MAX_HOSTS','260'))))
+MAX_WORKERS=min(32,max(4,int(os.environ.get('KQ247_GOOGLE_WORKERS','20'))))
 MAX_SITEMAPS_PER_HOST=10
 MAX_INVENTORY_URLS_PER_HOST=12000
 MAX_BYTES_PER_SITEMAP=3_500_000
@@ -277,6 +277,7 @@ def run():
          "index_frontier_total_pages":index_frontier_count,
          "source_hosts_new_this_run":new_sites,"source_hosts_known_total":total_sites,
          "source_hosts_examined_this_run":host_count,
+         "host_budget_per_cycle":MAX_HOSTS,"worker_count":MAX_WORKERS,
          "sitemap_url_records_read_this_run":ur,
          "contributor_url_candidates_new_this_run":form_new,
          "contributor_url_candidates_total":total_forms,
