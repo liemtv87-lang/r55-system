@@ -10,6 +10,11 @@ BASE="https://raw.githubusercontent.com/"+REPO+"/"+REV+"/data/"
 SRC=pathlib.Path("/opt/kq247/vietlott/data")
 SPEC={"mega645":{"count":1575,"start":"2016-07-20","last":"2026-10-14","max":45},
       "power655":{"count":1410,"start":"2017-08-01","last":"2026-10-13","max":55}}
+# One known production-archive disagreement, independently corroborated from public
+# dated draw records (Minh Ngoc and XosoNgay), never changed in production.
+CONFIRMED={"power655|2026-09-17":{"draw_id":"01399","numbers":[6,11,25,27,37,45],"special":15,
+ "evidence":["https://www.minhngoc.net.vn/ket-qua-xo-so/dien-toan-vietlott/power-6x55/17-09-2026.html",
+             "https://xosongay.com/vietlott/power-6-55/2026-09-17"]}}
 def pull(filename):
  url=BASE+filename
  with urllib.request.urlopen(urllib.request.Request(url,headers={"User-Agent":"KQ247-Data-Verification/1.0"}),timeout=55) as r:
@@ -57,9 +62,19 @@ def crosscheck(product,archived):
   if same:match+=1
   else:disagreements.append(date)
  if overlap<100 or match/overlap<0.95:raise ValueError("independent local overlap mismatch "+product+f" {match}/{overlap}")
- # Quarantine disagreement before allowing that draw to be graded as real.
- good=[r for r in archived if r["date"] not in disagreements]
- return good,{"local_total":len(local),"overlap":overlap,"exact_matches":match,"quarantined_dates":disagreements}
+ # Resolve disagreements only where independent published dated records verify
+ # the official draw; never silently overwrite or alter production local history.
+ confirmed=[];quarantine=[]
+ for date in disagreements:
+  r=bydate[date];expect=CONFIRMED.get(product+"|"+date)
+  if expect and r["draw_id"]==expect["draw_id"] and r["numbers"]==expect["numbers"] and (
+     product=="mega645" or r["special"]==expect["special"]):
+   confirmed.append(date)
+  else:quarantine.append(date)
+ good=[r for r in archived if r["date"] not in quarantine]
+ return good,{"local_total":len(local),"overlap":overlap,"exact_matches":match,
+              "independently_confirmed_disagreement_dates":confirmed,
+              "quarantined_dates":quarantine}
 def ingest():
  state=ROOT/"vietlott-history"
  state.mkdir(parents=True,exist_ok=True)
@@ -87,6 +102,7 @@ def test():
  # Parser validates complete coverage in normal mode; assert individual row formatting here.
  assert len(next(csv.DictReader(io.StringIO(raw.decode())))["main_numbers"].split())==6
  assert len(SPEC)==2 and SPEC["mega645"]["count"]>1500 and SPEC["power655"]["count"]>1400
+ assert CONFIRMED["power655|2026-09-17"]["numbers"]==[6,11,25,27,37,45]
  print("KQ247_VIETLOTT_ALL_HISTORY_IMPORT_SELFTEST=PASS")
 if __name__=="__main__":
  if "--self-test" in sys.argv:test()
