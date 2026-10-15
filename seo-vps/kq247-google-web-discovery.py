@@ -48,6 +48,7 @@ SEARCH_PAGES=[
  ("https://digicomvn.com/dien-dan-di-backlink/","VN_public_directory_sources"),
  ("https://famemedia.vn/website-dat-backlink/","VN_public_directory_sources"),
  ("https://www.thietkewebchuanseo.com/seo-offpage.htm","VN_public_directory_sources"),
+ ("https://www.hoatech.vn/danh-sach-web-directory/","VN_web_directory_sources"),
  # Additional independently sourced, current web-directory indexes.
  # Their linked sites are discovery prospects only, never permission to submit.
  ("https://launchdirectories.com/free-web-directories","global_web_directory_sources"),
@@ -417,6 +418,7 @@ def selftest():
  assert y.visible_host_urls==[]
  assert any('launchdirectories.com/free-web-directories' in url for url,_ in SEARCH_PAGES)
  assert sum(cat=="VN_forum_sources" for _,cat in SEARCH_PAGES)==3
+ assert any("hoatech.vn/danh-sach-web-directory" in u for u,_ in SEARCH_PAGES)
  assert INDEX_PAGE_BUDGET>=MAX_INDEX_PAGES_PER_HOST
  assert MAX_INDEX_WORKERS>=1
  assert editorial_submission_candidate("https://xoso.vn/submit-your-website/") is True
