@@ -62,6 +62,41 @@
       "status": "potential_review_not_verified",
       "reason": "Publishes general sites after review; current form and content eligibility not independently confirmed for KQ247",
       "auto_submit": false
+    },
+    {
+      "host": "veri.bet",
+      "url": "https://veri.bet/submit-service",
+      "status": "potential_topical_submission_form_not_attempted",
+      "reason": "Public site invites sports handicapping service URLs; exact eligibility of deep-link landing page and visible human verification remain unconfirmed",
+      "auto_submit": false
+    },
+    {
+      "host": "alllister.com",
+      "url": "https://www.alllister.com/directory/suggest.php",
+      "status": "captcha_manual_review",
+      "reason": "Editorial rules allow relevant prediction service pages, but submission contains CAPTCHA and requires genuine owner email",
+      "auto_submit": false
+    },
+    {
+      "host": "gamingpk.com",
+      "url": "https://www.gamingpk.com/directory/?wpbdp_view=submit_listing",
+      "status": "excluded_deep_link_policy",
+      "reason": "Directory explicitly disallows deep links; KQ247 campaign targets are deep .html landing pages, and valid email is required",
+      "auto_submit": false
+    },
+    {
+      "host": "sportbettingdirectory.com",
+      "url": "https://sportbettingdirectory.com/submit-your-site/",
+      "status": "requires_reciprocal_link_and_email",
+      "reason": "Site requires a reciprocal link from the listed website prior to approval; no owner-authorized reciprocal link is recorded",
+      "auto_submit": false
+    },
+    {
+      "host": "theigamingpeople.com",
+      "url": "https://theigamingpeople.com/submit-your-company/",
+      "status": "supplier_business_details_required",
+      "reason": "Free supplier-company listing requests legal business details, contact email and JavaScript form; no verified matching owner details yet",
+      "auto_submit": false
     }
   ],
   "submitted_count": 0,
@@ -70,6 +105,7 @@
   "notes": [
     "The rows are research evidence, NOT completed submissions",
     "Website sources and backlink Google Web are separate from Telegram directory t.me targets",
-    "Avoid submitting inappropriate content to editorial directories"
+    "Avoid submitting inappropriate content to editorial directories",
+    "2026-10-15 follow-up: topically matched sites added for permission triage; no submission or published backlink claimed."
   ]
 }
