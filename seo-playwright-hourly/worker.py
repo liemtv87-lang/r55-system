@@ -21,7 +21,7 @@ GROUPS = {
 DATA = pathlib.Path("/state")
 STATE = DATA / "state.json"
 REPORT = DATA / "latest.json"
-GOAL_PER_HOUR = 100
+GOAL_PER_HOUR = 100  # per independent campaign: Telegram directory SEO
 BROWSER_TIMEOUT_MS = 16000
 SEED_LINKS = [
     ("football", "https://tgfind.net/en/resource/keochuyengia79"),
@@ -404,6 +404,7 @@ def main():
         entries = [x for x in verified if x["group"] == group]
         by_group[group] = {
             "verified_total": len(set(x["listing_url"] for x in entries)),
+            "target_new_verified_per_hour": GOAL_PER_HOUR,
             "verified_in_last_hour": sum(
                 1 for x in entries if
                 (datetime.datetime.fromisoformat(now) -
@@ -417,6 +418,8 @@ def main():
         "target_new_backlinks_per_hour_total": GOAL_PER_HOUR,
         "verified_new_this_hour": new_links,
         "shortfall_vs_target": max(0, GOAL_PER_HOUR - new_links),
+        "target_verified_per_group_per_hour": GOAL_PER_HOUR,
+        "per_group_hourly_shortfall": {k:max(0,GOAL_PER_HOUR-v["verified_in_last_hour"]) for k,v in by_group.items()},
         "group_metrics": by_group,
         "directory_checks": discoveries,
         "form_first_filter": {
