@@ -74,6 +74,19 @@ def import_2000():
  chosen=dates[-COUNT:]
  if chosen[-1]!=cutoff:raise ValueError("latest locally verified draw absent")
  archive={date:full[date] for date in chosen}
+ # Resolve sparse source conflicts against the 505-draw local verified archive.
+ # Never use the conflicting upstream values in a training or grading window.
+ reconciled=[]
+ for date,values in local.items():
+  if date not in archive:continue
+  trusted=[str(v).zfill(width) for v,(_,width) in zip(values,PRIZES)]
+  if len(trusted)!=27 or any(len(v)!=width or not v.isdecimal() for v,(_,width) in zip(trusted,PRIZES)):
+   raise ValueError("trusted overlap has malformed full positional prizes at "+date)
+  if archive[date]!=trusted:
+   archive[date]=trusted
+   reconciled.append(date)
+ if len(reconciled)!=verification["mismatch_count"]:
+  raise ValueError("cross-check conflict reconciliation count differs")
  if len(archive)!=COUNT or any(len(v)!=27 for v in archive.values()):
   raise ValueError("incomplete draw coverage")
  selected=(date+"|"+",".join(v) for date,v in archive.items())
@@ -84,7 +97,10 @@ def import_2000():
         "oldest_date":chosen[0],"newest_date":chosen[-1],
         "full_prizes_per_draw":27,"all_digit_positions_preserved":True,
         "missing_dates_allowed_for_lottery_holidays":True,
-        "local_overlap":verification,"normalized_sha256":normalized_sha,
+        "local_overlap":verification,"trusted_archive_overrides":reconciled,
+        "trusted_archive_mismatch_resolved":len(reconciled),
+        "post_reconciliation_overlap_exact_matches":verification["overlap"],
+        "normalized_sha256":normalized_sha,
         "backtest_no_future_leakage":True,"production_modified":False}
  save(TARGET,archive)
  save(REPORT,audit)
