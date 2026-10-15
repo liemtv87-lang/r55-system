@@ -70,7 +70,7 @@ export async function fetchValidatedXsmbDay(date){
  }
  const best=[...agrees.values()].sort((a,b)=>b.sources.length-a.sources.length)[0];
  const summary=result.map(x=>({source:x.source,ok:!!x.full,error:x.error}));
- if(!best||best.sources.length<2)return {ok:false,date,reason:'requires_two_independently_identical_full27_draws',source_health:summary};
+ if(!best||best.sources.length<2)return {ok:false,date,reason:'requires_two_independently_identical_full27_draws',source_health:summary,source_prize_samples:result.filter(x=>x.full).map(x=>({source:x.source,full:x.full}))};
  return {ok:true,date,full:best.full,last2:best.full.map(v=>Number(v.slice(-2))),sources:best.sources,
          source_health:summary,source:'two_independent_dated_public_sources'};
 }
@@ -84,7 +84,7 @@ if(process.argv[1]?.endsWith('xsmb-verified-daily.mjs')){
  selfTest();
  if(process.argv[2]){
   const row=await fetchValidatedXsmbDay(process.argv[2]);
-  console.log('KQ247_DAILY_XSMB_SOURCE_PROOF='+JSON.stringify({ok:row.ok,date:row.date,sources:row.sources,reason:row.reason,full_count:row.full?.length||0,first:row.full?.[0],last:row.full?.at(-1),source_health:row.source_health}));
+  console.log('KQ247_DAILY_XSMB_SOURCE_PROOF='+JSON.stringify({ok:row.ok,date:row.date,sources:row.sources,reason:row.reason,full_count:row.full?.length||0,first:row.full?.[0],last:row.full?.at(-1),source_health:row.source_health,source_prize_samples:row.source_prize_samples}));
   if(!row.ok)process.exitCode=2;
  }else console.log('KQ247_XSMB_PARSER_SELFTEST=PASS');
 }
