@@ -1,0 +1,57 @@
+name: KQ247 Vietlott R35 History and 3-Region Completeness Audit
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-source-completeness-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Inspect canonical CSV full history and MT MN parsers without writes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=kq247-vietlott-r35-sourcefix-stage
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          timeout 240 docker exec -i "$name" node --input-type=module - <<'JS'
+          import {CFG,fetchText,parseSeedCsv,parseAllRegionsDaily,fetch3RegionSetForDate} from './scripts/engine.mjs';
+          const date=new Date(Date.now()+7*3600*1000).toISOString().slice(0,10);
+          const dmy=date.split('-').reverse().join('-');
+          for(const product of ['mega645','power655']){
+            try{
+              const csv=await fetchText(CFG[product].seed,1);
+              const parsed=parseSeedCsv(csv,product);
+              console.log('KQ247_R35_CANONICAL_HISTORY='+JSON.stringify({product,bytes:csv.length,lines:csv.split(/\r?\n/).length,parsed:parsed.length,first:parsed[0]?.date,last:parsed.at(-1)?.date,header:csv.split(/\r?\n/)[0]?.slice(0,150)}));
+            }catch(e){console.log('KQ247_R35_CANONICAL_HISTORY_ERROR='+JSON.stringify({product,error:String(e).slice(0,130)}))}
+          }
+          for(const [source,url] of [
+            ['daily',`https://www.minhngoc.net.vn/ket-qua-xo-so/${dmy}.html`],
+            ['mn',`https://www.minhngoc.net.vn/ket-qua-xo-so/mien-nam/${dmy}.html`],
+            ['mt',`https://www.minhngoc.net.vn/ket-qua-xo-so/mien-trung/${dmy}.html`],
+            ['mb',`https://www.minhngoc.net.vn/ket-qua-xo-so/mien-bac/${dmy}.html`]
+          ]){
+            try{
+              const html=await fetchText(url,1);
+              const nums=parseAllRegionsDaily(html,date);
+              console.log('KQ247_R35_REGION_AUDIT='+JSON.stringify({source,bytes:html.length,date,matches:nums.length,first_values:nums.slice(0,10),contains_mien_nam:/Miền Nam|mien-nam/i.test(html),contains_mien_trung:/Miền Trung|mien-trung/i.test(html),contains_GDB:/G\.ĐB|Giải đặc biệt|Giai dac biet/i.test(html)}));
+            }catch(e){console.log('KQ247_R35_REGION_ERROR='+JSON.stringify({source,error:String(e).slice(0,130)}))}
+          }
+          const all=await fetch3RegionSetForDate(date,55);
+          console.log('KQ247_R35_REGION_AGGREGATE='+JSON.stringify({unique55:all.numbers.length,source_health:all.health.map(x=>({source:x.source,ok:x.ok,count:x.count,error:x.error}))}));
+          JS
+          echo KQ247_R35_SOURCE_COMPLETENESS_READONLY=COMPLETE
+          VPS
