@@ -25,19 +25,27 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          name=kq247-vietlott-r35-sourcefix-stage
+          name=kq247-vietlott-r35-three-regions-stage
           test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
-          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:e9aae8c58857'
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:5a06471bfa97'
           echo 'R35_SOURCE_PREFLIGHT_DATE_VN='$(TZ=Asia/Ho_Chi_Minh date +%F)
           echo 'KQ247_R35_XSMB_SOURCE_VERIFY'
           if timeout 80 docker exec "$name" node scripts/xsmb-verified-daily.mjs "$(TZ=Asia/Ho_Chi_Minh date +%F)";then
             echo 'KQ247_R35_XSMB_FULL27_TWO_SOURCE=PASS'
           else echo 'KQ247_R35_XSMB_FULL27_TWO_SOURCE=NOT_READY';fi
+          echo 'KQ247_R35_THREE_REGION_PROOF'
+          if timeout 180 docker exec "$name" node --input-type=module -e '
+            import {fetch3RegionSetForDate} from "./scripts/engine.mjs";
+            const date=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Ho_Chi_Minh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+            const r=await fetch3RegionSetForDate(date,55);
+            console.log("KQ247_R35_REGION_COUNTS="+JSON.stringify({date,complete:r.regions_complete,counts:r.prize_counts,health:r.health.map(s=>({source:s.source,ok:s.ok,counts:s.prize_counts||null,error:s.error||null}))}));
+            if(!r.regions_complete)process.exitCode=2;
+          ';then echo 'KQ247_R35_THREE_REGION_COMPLETE=PASS';else echo 'KQ247_R35_THREE_REGION_COMPLETE=NOT_READY_NO_SNAPSHOT';fi
           echo 'KQ247_R35_STAGE_NEEDS_REPAIR'
           docker exec "$name" node scripts/needs-repair.mjs --verbose || true
           echo
           echo 'KQ247_R35_PRIMARY_AND_CLIENT_STATIC'
-          for url in 'http://127.0.0.1:18142/' 'http://127.0.0.1:18142/guest-snapshot.html' 'http://127.0.0.1:18142/client.html' 'http://127.0.0.1:18142/api/state';do
+          for url in 'http://127.0.0.1:18143/' 'http://127.0.0.1:18143/guest-snapshot.html' 'http://127.0.0.1:18143/client.html' 'http://127.0.0.1:18143/api/state';do
              curl -sS --max-time 7 -o /dev/null -w '%{url_effective} HTTP=%{http_code}\n' "$url" || true
           done
           echo 'KQ247_R35_LEGACY_AUTH_DEPENDENCY'
