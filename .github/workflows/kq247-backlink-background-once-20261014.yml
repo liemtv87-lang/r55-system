@@ -106,4 +106,90 @@ jobs:
           test "$before" = "$after"
           echo "KQ247_PRODUCTION_CONTAINERS_UNCHANGED=YES"
           echo "CONTINUOUS_DISCOVERY_WATCH_MODE=YES (idle backoff; no bulk posting in this worker)"
+          # Dedicated 5-minute watchdog: recover only this backlink discovery worker.
+          # Do not operate on any KQ247 football, lottery or Telegram container.
+          cat > "$base/ensure-worker.sh" <<'WATCHDOG'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          base=/opt/pwremote/kq247-backlink-background
+          script="$base/kq247-backlink-background-discovery-20261014.py"
+          pid="$(cat "$base/worker.pid" 2>/dev/null || true)"
+          healthy=0
+          if [[ "$pid" =~ ^[0-9]+$ ]] && test -r "/proc/$pid/cmdline"; then
+            cmdline="$(tr '\\0' ' ' < "/proc/$pid/cmdline" || true)"
+            if [[ "$cmdline" == *"$script"* && "$cmdline" == *"--watch"* ]]; then
+              healthy=1
+            fi
+          fi
+          if test "$healthy" -eq 0; then
+            echo "KQ247_DISCOVERY_WATCHDOG_RECOVERY=starting"
+            cd "$base"
+            nohup nice -n 15 python3 -u "$script" --watch >>"$base/worker.log" 2>&1 </dev/null &
+            pid="$!"
+            printf '%s\\n' "$pid" > "$base/worker.pid"
+            sleep 3
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "KQ247_DISCOVERY_WATCHDOG_RECOVERY=FAILED"
+              exit 1
+            fi
+          else
+            echo "KQ247_DISCOVERY_WATCHDOG_RECOVERY=not_needed"
+          fi
+          python3 - <<'PY'
+          import json,datetime,pathlib,subprocess
+          root=pathlib.Path('/opt/pwremote/kq247-backlink-background')
+          public=pathlib.Path('/opt/kq247/deployment/football-original/public')
+          def report(filename):
+              try:
+                  o=json.loads((root/filename).read_text())
+                  return {k:o.get(k) for k in ('updated_utc','updated_at_utc','unique_hosts_discovered','hosts_by_status','counts','verified_new_public_links')}
+              except Exception:return {}
+          poster=subprocess.run(['docker','inspect','-f','{{.State.Running}}','seo-kq247-opt-in-directory'],capture_output=True,text=True,timeout=12)
+          running=(poster.returncode==0 and poster.stdout.strip()=='true')
+          data={'checked_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                'discovery_pid':int((root/'worker.pid').read_text().strip()),
+                'discovery_status':'running',
+                'poster_running':running,
+                'scanner':report('latest.json'),
+                'submissions':report('bulk-posts.json'),
+                'note':'Running is not the same as new eligible listing or verified backlinks. Only public links count.'}
+          temp=public/'seo-backlink-worker-status.tmp'
+          temp.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\\n')
+          temp.replace(public/'seo-backlink-worker-status.json')
+          print('KQ247_BACKLINK_WATCHDOG_STATUS='+json.dumps({
+             'discovery_status':data['discovery_status'],
+             'poster_running':running,
+             'sources':data['scanner'].get('unique_hosts_discovered'),
+             'attempts':data['submissions'].get('counts')},ensure_ascii=False))
+          PY
+          WATCHDOG
+          chmod 0750 "$base/ensure-worker.sh"
+          cat > /etc/systemd/system/kq247-backlink-discovery-watchdog.service <<'WATCHDOGSERVICE'
+          [Unit]
+          Description=KQ247 isolated backlink discovery self-healing worker
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/bash /opt/pwremote/kq247-backlink-background/ensure-worker.sh
+          TimeoutStartSec=40
+          WATCHDOGSERVICE
+          cat > /etc/systemd/system/kq247-backlink-discovery-watchdog.timer <<'WATCHDOGTIMER'
+          [Unit]
+          Description=Verify only the KQ247 SEO background discovery every 5 minutes
+          [Timer]
+          OnBootSec=2min
+          OnUnitInactiveSec=5min
+          AccuracySec=30s
+          Unit=kq247-backlink-discovery-watchdog.service
+          [Install]
+          WantedBy=timers.target
+          WATCHDOGTIMER
+          systemctl daemon-reload
+          systemctl enable --now kq247-backlink-discovery-watchdog.timer
+          systemctl start kq247-backlink-discovery-watchdog.service
+          systemctl is-active --quiet kq247-backlink-discovery-watchdog.timer
+          test -s /opt/kq247/deployment/football-original/public/seo-backlink-worker-status.json
+          echo "KQ247_DISCOVERY_WATCHDOG_ACTIVE=YES"
+
           VPS
