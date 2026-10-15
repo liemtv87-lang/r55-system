@@ -1,0 +1,64 @@
+name: KQ247 Three Research Input Shapes Read-only
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-three-research-data-shapes-20261015.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read JSON shapes and historical data names only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'python3 -' <<'PY'
+          import json,pathlib,subprocess
+          paths=['/opt/kq247/vietlott/data/history-mega645.json',
+                 '/opt/kq247/vietlott/data/history-power655.json',
+                 '/opt/kq247/vietlott/data/predlog-mega645.json',
+                 '/opt/kq247/vietlott/data/snapshot-mega645.json',
+                 '/opt/kq247/vietlott/public/backtest-60.json',
+                 '/opt/kq247/lottery-daily-staging/history/xsmb-505-actual-through-20261014.json',
+                 '/opt/kq247/lottery-daily-staging/mtmn-500-full18-archive-backfill.json']
+          def shape(v,depth=0):
+              if depth>=2:return type(v).__name__
+              if isinstance(v,dict):return {k:shape(x,depth+1) for k,x in list(v.items())[:12]}
+              if isinstance(v,list):return {'items':len(v),'first':shape(v[0],depth+1) if v else None}
+              if isinstance(v,(str,int,float,bool)):return str(v)[:75]
+              return None
+          data={}
+          for filename in paths:
+              p=pathlib.Path(filename)
+              if not p.is_file():data[filename]={'present':False};continue
+              try:
+                  v=json.loads(p.read_text())
+                  data[filename]={'bytes':p.stat().st_size,'shape':shape(v)}
+              except Exception as e:data[filename]={'error':type(e).__name__}
+          for loc in ['/opt/kq247/lottery-daily-staging','/opt/kq247/lottery-daily-staging/data',
+                      '/opt/kq247/lottery-daily-staging/public-locked',
+                      '/opt/kq247/vietlott-r33-primary/data']:
+              p=pathlib.Path(loc)
+              data[loc]={'exists':p.exists(),'names':[x.name for x in list(p.iterdir())[:40]] if p.is_dir() else []}
+          for db in ['postgres','kq247','football','r55']:
+              run=subprocess.run(['docker','exec','-u','postgres','kq247-r55-postgres',
+                    'psql','-d',db,'-Atc','SELECT current_database()'],capture_output=True,text=True,timeout=6)
+              if run.returncode==0:
+                  data['postgres_db']={'db':db}
+                  run2=subprocess.run(['docker','exec','-u','postgres','kq247-r55-postgres',
+                   'psql','-d',db,'-Atc',"""SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND (table_name LIKE 'football_%' OR table_name LIKE 'r55_%' OR table_name LIKE '%settle%') ORDER BY 1 LIMIT 35"""],capture_output=True,text=True,timeout=6)
+                  data['football_tables']=run2.stdout.strip().splitlines()
+                  break
+          print('KQ247_INPUT_SHAPES='+json.dumps(data,ensure_ascii=False))
+          print('KQ247_RESEARCH_SHAPES_READ_ONLY=YES')
+          PY
