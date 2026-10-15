@@ -2,12 +2,16 @@
 """Three-lo, de 50/60/75 and 3-cang walk-forward research per genuine station."""
 import collections,hashlib,os,pathlib,sys
 from common import ROOT,load,save,seed,pct,run_job
-PATH=os.environ.get("KQ247_XS_HISTORY","/opt/kq247/lottery-daily-staging/xsmb-505-actual-through-20261014.json")
+PATH=os.environ.get("KQ247_XS_HISTORY","/opt/kq247/lottery-daily-staging/xsmb-505-all27-prizes-20261014.json")
 TRIALS=max(8,min(2000,int(os.environ.get("KQ247_XS_TRIALS","256"))))
 TARGETS={"lo3":75.0,"de50":75.0,"de60":75.0,"de75":90.0,"three_cang":90.0}
 def unwrap(data):
  if isinstance(data,list):return data
  if not isinstance(data,dict):return []
+ # MB genuine archive maps ISO draw date -> 27 full prize strings.
+ if data and all(isinstance(k,str) and len(k)==10 and k[4]=="-" and k[7]=="-" for k in data):
+  return [{"draw_date":date,"region":"mb","station":"xsmb","full_results":prizes}
+          for date,prizes in data.items() if isinstance(prizes,list) and len(prizes)==27]
  for k in ("draws","records","history","actual_draws","data","items"):
   if isinstance(data.get(k),list):return data[k]
  return []
@@ -155,6 +159,9 @@ def test():
  assert normalize(ds[0]) is not None
  assert normalize({"date":"2026-01-01","full_results":["12"],"special":"123"}) is None
  assert len(normalize(ds[0])["endings"])<=27
+ mapped={"2026-09-10":[str(10000+i) for i in range(27)]}
+ unpacked=unwrap(mapped)
+ assert len(unpacked)==1 and normalize(unpacked[0])["special"]=="10000" and normalize(unpacked[0])["station"]=="xsmb"
  print("KQ247_XS_SELFTEST=PASS")
 if __name__=="__main__":
  if "--self-test" in sys.argv:test()
