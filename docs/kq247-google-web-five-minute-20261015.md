@@ -37,3 +37,9 @@ Check GitHub Actions `38664953624` and `38665055461`, read job logs and current 
 - Public status JSON and both Google Web and independent Telegram systemd timers verified. KQ247 production containers unchanged. Source: https://github.com/liemtv87-lang/r55-system/actions/runs/38698415589
 - Zero authorized web posting sources established, zero web links submitted or published. Scans, guessed candidate forms and URLs are never proof of backlink publication; cumulative URL reads include duplicates, not unique indexing.
 - Continue bounded five-minute automation; measure latency, resource usage and errors before further scaling. Preserve production football, lottery, Vietlott and bots.
+
+## Verified 14:37 VN: rotating verifier deployed
+- Discovery commit ad6169378f836d66327ba56e02ad6215d0efd441 parallelizes source-index HTML scans across at most 8 distinct hosts, max 3 pages per host and 24 index pages per cycle. GitHub Actions 38699201820 SUCCESS, read 719254 URL records on one 400-host cycle, cumulative 12846095, 13780 known source hosts and 15721 candidate contributor pages.
+- Verifier commit 8b90c189efda72186064a4d08581d5bbcd87f90c rotates persistent candidate-audit records so it will not continually recheck just the latest 120 pages; prioritizes likely explicit submission pages and .vn.
+- Verifier commit 96e998c4f6a24892b0133e3ea156e79b8825ff78 increases hourly source verification to 400 distinct hosts, 240 candidate pages and 24 workers. VPS installer GitHub Actions 38699796103 SUCCESS at 14:37 VN; job 116304934397 confirms 400 sources checked, 303 HTTP 200, live Google Web timer active; production KQ247 containers unchanged.
+- Current confirmed Google Web verified backlinks football=0 and lottery=0; automatic submission disabled because no independently authorized publisher identified yet. Crawler URLs and post forms alone do not show permission to post or actual Google indexation.
