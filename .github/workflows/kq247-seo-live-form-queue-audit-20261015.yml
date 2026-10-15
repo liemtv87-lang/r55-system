@@ -1,0 +1,69 @@
+name: KQ247 SEO Live Source-Queue Audit 20261015
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-seo-live-form-queue-audit-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Setup verified SSH
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+      - name: Read source/submit inventory, fresh reports and unique active timers; no writes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'python3 -' <<'PY'
+          import json,sqlite3,pathlib,datetime,hashlib,subprocess
+          root=pathlib.Path('/opt/pwremote/kq247-backlink-background')
+          public=pathlib.Path('/opt/kq247/deployment/football-original/public')
+          report={}
+          def read(path):
+              try:
+                  p=pathlib.Path(path)
+                  d=json.loads(p.read_text())
+                  age=round((datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc)).total_seconds()/60,2)
+                  return dict(age_minutes=age,payload=d)
+              except Exception as e:return {'error':type(e).__name__}
+          def cmd(argv):
+              try:
+                  p=subprocess.run(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=8)
+                  return {'returncode':p.returncode,'value':p.stdout.strip()[:300]}
+              except Exception as e:return {'error':type(e).__name__}
+          for file in ['seo-unified-status.json','seo-backlinks-status.json','seo-backlink-worker-status.json']:
+              report[file]=read(public/file)
+          report['discovery']=read(root/'latest.json')
+          report['poster']=read(root/'bulk-posts.json')
+          report['discovery_script_sha256']=hashlib.sha256((root/'kq247-backlink-background-discovery-20261014.py').read_bytes()).hexdigest()
+          report['source_inventory_bytes']={str(p):p.stat().st_size for p in [root/'url-inventory.txt',pathlib.Path('/opt/pwremote/kq247-domain-first/url-inventory.txt')] if p.exists()}
+          report['active_seo_timers']=[name for name in ['kq247-seo-unified.timer','kq247-seo-backlinks.timer','kq247-seo-groups.timer','kq247-telegram-playwright.timer','kq247-seo-indexnow.timer','kq247-organic-10k.timer','kq247-backlink-discovery-watchdog.timer'] if cmd(['systemctl','is-active',name]).get('value')=='active']
+          db='file:'+str(root/'sources.sqlite3')+'?mode=ro'
+          con=sqlite3.connect(db,uri=True,timeout=6)
+          report['classified_counts']=[{'state':row[0],'reason':row[1],'total':row[2]} for row in con.execute("SELECT status,reason,count(*) FROM hosts GROUP BY status,reason ORDER BY count(*) DESC")]
+          report['form_candidates']=[{'host':row[0],'url':row[1],'reason':row[2]} for row in con.execute("SELECT host,url,reason FROM hosts WHERE status='form_candidate' ORDER BY host LIMIT 60")]
+          report['submissions']=[{'host':row[0],'group':row[1],'state':row[2]} for row in con.execute("SELECT host,grp,state FROM submissions ORDER BY host,grp LIMIT 70")]
+          con.close()
+          # Print only status counters and PUBLIC first-party website addresses. Never print credentials.
+          for key in ('seo-unified-status.json','discovery','poster'):
+              q=report.get(key,{}).get('payload',{})
+              print('AUDIT',key,json.dumps({'age_minutes':report.get(key,{}).get('age_minutes'),'hourly_delta':q.get('hourly_delta'),'discovery':q.get('discovery'),'submission':q.get('submission'),'verification':q.get('verification'),'sources':q.get('unique_hosts_discovered'),'statuses':q.get('hosts_by_status'),'counts':q.get('counts'),'feed_status':q.get('public_feed_last_status')},ensure_ascii=False))
+          print('SEO_ACTIVE_TIMERS',json.dumps(report['active_seo_timers']))
+          print('SEO_SOURCE_INVENTORY_BYTES',json.dumps(report['source_inventory_bytes']))
+          print('SEO_CLASSIFIED_REASONS',json.dumps(report['classified_counts'],ensure_ascii=False))
+          print('SEO_FORM_CANDIDATES',json.dumps(report['form_candidates'],ensure_ascii=False))
+          print('SEO_SUBMISSIONS',json.dumps(report['submissions'],ensure_ascii=False))
+          assert report['active_seo_timers']==['kq247-seo-unified.timer'],report['active_seo_timers']
+          print('SEO_ONE_TIMER_READONLY_AUDIT=PASS')
+          PY
