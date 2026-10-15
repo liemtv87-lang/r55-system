@@ -38,6 +38,7 @@ MAX_INDEX_PAGES_PER_HOST=3
 INDEX_PAGE_BUDGET=24
 SITE_LIMIT_SECONDS=30
 HOST_QUOTA_PER_CYCLE=100
+HOST_REVISIT_MINUTES=30  # A known .vn host should not eat a slot every 5 minutes.
 SEARCH_PAGES=[
  ("https://vietnamnavigation.com/doi-song/","VN_directory"),
  ("https://seohot.vn/website-the-thao/","VN_sports_directory"),
@@ -354,7 +355,9 @@ def run():
  db.execute("UPDATE sites SET priority=1 WHERE priority=0 AND host NOT LIKE '%.vn' AND host NOT IN ('vietnamnavigation.com','xosodaiphat.com','ketqua.net','vncapitals.com')")
  db.execute("UPDATE sites SET priority=0 WHERE host LIKE '%.vn' OR host IN ('vietnamnavigation.com','xosodaiphat.com','ketqua.net','vncapitals.com')")
  db.commit()
- rows=db.execute("SELECT host,source_url,category,priority FROM sites ORDER BY priority ASC, COALESCE(last_scanned,'') ASC,host LIMIT ?",(MAX_HOSTS,)).fetchall()
+ revisit_cutoff=(dt.datetime.now(dt.timezone.utc)-dt.timedelta(minutes=HOST_REVISIT_MINUTES)).isoformat()
+ due_sites=db.execute("SELECT COUNT(*) FROM sites WHERE last_scanned IS NULL OR last_scanned<=?",(revisit_cutoff,)).fetchone()[0]
+ rows=db.execute("SELECT host,source_url,category,priority FROM sites WHERE last_scanned IS NULL OR last_scanned<=? ORDER BY priority ASC, COALESCE(last_scanned,'') ASC,host LIMIT ?",(revisit_cutoff,MAX_HOSTS)).fetchall()
  jobs=[]
  for h,u,c,p in rows:
   sitemaps=[r[0] for r in db.execute("SELECT url FROM per_host_sitemaps WHERE host=? LIMIT 20",(h,))]
@@ -402,6 +405,8 @@ def run():
          "index_frontier_total_pages":index_frontier_count,
          "source_hosts_new_this_run":new_sites,"source_hosts_known_total":total_sites,
          "source_hosts_examined_this_run":host_count,
+         "source_host_revisit_cooldown_minutes":HOST_REVISIT_MINUTES,
+         "source_hosts_due_for_scanning_this_run":due_sites,
          "source_hosts_actual_vn_tld_examined_this_run":sum(r["host"].endswith(".vn") for r in results),
          "source_hosts_vn_priority_examined_this_run":sum(r.get("priority")==0 for r in results),
          "source_hosts_actual_vn_tld_known_total":total_vn_tld_sites,
@@ -457,6 +462,7 @@ def selftest():
  assert any("hoatech.vn/danh-sach-web-directory" in u for u,_ in SEARCH_PAGES)
  assert INDEX_PAGE_BUDGET>=MAX_INDEX_PAGES_PER_HOST
  assert MAX_INDEX_WORKERS>=1
+ assert HOST_REVISIT_MINUTES>=5 and HOST_REVISIT_MINUTES<=60
  assert editorial_submission_candidate("https://xoso.vn/submit-your-website/") is True
  assert editorial_submission_candidate("https://news.com/2024/submit-a-false-tip-to-police/") is False
  assert editorial_submission_candidate("https://wordpress.com/wp-content/plugins/forms/submit-spin.svg") is False
