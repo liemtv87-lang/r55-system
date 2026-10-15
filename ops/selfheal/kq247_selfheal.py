@@ -145,6 +145,61 @@ def heal_containers(scope, record, dry_run):
             events.append(event)
     return events
 
+def audit_unmanaged_workloads(scope):
+    """Report every KQ247-owned container/timer; do not activate unknown or disabled ones."""
+    events=[]
+    known=set(KNOWN_CONTAINERS.get(scope,()))
+    ret, output, err=cmd("docker","ps","-a","--format","{{.Names}}|{{.State}}",timeout=12)
+    if ret:
+        events.append({"name":"all_container_inventory","status":"inventory_failed","error":err})
+    else:
+        for line in output.splitlines():
+            name, sep, status=line.partition("|")
+            if not sep or not name.startswith("kq247-") or classify_timer(name+".timer")!=scope:
+                continue
+            if name not in known:
+                events.append({"name":name,"status":"unlisted_container_observed_only",
+                               "docker_state":status,"action":"no_auto_start_without_allowlist"})
+    ret, output, err=cmd("systemctl","list-unit-files","--type=timer","--no-legend","--no-pager",timeout=15)
+    if ret:
+        events.append({"name":"all_timer_inventory","status":"inventory_failed","error":err})
+    else:
+        for line in output.splitlines():
+            parts=line.split()
+            if len(parts)<2: continue
+            name,status=parts[0],parts[1]
+            if (name.startswith("kq247-") and name.endswith(".timer")
+                    and not name.startswith("kq247-selfheal-")
+                    and status!="enabled" and classify_timer(name)==scope):
+                events.append({"name":name,"status":"disabled_timer_observed_only",
+                               "unit_file_state":status,"action":"never_reenable_without_approval"})
+    return events
+
+def audit_resource_pressure(scope):
+    """Local low-cost warning. One ops-scope check avoids duplicating probes."""
+    if scope!="ops":return []
+    events=[]
+    try:
+        disk=os.statvfs("/opt/kq247")
+        used=1-disk.f_bavail/max(1,disk.f_blocks)
+        if used>=0.90:
+            events.append({"name":"vps_disk","status":"disk_pressure",
+                           "used_percent":round(100*used,1),"action":"no_automatic_deletion"})
+    except OSError as exc:
+        events.append({"name":"vps_disk","status":"stat_failed","error":type(exc).__name__})
+    try:
+        mem={}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            key,_,val=line.partition(":")
+            if key in ("MemAvailable","MemTotal"):mem[key]=int(val.strip().split()[0])
+        if mem.get("MemTotal") and mem.get("MemAvailable",0)/mem["MemTotal"]<0.10:
+            events.append({"name":"vps_memory","status":"memory_pressure",
+                           "available_percent":round(100*mem["MemAvailable"]/mem["MemTotal"],1),
+                           "action":"no_automatic_process_termination"})
+    except (OSError,ValueError,IndexError,ZeroDivisionError) as exc:
+        events.append({"name":"vps_memory","status":"stat_failed","error":type(exc).__name__})
+    return events
+
 def read_local(port, path, timeout=6):
     try:
         with urllib.request.urlopen("http://127.0.0.1:%d%s" % (port,path), timeout=timeout) as response:
@@ -232,6 +287,8 @@ def main():
     previous=load(state_file,{"attempts":{}})
     events=heal_timers(args.scope,previous,args.dry_run)
     events+=heal_containers(args.scope,previous,args.dry_run)
+    events+=audit_unmanaged_workloads(args.scope)
+    events+=audit_resource_pressure(args.scope)
     if args.scope=="vietlott":
         events+=repair_vietlott(previous,args.dry_run)
     report={"scope":args.scope,"checked_at_utc":now_utc().isoformat(),
