@@ -40,9 +40,9 @@ KEYWORDS = ("lien-he","lien_he","gui-bai","gui-tin","dang-bai","dang-tin",
 UA = "KQ247GoogleWebSEO/1.0 (+public technical audit; non-invasive)"
 MAX_BYTES = 450_000
 TIMEOUT = 9
-MAX_WORKERS = 16
+MAX_WORKERS = 24
 SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
-MAX_SEEDS = 260
+MAX_SEEDS = 400
 
 def source_seeds():
  """Curated independent Google WEB website inventory. Never grants POST permission."""
@@ -198,7 +198,7 @@ def inspect_source(url):
              "html_checked":True})
  return out
 
-def candidate_pages_to_inspect(limit=120):
+def candidate_pages_to_inspect(limit=240):
  """Prioritize real submission-intent pages, rotating through unreviewed URLs.
  Persist a durable audit cursor: do not inspect the same latest 120 forever.
  No form presence grants permission to submit content.
