@@ -38,7 +38,11 @@ SEARCH_PAGES=[
  ("https://seohot.vn/website-the-thao/","VN_sports_directory"),
  ("https://www.fbvn.com/p/web.html","VN_directory"),
  ("https://piperic.com/language/vi","VN_language_index"),
- ("https://www.viet.net/cgi-bin/unibrowse","VN_directory")
+ ("https://www.viet.net/cgi-bin/unibrowse","VN_directory"),
+ ("https://duonggiaphat.vn/danh-sach-cac-noi-dat-backlink-mien-phi-tot-cho-seo/","VN_public_directory_sources"),
+ ("https://digicomvn.com/dien-dan-di-backlink/","VN_public_directory_sources"),
+ ("https://famemedia.vn/website-dat-backlink/","VN_public_directory_sources"),
+ ("https://www.thietkewebchuanseo.com/seo-offpage.htm","VN_public_directory_sources")
 ]
 TOKENS=("dang-bai","dang-tin","gui-bai","gui-tin","lien-he","lien_he",
         "cong-tac-vien","contact","submit","contribute","guest-post",
@@ -106,19 +110,45 @@ def priority(url,kind=""):
  # Vietnam hosts first. A .vn domain alone is NOT a publication permission.
  return 0 if h.endswith((".vn",".com.vn",".net.vn",".org.vn",".edu.vn")) or kind.startswith("VN_") else 1
 
-def discover_directories():
- seen={}
+def discover_directories(db):
+ """Rotate public index subpages across five-minute cycles instead of reopening
+ the same index pages forever. No third-party POSTs or Google scraping."""
+ now=utcnow()
  for base,category in SEARCH_PAGES:
+  db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
+             (base,category,None,None))
+ db.commit()
+ pages=db.execute("""SELECT url,category FROM index_frontier
+                     ORDER BY CASE WHEN last_checked IS NULL THEN 0 ELSE 1 END,
+                              COALESCE(last_checked,'') ASC LIMIT 24""").fetchall()
+ seen={}
+ visited=[]
+ for base,category in pages:
   raw,err=fetch(base,MAX_BYTES_PER_INDEX)
+  visited.append((base,now,err))
   if raw is None:continue
   parser=Outgoing()
   parser.feed(raw.decode("utf-8","replace"))
+  nested=0
   for item in parser.links:
-   u=urlparse.urljoin(base,item)
+   u=urlparse.urljoin(base,item).split("#")[0]
+   p=urlparse.urlsplit(u)
    h=host(u)
-   if h and h not in SKIP_HOSTS and h!=host(base) and urlparse.urlsplit(u).scheme=="https":
+   if p.scheme!="https" or not h or h in SKIP_HOSTS:continue
+   if h!=host(base):
     seen.setdefault(h,{"host":h,"url":"https://"+h+"/","category":category,"priority":priority(u,category)})
- return sorted(seen.values(),key=lambda x:(x["priority"],x["host"]))
+   elif nested<35 and len(p.path)<150 and len(p.query)<100 and any(
+      marker in p.path.lower()+("?"+p.query.lower()) for marker in
+      ("page","category","sports","the-thao","vietnam","website","browse",
+       "directory","site","forum","web","football","links","vi/","p=")):
+    db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
+               (u,category,None,None))
+    nested+=1
+ for base,at,err in visited:
+  db.execute("UPDATE index_frontier SET last_checked=?,last_error=? WHERE url=?",
+             (at,err,base))
+ db.commit()
+ return sorted(seen.values(),key=lambda x:(x["priority"],x["host"])),len(pages)
 
 def sitemap_scan(job):
  h=job["host"]
@@ -181,6 +211,7 @@ def init_db(db):
  db.execute("CREATE TABLE IF NOT EXISTS candidate_pages (url TEXT PRIMARY KEY,host TEXT,first_seen TEXT,last_seen TEXT,review_status TEXT)")
  db.execute("CREATE TABLE IF NOT EXISTS per_host_sitemaps (host TEXT,url TEXT,PRIMARY KEY(host,url))")
  db.execute("CREATE TABLE IF NOT EXISTS cycles (run_at TEXT, hosts_scanned INTEGER,url_records INTEGER,new_hosts INTEGER,new_form_pages INTEGER, errors INTEGER)")
+ db.execute("CREATE TABLE IF NOT EXISTS index_frontier (url TEXT PRIMARY KEY,category TEXT,last_checked TEXT,last_error TEXT)")
  db.commit()
 
 def load_candidates():
@@ -199,7 +230,7 @@ def run():
  db=sqlite3.connect(ROOT/"google-web-discovery.sqlite3")
  init_db(db)
  from_config=load_candidates()
- from_directory=discover_directories()
+ from_directory,index_pages_checked=discover_directories(db)
  combined=from_config+from_directory
  existing={r[0] for r in db.execute("SELECT host FROM sites")}
  new_sites=0
@@ -236,11 +267,14 @@ def run():
  db.commit()
  total_sites=db.execute("SELECT COUNT(*) FROM sites").fetchone()[0]
  total_forms=db.execute("SELECT COUNT(*) FROM candidate_pages").fetchone()[0]
+ index_frontier_count=db.execute("SELECT COUNT(*) FROM index_frontier").fetchone()[0]
  db.close()
  result={"campaign":"google_web_independent","checked_at_utc":now,
          "discovery_interval_minutes":5,"vietnam_priority_enabled":True,
          "source_ordering":"Vietnam-related and .vn first; round-robin via last_scanned",
-         "source_indexes_checked":len(SEARCH_PAGES),
+         "source_indexes_seeded":len(SEARCH_PAGES),
+         "source_index_pages_checked_this_run":index_pages_checked,
+         "index_frontier_total_pages":index_frontier_count,
          "source_hosts_new_this_run":new_sites,"source_hosts_known_total":total_sites,
          "source_hosts_examined_this_run":host_count,
          "sitemap_url_records_read_this_run":ur,
