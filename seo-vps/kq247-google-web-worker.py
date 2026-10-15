@@ -15,7 +15,6 @@ import sqlite3
 import time
 import urllib.parse
 import urllib.request
-import urllib.robotparser
 
 ROOT = Path(os.environ.get("KQ247_GOOGLE_ROOT", "/opt/kq247/google-web-seo"))
 PUBLIC = Path(os.environ.get("KQ247_PUBLIC_ROOT", "/opt/kq247/deployment/football-original/public"))
@@ -122,10 +121,15 @@ def get(url, *, check_robots=False):
  if p.scheme!="https" or not p.hostname: return {"error":"not_https"}
  if check_robots:
   try:
-   rp=urllib.robotparser.RobotFileParser()
-   rp.set_url("https://"+p.hostname+"/robots.txt")
-   rp.read()
-   if not rp.can_fetch(UA, url):return {"error":"robots_disallow"}
+   robots_url="https://"+p.hostname+"/robots.txt"
+   req=urllib.request.Request(robots_url,headers={"User-Agent":UA})
+   with urllib.request.urlopen(req,timeout=4) as response:
+    rules=response.read(120_000).decode("utf-8","replace")
+   # Fail closed on explicit robots disallow; avoid unbounded RobotFileParser.read().
+   from urllib.robotparser import RobotFileParser
+   rp=RobotFileParser()
+   rp.parse(rules.splitlines())
+   if not rp.can_fetch(UA,url):return {"error":"robots_disallow"}
   except Exception:return {"error":"robots_not_verified"}
  try:
   req=urllib.request.Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xml,text/plain"})
