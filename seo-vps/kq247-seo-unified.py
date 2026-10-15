@@ -142,6 +142,22 @@ def main():
  payload["hourly_window_utc"]=hour
  payload["supervisor_active"]=bool(discovery_pids)
  payload["one_vps_timer"]="kq247-seo-unified.timer"
+ # An older installer might be invoked after a source update. Keep one SEO
+ # schedule by reconciling exact known legacy timers on each healthy tick.
+ old_timers=(
+  "kq247-seo-groups.timer",
+  "kq247-seo-indexnow.timer",
+  "kq247-seo-backlinks.timer",
+  "kq247-organic-10k.timer",
+  "kq247-telegram-playwright.timer",
+  "kq247-backlink-discovery-watchdog.timer",
+ )
+ deduplicated={}
+ if all_ok and run_cmd(["systemctl","is-active","--quiet","kq247-seo-unified.timer"],8).get("ok"):
+  for unit in old_timers:
+   if run_cmd(["systemctl","is-active","--quiet",unit],8).get("ok"):
+    deduplicated[unit]=run_cmd(["systemctl","disable","--now",unit],15).get("ok")
+ payload["duplicate_timers_disabled"]=deduplicated
  atomic_json(REPORT,payload)
  # Durable once-per-hour report: true observed counts, not claims of future reach.
  if all_ok:
