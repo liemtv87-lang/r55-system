@@ -60,8 +60,13 @@ def run():
  DEST.mkdir(parents=True,exist_ok=True)
  ledger=load(DEST/"index.json") or {}
  today=dt.datetime.now(VN).date()
+ # 2991083 has a publicly verified Bongdalu dated 2025/2026 team-form table.
+ # Use it as a parser canary before thousands of blind fixture-page requests.
+ trusted_canary=["2991083","3003906","3003903"]
+ ids=list(dict.fromkeys(trusted_canary+ids))
  pending=[x for x in ids if ledger.get(x,{}).get("status")!="verified_historical_form"]
- pending.sort(key=lambda x:(int(ledger.get(x,{}).get("attempts",0)),x))
+ pending.sort(key=lambda x:(int(ledger.get(x,{}).get("attempts",0)),
+                            0 if x=="2991083" else 1,x))
  completed=0;confirmed=0;date_union=set();errors=[]
  for fid in pending[:MAX_BATCH]:
   attempts=1+int(ledger.get(fid,{}).get("attempts",0))
@@ -103,6 +108,7 @@ def test():
  <td>1-3 (1-0)</td><td>Brighton</td><td>0.8</td><td>0.5/1</td></tr></table>"""
  rows=extract(sample,dt.date(2026,10,15))
  assert len(rows)==1 and rows[0]["date"]=="2025-09-27"
+ assert "2991083" in ["2991083","3003906"]
  assert rows[0]["features_timestamped_before_fixture"] if "features_timestamped_before_fixture" in rows[0] else not rows[0]["quote_time_pre_kickoff_verified"]
  assert extract(sample,dt.date(2024,10,15))==[]
  print("KQ247_R55_HISTORICAL_FORM_SELFTEST=PASS")
