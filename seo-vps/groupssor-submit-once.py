@@ -91,20 +91,15 @@ def main():
                 if visible(page.locator("iframe[src*='captcha'],[data-sitekey]")):
                     receipt.update(state="human_verification_required")
                     state["groups"][key]=receipt;save(state);continue
-                radios=visible(page.locator("input[type=radio]"))
-                radios=[r for r in radios if "telegram" in (r.get_attribute("value") or "").lower()]
-                if radios:
-                    # Input uses visually hidden sr-only CSS, click the actual radio
-                    # programmatically to trigger React's normal change event.
-                    radios[0].evaluate("(el) => el.click()")
-                    if not radios[0].is_checked():
-                        raise RuntimeError("telegram_radio_not_selected")
-                else:
-                    labels=visible(page.get_by_label("Telegram",exact=True))
-                    if labels:labels[0].check()
-                    else:
-                        receipt.update(state="form_changed",reason="telegram_radio_missing")
-                        state["groups"][key]=receipt;save(state);continue
+                # The site's CSS makes radio inputs screen-reader-only. A
+                # visibility filter drops the Telegram input altogether.
+                telegram_radio=page.locator("#submit-group-form input[name='platform'][value='telegram']")
+                if telegram_radio.count()!=1:
+                    receipt.update(state="form_changed",reason="telegram_radio_missing")
+                    state["groups"][key]=receipt;save(state);continue
+                telegram_radio.evaluate("(el) => el.click()")
+                if not telegram_radio.is_checked():
+                    raise RuntimeError("telegram_radio_not_selected")
                 ok=fill_first(page,[
                     "input[placeholder*='t.me']",
                     "input[name*='link' i]",
