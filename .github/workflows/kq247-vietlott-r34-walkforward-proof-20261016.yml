@@ -1,0 +1,61 @@
+name: KQ247 Vietlott R34 Verified Walkforward Prize Proof
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-walkforward-proof-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-r34-walkforward-proof-readonly
+  cancel-in-progress: false
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Extend independently confirmed historical XSMB source in isolated VPS archive
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          sha=7f89c6d12ecb3955acf95c46c0305231fc0e6e5c
+          root=/opt/kq247/vietlott
+          src="$root/versions/r34-walkforward-proof-$sha"
+          d="$root/backtest-verified/r34-xsmb150-20261015"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          if ! test -d "$src/.git";then
+            tmp=$(mktemp -d "$root/versions/.bt-proof-XXXXXX")
+            trap 'rm -rf "$tmp"' EXIT
+            GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$tmp/source"
+            git -C "$tmp/source" checkout --quiet --detach "$sha"
+            test "$(git -C "$tmp/source" rev-parse HEAD)" = "$sha"
+            mv "$tmp/source" "$src"
+            rmdir "$tmp"
+            trap - EXIT
+          fi
+          test "$(git -C "$src" rev-parse HEAD)" = "$sha"
+          test -s "$d/input/data/history-mega645.json"
+          test -s "$d/input/data/history-power655.json"
+          test -s "$d/output/xsmb-verified-150-draws.json"
+          test -s "$d/regions/three-region-verified-150-draws.json"
+          timeout 720 docker run --rm --network none --cpus=2 --memory=4g --pids-limit=128 \
+            -v "$src":/work:ro -v "$d/input":/archive-input:ro \
+            -v "$d/output":/verified-xsmb:ro -v "$d/regions":/verified-regions:ro \
+            -w /work --entrypoint node node:22-bookworm scripts/r34-walkforward-verified-smoke.mjs
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test "$before" = "$after"
+          echo R34_VERIFIED_BACKTEST_SMOKE_PUBLIC_UNCHANGED=YES
+          VPS
