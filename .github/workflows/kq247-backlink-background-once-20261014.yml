@@ -63,6 +63,22 @@ jobs:
               owned_running=1
             fi
           fi
+          # Adopt a matching worker when an older launcher left a stale PID file.
+          # No arbitrary process kill: require the exact dedicated path and --watch.
+          if test "$owned_running" = 0; then
+            for candidate in $(pgrep -f 'kq247-backlink-background-discovery-20261014.py' || true); do
+              if test -r "/proc/$candidate/cmdline"; then
+                verified="$(tr '\\0' ' ' < "/proc/$candidate/cmdline" || true)"
+                if [[ "$verified" == *"$base/kq247-backlink-background-discovery-20261014.py"* && "$verified" == *"--watch"* ]]; then
+                  owned_running=1
+                  pid="$candidate"
+                  printf '%s\\n' "$pid" > "$base/worker.pid"
+                  echo "KQ247_DISCOVERY_PID_ADOPTED=$pid"
+                  break
+                fi
+              fi
+            done
+          fi
           if test "$owned_running" = 1 && test "$current_sha" = "$active_sha"; then
             echo "KQ247_WATCH_ALREADY_CURRENT_PID=$pid"
           else
@@ -120,6 +136,20 @@ jobs:
             if [[ "$cmdline" == *"$script"* && "$cmdline" == *"--watch"* ]]; then
               healthy=1
             fi
+          fi
+          if test "$healthy" -eq 0; then
+            for candidate in $(pgrep -f 'kq247-backlink-background-discovery-20261014.py' || true); do
+              if test -r "/proc/$candidate/cmdline"; then
+                checked="$(tr '\\0' ' ' < "/proc/$candidate/cmdline" || true)"
+                if [[ "$checked" == *"$script"* && "$checked" == *"--watch"* ]]; then
+                  pid="$candidate"
+                  healthy=1
+                  printf '%s\\n' "$pid" > "$base/worker.pid"
+                  echo "KQ247_DISCOVERY_WATCHDOG_ADOPTED_PID=$pid"
+                  break
+                fi
+              fi
+            done
           fi
           if test "$healthy" -eq 0; then
             echo "KQ247_DISCOVERY_WATCHDOG_RECOVERY=starting"
