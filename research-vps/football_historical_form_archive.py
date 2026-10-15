@@ -80,7 +80,12 @@ def run():
    if len(raw)>1200000 or len(raw)<2000:raise ValueError("unsupported response length")
    html=raw.decode("utf-8","replace")
    rows=extract(html,today)
-   if not rows:raise ValueError("no 500-day dated result rows in source tables")
+   if not rows:
+    raw_date_count=len(DATE_RE.findall(html))
+    parsed=TableRows();parsed.feed(html)
+    title=re.search(r"<title[^>]*>(.{0,80}?)</title>",html,re.I|re.S)
+    diagnostic="no_rows;raw_dates="+str(raw_date_count)+";parsed_rows="+str(len(parsed.rows))+";title="+(title.group(1)[:45] if title else "none")
+    raise ValueError(diagnostic)
    obj={"fixture_id":fid,"url":url,"retrieved_utc":now(),"raw_sha256":hashlib.sha256(raw).hexdigest(),
         "historical_rows":rows,"date_count":len(set(r["date"] for r in rows)),
         "games_count":len(rows),"h2h_not_required":True,
