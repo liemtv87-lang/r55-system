@@ -22,6 +22,20 @@ class SelfhealSafetyTests(unittest.TestCase):
         for name, expected in cases.items():
             self.assertEqual(sh.classify_timer(name), expected, name)
 
+    def test_disabled_timers_and_unmanaged_containers_are_only_observed(self):
+        def fake_cmd(*args, **kwargs):
+            if args[:3] == ("docker", "ps", "-a"):
+                return 0, "kq247-vietlott-vps|running\\nkq247-vietlott-r33-candidate|running", ""
+            if args[:2] == ("systemctl", "list-unit-files"):
+                return 0, "kq247-vietlott-update.timer disabled enabled\\nkq247-research-vietlott.timer enabled enabled", ""
+            raise AssertionError(args)
+        with patch.object(sh, "cmd", side_effect=fake_cmd):
+            events=sh.audit_unmanaged_workloads("vietlott")
+        self.assertTrue(any(x.get("name")=="kq247-vietlott-r33-candidate" and
+                            x.get("action")=="no_auto_start_without_allowlist" for x in events))
+        self.assertTrue(any(x.get("name")=="kq247-vietlott-update.timer" and
+                            x.get("action")=="never_reenable_without_approval" for x in events))
+
     def test_only_current_both_product_snapshots_count_ready(self):
         good = {"ready": True, "products": {
             "mega645": {"snapshot": {"locked": True, "analysis_date": "2026-10-15"}},
