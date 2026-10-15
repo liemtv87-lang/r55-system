@@ -38,9 +38,9 @@ def classify_timer(name):
         return "seo-telegram"
     if "sales" in name: return "sales"
     if "vietlott" in name: return "vietlott"
+    if any(x in name for x in ("bot", "group")): return "bots"
     if any(x in name for x in ("xs", "lottery")): return "xs"
     if any(x in name for x in ("football", "bongdalu", "r55")): return "football"
-    if any(x in name for x in ("bot", "group")): return "bots"
     return "ops"
 
 def cmd(*argv, timeout=12):
@@ -95,15 +95,26 @@ def heal_timers(scope, record, dry_run):
     for timer in timers:
         ret, active, _=cmd("systemctl", "is-active", timer)
         if ret != 0 or active!="active":
-            events.append(try_action(record,timer,"start_enabled_timer",
+            event=try_action(record,timer,"start_enabled_timer",
                                      lambda timer=timer:cmd("systemctl","start",timer,timeout=30),
-                                     cooldown=1800,cap=3,dry_run=dry_run))
+                                     cooldown=1800,cap=3,dry_run=dry_run)
+            if event["status"]=="performed":
+                probe_rc, probe_status, _=cmd("systemctl","is-active",timer)
+                event["postcheck"]=probe_status
+                event["status"]="verified" if probe_rc==0 and probe_status=="active" else "failed_postcheck"
+            events.append(event)
             continue
         service=timer.replace(".timer",".service")
         ret, props, _=cmd("systemctl","show",service,"-p","ActiveState","-p","Result","-p","ExecMainStatus","--no-pager")
         row=dict(line.split("=",1) for line in props.splitlines() if "=" in line)
         if row.get("Result")=="failed" and row.get("ActiveState") not in ("activating","active"):
-            events.append(try_action(record,service,"retry_failed_oneshot",
+            # Generic retries can double-send bot posts, overwrite snapshots or repeat SEO submissions.
+            # Only idempotent research workloads are automatically requeued.
+            if scope!="research":
+                events.append({"name":service,"status":"failed_job_manual_or_specific_repair_required",
+                               "reason":"unsafe_to_requeue_non_idempotent_job"})
+                continue
+            events.append(try_action(record,service,"retry_failed_research_job",
                                      lambda service=service:cmd("systemctl","start","--no-block",service,timeout=15),
                                      cooldown=1800,cap=3,dry_run=dry_run))
     return events
@@ -114,11 +125,24 @@ def heal_containers(scope, record, dry_run):
         ret, status, err=cmd("docker","inspect","-f","{{.State.Status}}",name,timeout=10)
         if ret:
             events.append({"name":name,"status":"container_missing","error":err})
-        elif status not in ("running", "restarting"):
-            # Only start existing stopped container. Never stop, restart, recreate or deploy.
-            events.append(try_action(record,name,"start_exited_container",
+        elif status=="running":
+            code, health, _=cmd("docker","inspect","-f",
+                                  "{{if .State.Health}}{{.State.Health.Status}}{{else}}no_healthcheck{{end}}",
+                                  name,timeout=10)
+            if code==0 and health=="unhealthy":
+                events.append({"name":name,"status":"container_unhealthy",
+                               "action":"alert_without_restart"})
+        elif status not in ("restarting",):
+            # Only start existing exited containers explicitly on this allowlist.
+            # Never stop/restart/recreate/deploy a running container.
+            event=try_action(record,name,"start_exited_container",
                                      lambda name=name:cmd("docker","start",name,timeout=30),
-                                     cooldown=3600,cap=2,dry_run=dry_run))
+                                     cooldown=3600,cap=2,dry_run=dry_run)
+            if event["status"]=="performed":
+                code, after, _=cmd("docker","inspect","-f","{{.State.Status}}",name,timeout=10)
+                event["postcheck"]=after
+                event["status"]="verified" if code==0 and after=="running" else "failed_postcheck"
+            events.append(event)
     return events
 
 def read_local(port, path, timeout=6):
