@@ -212,6 +212,9 @@ def inspect_source(url):
  if "html" not in res.get("content_type","").lower():return {**out,"error":"not_html"}
  p=Links()
  p.feed(res["body"])
+ # Homepage itself can expose a valid publisher listing form; do not depend
+ # on a /submit slug being present in a sitemap to observe this evidence.
+ on_page_form=evaluate_publisher_form(p.forms,url,p.title,res["body"])
  basehost=urllib.parse.urlsplit(url).hostname
  possible=[]
  verified=[]
@@ -226,6 +229,8 @@ def inspect_source(url):
  out.update({"forms_observed_on_source_page":len(p.forms),
              "post_forms_observed_on_source_page":sum(f["method"]=="post" for f in p.forms),
              "form_details":p.forms[:5],
+             "homepage_publisher_form_status":on_page_form["publisher_form_status"],
+             "homepage_credible_site_submission_forms":on_page_form["credible_site_submission_forms"],
              "submission_authorized":False,
              "submission_status":"not_attempted_unverified_permission",
              "potential_contributor_pages":possible[:10],
@@ -493,6 +498,7 @@ def main():
   assert evaluate_publisher_form(terms_form.forms,"https://directory.example/submit-site")["publisher_form_status"]=="requires_terms_review"
   assert candidate_page_intent("https://example.com/directory/suggest.php")==1
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit-your-website/")["publisher_form_status"]=="form_review_required"
+  assert evaluate_publisher_form([], "https://example.vn/")["credible_site_submission_forms"]==0
   comment={"action":"/wp-comments-post.php","method":"post","fields":[{"name":"url"},{"name":"comment"}]}
   assert evaluate_publisher_form([comment],"https://example.vn/guest-post/")["credible_site_submission_forms"]==0
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="No gambling allowed")["publisher_form_status"]=="blocked_topic_policy"
@@ -532,6 +538,9 @@ def main():
          "new_web_contribution_candidates_this_run":sum(s.get("candidate_count",0) for s in sources),
          "source_pages_with_forms_this_run":sum(bool(s.get("forms_observed_on_source_page")) for s in sources),
          "source_pages_with_post_forms_this_run":sum(bool(s.get("post_forms_observed_on_source_page")) for s in sources),
+         "source_homepages_with_credible_submission_forms":sum(bool(s.get("homepage_credible_site_submission_forms")) for s in sources),
+         "source_homepage_publisher_review_queue":[{"url":s["source"],"status":s.get("homepage_publisher_form_status")}
+                                            for s in sources if s.get("homepage_publisher_form_status")=="form_review_required"][:30],
          "authorized_submission_sources_this_run":0,
          "sources":sources,
          "candidate_pages_inspected_this_run":len(candidate_pages),
