@@ -4,8 +4,8 @@ import hashlib,os,sys
 from collections import Counter
 from common import ROOT,dice,load,save,now,seed,pct,run_job
 CONFIG={"mega645":(45,200_000),"power655":(55,500_000)}
-SRC=os.environ.get("KQ247_VIETLOTT_DATA","/opt/kq247/vietlott/data")
-MAX_NEW=int(os.environ.get("KQ247_VIETLOTT_DRAWS_PER_CYCLE","4"))
+SRC=os.environ.get("KQ247_VIETLOTT_DATA","/opt/kq247/research/state/vietlott-history")
+MAX_NEW=max(2,min(96,int(os.environ.get("KQ247_VIETLOTT_DRAWS_PER_CYCLE","32"))))
 def check_draw(d,maxn,product):
  if not isinstance(d,dict):return None
  n=d.get("numbers")
@@ -60,10 +60,11 @@ def research(previous):
    errors.append(product+":duplicate_draw_dates");continue
   source_rows[product]=len(history)
   if len(history)<66:errors.append(product+":history_short");continue
-  # Keep a calendar window spanning several complete months, not only 30 draw rows.
-  pending=[i for i in range(max(35,len(history)-110),len(history))
+  # All verified historical draws, never truncate to last 110 / 60 / 30.
+  # 35 initial draws serve as strictly past-only features; backtest every eligible draw.
+  pending=[i for i in range(35,len(history))
            if product+"|"+history[i]["date"] not in cache]
-  pending.sort(reverse=True)
+  pending.sort() # oldest first: complete each month chronologically, with no future results as input
   for i in pending[:max(1,MAX_NEW//2)]:
    draw=history[i]
    try:
@@ -74,9 +75,12 @@ def research(previous):
    except Exception as e:
     errors.append(product+":"+draw["date"]+":"+type(e).__name__)
  monthly={}
+ remaining={}
  for product,(maxn,target) in CONFIG.items():
   rows=[v for k,v in cache.items() if k.startswith(product+"|")
         and isinstance(v,dict) and v.get("tickets")==target]
+  eligible=source_rows.get(product,0)-35
+  remaining[product]=max(0,eligible-len(rows))
   months=sorted({r["date"][:7] for r in rows})
   monthly[product]={}
   for month in months:
@@ -96,6 +100,9 @@ def research(previous):
          "evaluations":sum(r.get("tickets",0) for r in cache.values() if isinstance(r,dict))*6,
          "new_draw_portfolios_this_cycle":touched,
          "historical_draw_portfolios_checked":len(cache),
+         "remaining_full_history_draws":remaining,
+         "entire_history_backtest_completed":bool(source_rows) and all(v==0 for v in remaining.values()) and len(source_rows)==2,
+         "research_draws_from_earliest_eligible":True,
          "monthly":monthly,"errors":errors[-10:],
          "metrics":{"qualified_months":0,"candidate_promotable":False},
          "promotion_blocker":"No independent precommitted prospective month at all required targets; real portfolio and actual prize wins required."}
@@ -105,6 +112,8 @@ def test():
  assert grade((1,2,3,4,5,7),check_draw(a,55,"power655"),"power655")=="jackpot2"
  assert grade((1,2,3,4,5,8),check_draw(a,55,"power655"),"power655")=="g1"
  assert grade((1,2,3,4,5,6),check_draw(a,55,"power655"),"power655")=="jackpot1"
+ assert MAX_NEW>=2
+ assert "110" not in research.__code__.co_consts # no fixed 110-draw history cap
  print("KQ247_VIETLOTT_SELFTEST=PASS")
 if __name__=="__main__":
  if "--self-test" in sys.argv:test()
