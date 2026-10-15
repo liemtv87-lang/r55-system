@@ -33,6 +33,9 @@ MAX_INVENTORY_URLS_PER_HOST=12000
 MAX_BYTES_PER_SITEMAP=3_500_000
 MAX_BYTES_PER_INDEX=650_000
 TIMEOUT=7
+MAX_INDEX_WORKERS=8
+MAX_INDEX_PAGES_PER_HOST=3
+INDEX_PAGE_BUDGET=24
 SITE_LIMIT_SECONDS=30
 HOST_QUOTA_PER_CYCLE=100
 SEARCH_PAGES=[
@@ -112,45 +115,75 @@ def priority(url,kind=""):
  # Vietnam hosts first. A .vn domain alone is NOT a publication permission.
  return 0 if h.endswith((".vn",".com.vn",".net.vn",".org.vn",".edu.vn")) or kind.startswith("VN_") else 1
 
+def inspect_index_host_group(items):
+ """Read index pages serially per host, concurrently across distinct hosts.
+ Do not share SQLite across workers or issue simultaneous fetches to one host.
+ """
+ done=[]
+ for base,category in items:
+  raw,err=fetch(base,MAX_BYTES_PER_INDEX)
+  links=[]
+  if raw is not None:
+   try:
+    parser=Outgoing()
+    parser.feed(raw.decode("utf-8","replace"))
+    links=parser.links
+   except (ValueError,UnicodeError) as ex:
+    err=type(ex).__name__
+  done.append((base,category,err,links))
+ return done
+
 def discover_directories(db):
- """Rotate public index subpages across five-minute cycles instead of reopening
- the same index pages forever. No third-party POSTs or Google scraping."""
+ """Rotate public source indexes across five-minute cycles.
+ Fetch separate domains concurrently while limiting pages per domain.
+ No third-party POSTs or Google Search scraping.
+ """
  now=utcnow()
  for base,category in SEARCH_PAGES:
   db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
              (base,category,None,None))
  db.commit()
- pages=db.execute("""SELECT url,category FROM index_frontier
+ candidates=db.execute("""SELECT url,category FROM index_frontier
                      ORDER BY CASE WHEN last_checked IS NULL THEN 0 ELSE 1 END,
-                              COALESCE(last_checked,'') ASC LIMIT 24""").fetchall()
+                              COALESCE(last_checked,'') ASC LIMIT 128""").fetchall()
+ groups={}
+ page_count={}
+ selected=[]
+ for base,category in candidates:
+  h=host(base)
+  if not h or page_count.get(h,0)>=MAX_INDEX_PAGES_PER_HOST:continue
+  page_count[h]=page_count.get(h,0)+1
+  groups.setdefault(h,[]).append((base,category))
+  selected.append(base)
+  if len(selected)>=INDEX_PAGE_BUDGET:break
  seen={}
  visited=[]
- for base,category in pages:
-  raw,err=fetch(base,MAX_BYTES_PER_INDEX)
-  visited.append((base,now,err))
-  if raw is None:continue
-  parser=Outgoing()
-  parser.feed(raw.decode("utf-8","replace"))
-  nested=0
-  for item in parser.links:
-   u=urlparse.urljoin(base,item).split("#")[0]
-   p=urlparse.urlsplit(u)
-   h=host(u)
-   if p.scheme!="https" or not h or h in SKIP_HOSTS:continue
-   if h!=host(base):
-    seen.setdefault(h,{"host":h,"url":"https://"+h+"/","category":category,"priority":priority(u,category)})
-   elif nested<35 and len(p.path)<150 and len(p.query)<100 and any(
-      marker in p.path.lower()+("?"+p.query.lower()) for marker in
-      ("page","category","sports","the-thao","vietnam","website","browse",
-       "directory","site","forum","web","football","links","vi/","p=")):
-    db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
-               (u,category,None,None))
-    nested+=1
+ with cf.ThreadPoolExecutor(max_workers=MAX_INDEX_WORKERS) as pool:
+  scanned=list(pool.map(inspect_index_host_group,groups.values()))
+ for host_results in scanned:
+  for base,category,err,links in host_results:
+   visited.append((base,now,err))
+   nested=0
+   for item in links:
+    u=urlparse.urljoin(base,item).split("#")[0]
+    p=urlparse.urlsplit(u)
+    h=host(u)
+    if p.scheme!="https" or not h or h in SKIP_HOSTS:continue
+    if h!=host(base):
+     seen.setdefault(h,{"host":h,"url":"https://"+h+"/",
+                        "category":category,"priority":priority(u,category)})
+    elif nested<35 and len(p.path)<150 and len(p.query)<100 and any(
+       marker in p.path.lower()+("?"+p.query.lower()) for marker in
+       ("page","category","sports","the-thao","vietnam","website","browse",
+        "directory","site","forum","web","football","links","vi/","p=")):
+     db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
+                (u,category,None,None))
+     nested+=1
  for base,at,err in visited:
   db.execute("UPDATE index_frontier SET last_checked=?,last_error=? WHERE url=?",
              (at,err,base))
  db.commit()
- return sorted(seen.values(),key=lambda x:(x["priority"],x["host"])),len(pages)
+ return sorted(seen.values(),key=lambda x:(x["priority"],x["host"])),len(visited)
 
 def sitemap_scan(job):
  h=job["host"]
@@ -281,6 +314,8 @@ def run():
          "source_ordering":"Vietnam-related and .vn first; round-robin via last_scanned",
          "source_indexes_seeded":len(SEARCH_PAGES),
          "source_index_pages_checked_this_run":index_pages_checked,
+         "index_pages_per_host_cap":MAX_INDEX_PAGES_PER_HOST,
+         "index_parallel_host_workers":MAX_INDEX_WORKERS,
          "index_frontier_total_pages":index_frontier_count,
          "source_hosts_new_this_run":new_sites,"source_hosts_known_total":total_sites,
          "source_hosts_examined_this_run":host_count,
