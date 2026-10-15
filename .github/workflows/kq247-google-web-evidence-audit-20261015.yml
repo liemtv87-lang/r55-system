@@ -1,0 +1,73 @@
+name: KQ247 Google Web Readonly Evidence Audit 20261015
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-google-web-evidence-audit-20261015.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: SSH client and pinned host check
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+      - name: Read-only Google Web source and candidate evidence
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime as dt, json, pathlib, sqlite3
+          root=pathlib.Path('/opt/kq247/google-web-seo')
+          public=pathlib.Path('/opt/kq247/deployment/football-original/public')
+          report={}
+          for name in ('google-web-discovery-status.json','google-web-seo-status.json'):
+              p=public/name
+              if p.exists():
+                  v=json.loads(p.read_text())
+                  if 'discovery' in name:
+                      report['discovery_latest']={k:v.get(k) for k in (
+                          'checked_at_utc','source_hosts_known_total','source_hosts_examined_this_run',
+                          'sitemap_url_records_read_this_run','cumulative_sitemap_url_records_read',
+                          'contributor_url_candidates_total','site_error_samples')}
+                  else:
+                      report['verifier_latest']={k:v.get(k) for k in (
+                          'checked_at_utc','sources_checked_this_run','sources_http200_this_run',
+                          'candidate_pages_inspected_this_run','candidate_pages_with_post_forms_this_run',
+                          'candidate_pages_audited_lifetime','candidate_pages_with_post_forms_lifetime',
+                          'new_verified_web_backlinks_this_run','web_backlinks','automatic_submission')}
+                      pages=v.get('candidate_page_inspections',[])
+                      report['latest_candidate_http200']=sum(p.get('http')==200 for p in pages)
+                      report['latest_candidate_postform_pages']=[p.get('url') for p in pages if p.get('post_forms_observed',0)>0][:12]
+          evidence=root/'google-web-seo.sqlite3'
+          if evidence.is_file():
+              with sqlite3.connect('file:'+str(evidence)+'?mode=ro',uri=True,timeout=8) as db:
+                  report['candidate_counts']={'audited':db.execute('SELECT COUNT(*) FROM candidate_audits').fetchone()[0],
+                      'http200':db.execute('SELECT COUNT(*) FROM candidate_audits WHERE http=200').fetchone()[0],
+                      'postform':db.execute('SELECT COUNT(*) FROM candidate_audits WHERE post_forms>0').fetchone()[0],
+                      'backlink_rows':db.execute('SELECT COUNT(*) FROM verified').fetchone()[0]}
+                  report['audit_error_top']=db.execute('SELECT COALESCE(error,\'none\'),COUNT(*) AS c FROM candidate_audits GROUP BY error ORDER BY c DESC LIMIT 8').fetchall()
+                  report['latest_audited_post_forms']=db.execute('SELECT url,post_forms FROM candidate_audits WHERE post_forms>0 ORDER BY checked_at DESC LIMIT 15').fetchall()
+                  report['recent_site_status']=db.execute('SELECT COALESCE(CAST(http AS TEXT),COALESCE(error,\'unknown\')),COUNT(*) FROM history WHERE run_at >= datetime(\'now\',\'-3 hours\') GROUP BY 1 ORDER BY 2 DESC LIMIT 8').fetchall()
+          discovery=root/'google-web-discovery.sqlite3'
+          if discovery.is_file():
+              with sqlite3.connect('file:'+str(discovery)+'?mode=ro',uri=True,timeout=8) as db:
+                  report['discovery_db']={'candidate_pages':db.execute('SELECT COUNT(*) FROM candidate_pages').fetchone()[0],
+                      'index_frontier':db.execute('SELECT COUNT(*) FROM index_frontier').fetchone()[0]}
+                  report['top_recent_candidates']=db.execute("SELECT url FROM candidate_pages WHERE lower(url) LIKE '%dang-bai%' OR lower(url) LIKE '%submit%' OR lower(url) LIKE '%contribute%' LIMIT 12").fetchall()
+          report['server_utc']=dt.datetime.now(dt.timezone.utc).isoformat()
+          print('KQ247_GOOGLE_WEB_READONLY_EVIDENCE='+json.dumps(report,ensure_ascii=False))
+          PY
+          VPS
