@@ -1,32 +1,33 @@
-# KQ247 VPS selfheal — handoff 15/10/2026, Asia/Ho_Chi_Minh
+# KQ247 — bàn giao tự phục hồi VPS (15/10/2026, GMT+7)
 
-## Current user instruction (supersedes earlier priority)
-Run **all KQ247 tools, bots and background jobs only on VPS VinaHost 64.120.92.172**, with automatic bounded fault detection, isolated repair and verification. Do not stop/restart/recreate **running** production containers; do not overwrite unverified locked lottery/Vietlott snapshots or invalidate old client codes/URLs. Keep a durable transcript/progress handoff to prevent chat switches from losing work. Absolute zero incidents is impossible; preserve correctness and detect/report what cannot be safely repaired.
+## Yêu cầu người dùng
+- Chỉ một VPS VinaHost 64.120.92.172 để chạy các hệ thống KQ247, không chuyển nơi xử lý sang dịch vụ ngoài VPS.
+- Áp dụng cho mọi công cụ/bản chính/bản khách/bot/tác vụ nền: bóng đá, xổ số, Vietlott, bán hàng, SEO Web, SEO Telegram, nghiên cứu và vận hành.
+- Tự phát hiện lỗi, thử phục hồi có giới hạn, kiểm tra sau phục hồi; cách ly từng dịch vụ để không chồng chéo.
+- Không dừng/restart container đang chạy; không ghi đè snapshot chưa được xác minh; không phát tin bot lặp hay tự bật lại timer bị tắt.
+- Giữ nguyên public link, giao diện, mã khách và tính liên tục của snapshot.
+- Bảo toàn lịch sử tiến độ/commit/log để tiếp nối sau khi chat chuyển. Tài liệu này là tóm tắt, **không phải bản sao nguyên văn toàn bộ tin nhắn**.
 
-## Installed and verified 15/10
-* Repo `liemtv87-lang/r55-system`, `ops/selfheal/kq247_selfheal.py`.
-* Installer workflow `.github/workflows/kq247-selfheal-all-vps-install-20261015.yml`, run **38753515497 SUCCESS** (first on-VPS installation); repeat **38753869471 SUCCESS** and **38754157501 SUCCESS**.
-* Verified `KQ247_SELFHEAL_VPS_INSTALL=COMPLETE`, `KQ247_SELFHEAL_TIMER_COUNT=9`, `KQ247_PRODUCTION_RUNNING_CONTAINER_IDS_UNCHANGED=YES` from actual SSH VPS job logs.
-* 9 dedicated enabled and active systemd timers: `kq247-selfheal-{football,xs,vietlott,bots,sales,seo-web,seo-telegram,research,ops}.timer`; typical 10-minute cadence and jitter. Dedicated per-scope flock locks, JSON reports and append-only JSONL under `/opt/kq247/ops/selfheal/state`.
-* Selfheal scope registry of known production containers; start only explicitly known stopped containers with bounds (never stop/restart running), attempt start only previously enabled inactive timers. Generic failed jobs with side effects (bot sends, snapshots, SEO posts) **not automatically requeued**; research-safe tasks may be requeued. Each successful timer/container start has a post-action health/status check.
-* Record unknown named KQ247 containers and disabled timers in read-only inventory without enabling or starting. Warn on Docker unhealthy + low disk/memory. Additional self-monitor timers must be excluded from their own worklists (follow-up commit `36da0df22a4c6c973039bb8a394609df52eb5406`).
-* Six offline tests for grouping, disabled/unknown inventory and Vietlott R35 rollback gate PASS in workflow run **38754157544**. A prior test-run failed due to a test fixture escaped-newline bug and was fixed in `33302ac775b54315d5ba54540ffe6cef74ba3ff5`. Latest code post exclusion of selfheal timers awaits a new CI/deployment outcome before making final version claim.
+## Đã xác minh
+- Repo chính: `liemtv87-lang/r55-system`, mã `ops/selfheal/kq247_selfheal.py`.
+- 9 scope độc lập: `football xs vietlott bots sales seo-web seo-telegram research ops`, timer `kq247-selfheal-<scope>.timer` thiết lập `OnUnitInactiveSec=10min` với jitter.
+- GitHub Actions cài `38753515497` thành công, cập nhật `38754384684` thành công, kiểm thử `38754385127` thành công (6/6).
+- Audit run `38754916443` thành công, lúc 14:50 UTC (21:50 Việt Nam): 9/9 timer `active` và `enabled`, có bản ghi trạng thái per-scope trong `/opt/kq247/ops/selfheal/state`.
+- Các container production đang chạy không bị thay đổi ID trong bước cài/kiểm tra.
+- Cơ chế: allowlist container được phép khởi động khi đã dừng; cảnh báo Docker unhealthy, timer/service có khóa theo scope, giới hạn số lần retry, postcheck sau kích hoạt, chặn retry oneshot có thể gây bot double-send hoặc SEO spam, không sửa dữ liệu snapshot.
+- Audit ghi nhận container ngoài allowlist ở football, Vietlott, sales; một số timer SEO Web/Telegram đang disabled: chỉ ghi nhận, không tự bật lại.
+- Live Vietlott tại `https://vietlott.64-120-92-172.sslip.io`: audit `38752296092` lúc 21:32 VN trả `/health 200` nhưng `status=failed`, runtime `R40_VPS_USER33_FULL30_60_150_20261013`, `/api/state=503` vì snapshot R33 chưa sẵn sàng; `/guest-snapshot.html=404`, `/client.html=200`. Audit VPS `38754916443` cũng xác nhận `/api/state=503`.
+- Bộ tự phục hồi cấm kích hoạt retry lỗi trên R33/R40, yêu cầu runtime bắt đầu `R41_VPS_USER35` và snapshot Mega/Power đúng ngày/khóa và ruleset `USER_35_HARD_RULES_ADJACENT_HEAD_PAIRS_2026_10_15_R1`.
 
-## Final additional verification (15/10/2026 at 21:50 VN)
-* Runtime audit run **38754916443 SUCCESS** queried systemd on VPS: **all 9 timers active/waiting**, and all 9 matching oneshot services have a real `LastTriggerUSec` between 14:49 and 14:50 UTC, `ExecMainStatus=0`, `Result=success`; next timers scheduled around 14:59–15:01 UTC. This proves all nine selfheal scopes have executed at least one scheduled service invocation, not merely enabled.
-* Independent read-only `--scope ... --dry-run` audit run **38754667325 SUCCESS** passed all nine scopes with `docker_stop_or_restart=false` and `production_snapshot_override=false`. Observed: Vietlott R40→R41 mismatch and /api/state 503; disabled SEO tasks visible but NOT re-enabled; research/XS/bot scope checks ran; unknown production containers only observed, not restarted.
-* Latest installer **38754384684 SUCCESS** and latest source static safety test **38754385127 SUCCESS** after excluding selfheal timer recursion. Scope monitoring installed and observed working. This does **not** certify correctness or delivery of all underlying applications, only guarded monitoring.
-* All data/compute stays on VPS. A total VPS outage cannot be repaired by a watchdog on that same VPS; do not promise zero downtime without an independent external watchdog (which user has not authorized).
+## Trạng thái CHƯA xong
+1. **Chưa đồng bộ Vietlott R35 lên VPS live**: mã nằm repo `liemtv87-lang/vietlott-auto-hoc`, chưa có chứng cứ VPS R41 đang chạy. Dữ liệu cùng ngày `/api/state` 503 phải sửa tận gốc bằng nguồn hai nhà xuất bản XSMB full 27 giải rồi kiểm tra snapshot.
+2. **Chưa thể cam kết mọi dịch vụ không bao giờ lỗi**: 9 watchdog đang chạy nhưng chỉ có retry generic và giám sát Vietlott chuyên biệt; chưa đủ semantic checks cho mọi bot, bản khách, BD/XS và SEO.
+3. **Chưa gỡ được mọi dịch vụ ngoài VPS**; ít nhất 6 Render Vietlott/Zeabur dịch vụ cũ còn trong tài khoản, cần xác minh trước khi tắt/xóa để không đứt link.
+4. **Không được tự bật lại timer disabled** và không tự khởi động các container ngoài allowlist khi chưa phân loại nhiệm vụ/quyền sở hữu.
+5. Runtime R41 mới phải pass backtest 35 điều kiện, xuất TXT, kiểm thử cả hai bản chính/khách, bảo vệ snapshot đã khóa trước khi chuyển phục vụ.
 
-## Critically unresolved; never claim fully healthy
-* VPS public Vietlott `https://vietlott.64-120-92-172.sslip.io` at 21:32 VN returned `/health=200` but workload `status=failed`, runtime `R40_VPS_USER33_FULL30_60_150_20261013`, `/api/state=503` `r33_snapshot_not_ready`; customer `/guest-snapshot.html=404`. Real R35 code in private repo `liemtv87-lang/vietlott-auto-hoc` has **not been deployed**. R35 adds head-pair filter requirement (1 to 3 active of {0/1,1/2,2/3,3/4}), snapshot ruleset `USER_35_HARD_RULES_ADJACENT_HEAD_PAIRS_2026_10_15_R1`; caps 180k Mega, 450k Power.
-* Guarded selfheal recognizes old runtime and reports `requires_verified_version_upgrade` without re-triggering old job or modifying old snapshots. VPS dry-run from successful installer confirmed this behavior.
-* Other workflows may still have service-specific defects. Nine active timers do NOT prove every service delivers correct data or that all disabled/unknown services are safely autorecoverable. Need individual live health, data freshness, bot delivery and endpoint tests. Without external redundancy a complete VPS failure cannot be auto-healed from inside that same VPS.
-* Previously observed known live containers `kq247-vietlott-vps` port 18088 and `kq247-vietlott-r33-candidate` port 18112; unknown candidate must not be automatically started. Research timers and SEO timers exist independently. Preserve disabled timers until no overlap risks.
-* For live isolated audit refer to `.github/workflows/kq247-selfheal-all-vps-readonly-audit-20261015.yml`, run **38754028777 SUCCESS**, confirming 9 enabled active timers. Some scopes had no first-run report at time of audit due to initial stagger; do not claim all cycles confirmed.
-* Next: confirm latest install+CI after `36da0df...`, inspect first-run state per all 9 scopes, repair Vietlott runtime via reversible staged deployment without stopping existing running container, validate live current R35 snapshots and customer view, then review per-scope errors.
-
-## Source commits
-`21ec0d4d41e618b4762f2d87a8a9ec2aad3a16ef` R35 guarded repair; `6b3c9649aadf360f4ba48069409505ef48cc06f0` no duplicate generic replays, verified statuses; `2f9338918aca261d63e9bb1d27dfee008242ca13` unknown/disabled workloads + resource pressure; `33302ac775b54315d5ba54540ffe6cef74ba3ff5` fix test; `36da0df22a4c6c973039bb8a394609df52eb5406` selfheal recursion guard.
-
-**Never describe selfheal deployment as a guarantee of no errors, nor old R40 Vietlott as R35.**
+## Thứ tự tiếp theo
+- Kiểm tra lại các lỗi Vietlott full 27 giải + `/api/state`, thử bản R35 ở đường riêng, kiểm thử HTTP/lock/snapshot; chỉ đưa bản live sau gate và rollback an toàn, không restart container đang chạy.
+- Hoàn thiện giám sát nội dung cho từng dịch vụ: bản chính/khách, thời gian snapshot, độ mới dữ liệu, bot một bản tin/đài/trận, SEO số backlink đã duyệt, nghiên cứu đầu vào và quota CPU/disk.
+- Xác minh các timer selfheal tiếp tục chạy sau reboot, giám sát lưu nhật ký, và kiểm tra phục hồi thực tế bằng test lỗi an toàn, không phá hoại sản xuất.
+- Cập nhật tài liệu này sau mỗi lượt có commit/run/trạng thái xác minh.
