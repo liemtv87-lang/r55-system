@@ -1,0 +1,42 @@
+name: KQ247 R34 Historical XSMB Archive Pilot VPS
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-historical-archive-pilot-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Validate old XSMB prizes from independent archived pages on VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          sha=8cb83fba886f1e6efe6fb7ffa7f3e53384235819
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          tmp=$(mktemp -d /opt/kq247/vietlott/versions/.xsmb-archive-pilot-XXXXXX)
+          trap 'rm -rf "$tmp"' EXIT
+          GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$tmp/source"
+          git -C "$tmp/source" checkout --quiet --detach "$sha"
+          test "$(git -C "$tmp/source" rev-parse HEAD)" = "$sha"
+          timeout 180 docker run --rm --cpus=2 --memory=2g --network bridge -v "$tmp/source":/work:ro -w /work --entrypoint node node:22-bookworm \
+            scripts/xsmb-history-archive.mjs 2025-10-30 2026-04-15 2026-10-14
+          test "$before" = "$(docker ps --format '{{.Names}}|{{.ID}}' | sort)"
+          echo R34_ARCHIVE_PILOT_RUNNING_CONTAINERS_UNCHANGED=YES
+          VPS
