@@ -35,7 +35,9 @@ jobs:
           test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r34-stage:319d54228db7'
           curl -fsS --max-time 12 http://127.0.0.1:18146/health >/dev/null
           echo KQ247_R34_STAGE_HTTP=PASS
-          docker exec "$name" node scripts/vps-release-gate.mjs --stage
+          snapdate=$(docker exec "$name" node -p "JSON.parse(require('fs').readFileSync('/app/data/snapshot-mega645.json','utf8')).analysis_date")
+          echo "KQ247_R34_LOCKED_ANALYSIS_DATE=$snapdate"
+          docker exec -e VIETLOTT_VERIFY_DATE="$snapdate" "$name" node scripts/vps-release-gate.mjs --stage
           echo KQ247_R34_STAGE_SNAPSHOT_GATE=PASS
           for product in mega645 power655;do
              docker exec "$name" test -s "/app/data/snapshot-$product.json"
