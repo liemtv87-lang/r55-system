@@ -2,7 +2,7 @@ name: KQ247 Vietlott R35 Stage Same-day Data Preflight
 on:
   push:
     paths:
-      - .github/workflows/kq247-vietlott-r35-sourcefix-stage-data-preflight.yml
+      - .github/workflows/kq247-vietlott-r35-stage-data-preflight.yml
   workflow_dispatch:
 permissions:
   contents: read
