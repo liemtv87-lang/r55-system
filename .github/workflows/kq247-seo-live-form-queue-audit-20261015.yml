@@ -64,6 +64,27 @@ jobs:
           print('SEO_CLASSIFIED_REASONS',json.dumps(report['classified_counts'],ensure_ascii=False))
           print('SEO_FORM_CANDIDATES',json.dumps(report['form_candidates'],ensure_ascii=False))
           print('SEO_SUBMISSIONS',json.dumps(report['submissions'],ensure_ascii=False))
+          # Site-specific evidence for already attempted vs never sent.
+          interesting=['groupssor.com','groupverse.co.in','telegram-groups.com','groupsgyani.org',
+                       'telegrmgrouplink.com','en.search-t.me','groupmandi.com',
+                       'telegramgroup.arkservices.in']
+          db=sqlite3.connect('file:'+str(root/'sources.sqlite3')+'?mode=ro',uri=True,timeout=6)
+          for h in interesting:
+              hosts=list(db.execute("SELECT status,reason,url FROM hosts WHERE host=?",(h,)))
+              sent=list(db.execute("SELECT grp,state,at_utc FROM submissions WHERE host=? ORDER BY grp",(h,)))
+              print('SEO_FOCUSED_HOST',json.dumps({'host':h,'discovery':hosts[:3],'send_states':sent},ensure_ascii=False))
+          db.close()
+          # Public read-only candidate review counters, no article bodies or secrets.
+          gp=pathlib.Path('/opt/kq247/deployment/football-original/public/google-web-seo-status.json')
+          try:
+              j=json.loads(gp.read_text())
+              print('GOOGLE_WEB_FORMS',json.dumps({
+                  'checked_at_utc':j.get('checked_at_utc'),
+                  'hosts_checked':j.get('sources_checked_this_run'),
+                  'credible_forms':j.get('credible_website_submission_forms_this_run'),
+                  'review_queue':j.get('publisher_review_queue',[])[:15],
+                  'verified':j.get('web_backlinks')},ensure_ascii=False))
+          except Exception as e:print('GOOGLE_WEB_FORMS_ERROR',type(e).__name__)
           assert report['active_seo_timers']==['kq247-seo-unified.timer'],report['active_seo_timers']
           print('SEO_ONE_TIMER_READONLY_AUDIT=PASS')
           PY
