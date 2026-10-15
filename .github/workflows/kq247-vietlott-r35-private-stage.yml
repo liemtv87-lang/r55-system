@@ -1,0 +1,109 @@
+name: KQ247 Vietlott R35 Isolated Private VPS Stage
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-private-stage.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r35-isolated-stage
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Clone exact authorized private commit to VPS, test, and smoke only on isolated port
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          expected=e9bca84c3d2ac67b528eb4ae02e2fddee84d3500
+          base=/opt/kq247/vietlott/versions
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          test -s "$key" && test -s "$key.pub"
+          install -d -m 0700 /opt/kq247/ops/deploy/keys
+          ssh-keyscan -T 15 -t ed25519 github.com > "$known.new"
+          ssh-keygen -lf "$known.new" -E sha256 | grep -Fq 'SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU'
+          mv -f "$known.new" "$known"
+          chmod 600 "$known"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          repo=git@github.com:liemtv87-lang/vietlott-auto-hoc.git
+          if ! timeout 25 git ls-remote "$repo" refs/heads/main >/dev/null 2>&1; then
+            echo 'KQ247_VIETLOTT_PRIVATE_SOURCE_ACCESS=WAITING_FOR_READONLY_DEPLOY_KEY'
+            exit 3
+          fi
+          remote_head=$(timeout 25 git ls-remote "$repo" refs/heads/main | awk '{print $1}')
+          if [ "$remote_head" != "$expected" ];then
+            echo "KQ247_VIETLOTT_SOURCE_HEAD_CHANGED=YES"
+            exit 4
+          fi
+          echo 'KQ247_VIETLOTT_PRIVATE_SOURCE_ACCESS=OK'
+          dest="$base/r35-$expected"
+          if [ ! -d "$dest/.git" ];then
+            tmp="$base/.r35-fetch-$$"
+            trap 'rm -rf "$tmp"' EXIT
+            install -d -m 0755 "$base"
+            GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch main --single-branch "$repo" "$tmp" >/dev/null
+            test "$(git -C "$tmp" rev-parse HEAD)" = "$expected"
+            mv "$tmp" "$dest"
+            trap - EXIT
+          fi
+          test "$(git -C "$dest" rev-parse HEAD)" = "$expected"
+          echo "KQ247_VIETLOTT_STAGED_SOURCE_COMMIT=$expected"
+          docker run --rm --network none --cpus=2 --memory=2g -v "$dest":/work:ro -w /work --entrypoint sh node:22-bookworm-slim -ec '
+            set -eu
+            node --check vietlott-vps-server.mjs
+            node --check scripts/update-data.mjs
+            node --check scripts/backtest-60-shard.mjs
+            node --check scripts/merge-backtest-60.mjs
+            node --check scripts/vps-release-gate.mjs
+            node scripts/r35-contract.test.mjs
+            node test-snapshot.mjs
+            node scripts/reduce-coverage.test.mjs
+            node scripts/verify-fast-pool-filter.mjs
+          '
+          echo 'KQ247_VIETLOTT_STAGE_SOURCE_TEST=PASS'
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
+          tag="kq247-vietlott-r35-stage:${expected:0:12}"
+          docker build -q -f "$dest/deploy/Dockerfile.vps" -t "$tag" "$dest" >/dev/null
+          name=kq247-vietlott-r35-stage
+          if docker ps -a --format '{{.Names}}' | grep -qx "$name";then
+            test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+            test "$(docker inspect -f '{{.Config.Image}}' "$name")" = "$tag"
+            echo 'KQ247_VIETLOTT_MATCHING_STAGE_CONTAINER=REUSED'
+          else
+            docker run -d --name "$name" --restart=no --cpus=1 --memory=2g \
+              -e VIETLOTT_STAGE_READONLY=1 -e PORT=8080 -e TZ=Asia/Ho_Chi_Minh \
+              -p 127.0.0.1:18141:8080 "$tag" >/dev/null
+            echo 'KQ247_VIETLOTT_NEW_STAGE_CONTAINER=STARTED'
+          fi
+          for i in $(seq 1 15);do
+            if curl -fsS --max-time 5 http://127.0.0.1:18141/health >/tmp/kq247-r35-stage-health.json;then break;fi
+            sleep 2
+          done
+          python3 - <<'PY'
+          import json,urllib.request
+          with open('/tmp/kq247-r35-stage-health.json') as f: d=json.load(f)
+          assert d.get('ok') is True and str(d.get('runtime','')).startswith('R41_VPS_USER35'),d
+          for path in ('/','/guest-snapshot.html','/client.html'):
+            r=urllib.request.urlopen('http://127.0.0.1:18141'+path,timeout=5)
+            assert r.status==200,(path,r.status)
+          print('KQ247_VIETLOTT_R35_STAGE_HTTP_SMOKE=PASS')
+          PY
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
+          test "$before" = "$after"
+          echo 'KQ247_VIETLOTT_EXISTING_PRODUCTION_CONTAINERS=UNCHANGED'
+          echo 'KQ247_VIETLOTT_R35_STAGE_ONLY=YES_NO_PUBLIC_CUTOVER'
+          VPS
