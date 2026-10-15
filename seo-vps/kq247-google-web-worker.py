@@ -43,7 +43,7 @@ MAX_BYTES = 450_000
 TIMEOUT = 9
 MAX_WORKERS = 10
 SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
-MAX_SEEDS = 80
+MAX_SEEDS = 180
 
 def source_seeds():
  """Curated independent Google WEB website inventory. Never grants POST permission."""
@@ -54,6 +54,16 @@ def source_seeds():
                  isinstance(entry,dict) and entry.get("submission_authorized") is False]
  except (OSError,ValueError,TypeError):
   pass
+ # Consume the five-minute VN-first discovery ledger in read-only mode.
+ # A discovered host is NOT a confirmed publisher and never authorized for POST.
+ try:
+  with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as discovery:
+   rows=discovery.execute("SELECT source_url FROM sites ORDER BY priority ASC,created_at DESC LIMIT 900").fetchall()
+   candidates.extend(row[0] for row in rows)
+ except (sqlite3.Error,OSError):
+  pass
+ # Investigate .vn before unrelated global domains, then preserve feed order.
+ candidates=sorted(candidates,key=lambda uri: 0 if (urllib.parse.urlsplit(uri).hostname or "").endswith(".vn") else 1)
  hosts=set()
  result=[]
  for url in candidates:
@@ -235,6 +245,7 @@ def main():
            "robots_allows_discovery":"Allow: /" in other[0].get("body",""),
            "sitemap_both_landing_pages":all(url in other[1].get("body","") for url in TARGETS.values())},
          "configured_unique_source_hosts":len(seeds),
+         "five_minute_discovery_ledger_consumed":(ROOT/"google-web-discovery.sqlite3").is_file(),
          "sources_checked_this_run":len(sources),
          "sources_http200_this_run":sum(s.get("http")==200 for s in sources),
          "new_web_contribution_candidates_this_run":sum(s.get("candidate_count",0) for s in sources),
