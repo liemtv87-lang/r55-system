@@ -31,10 +31,10 @@ jobs:
           echo KQ247_VIETLOTT_CONTAINER_MOUNT_DIAG_BEGIN
           docker inspect --format '{{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}' kq247-vietlott-vps
           echo KQ247_VIETLOTT_CONTAINER_MOUNT_DIAG_END
-          test -s /opt/kq247/vietlott/public/index.html
+          test -s /opt/kq247/vietlott-r33-primary/public/index.html
           python3 - <<'PY'
           import pathlib,os,json,hashlib,shutil,datetime as dt
-          p=pathlib.Path('/opt/kq247/vietlott/public/index.html')
+          p=pathlib.Path('/opt/kq247/vietlott-r33-primary/public/index.html')
           assert p.is_file() and p.stat().st_size>25000,"Unexpected homepage: refuse to patch"
           s=p.read_text('utf-8')
           original_sha=hashlib.sha256(s.encode()).hexdigest()
@@ -65,7 +65,7 @@ jobs:
           assert "CLIENT_MODE" in result and "CLIENT_SNAPSHOT_ONLY" in result
           assert "pool.valid_total" in result and "SNAP" in result
           if changed:
-           dest=pathlib.Path('/opt/kq247/vietlott/versions/client-layout-backups')
+           dest=pathlib.Path('/opt/kq247/vietlott-r33-primary/versions/client-layout-backups')
            dest.mkdir(parents=True,exist_ok=True)
            stamp=dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
            backup=dest/('index-before-restore-'+stamp+'.html')
