@@ -50,7 +50,7 @@ def one_portfolio(hist,index,product,maxn,target):
          "predraw_seed_only":True,"simulated_not_purchased":True,"method":"PRECOMMITTED_UNIFORM_COVERAGE_BASELINE_V1"}
 def research(previous):
  cache=load(ROOT/"vietlott-draws.json") or {}
- touched=0;source_rows={};errors=[];new_tickets=0
+ touched=0;source_rows={};errors=[];new_tickets=0;checkpoint_pending=0
  for product,(maxn,target) in CONFIG.items():
   raw=load(os.path.join(SRC,"history-"+product+".json"))
   if not isinstance(raw,list):
@@ -72,9 +72,16 @@ def research(previous):
     cache[product+"|"+r["date"]]=r
     touched+=1
     new_tickets+=r["tickets"]
-    save(ROOT/"vietlott-draws.json",cache)
+    checkpoint_pending+=1
+    # Atomic checkpoint each 4 complete full-size portfolios, not O(N²)
+    # JSON rewrites after every single historic draw.
+    if checkpoint_pending>=4:
+     save(ROOT/"vietlott-draws.json",cache)
+     checkpoint_pending=0
    except Exception as e:
     errors.append(product+":"+draw["date"]+":"+type(e).__name__)
+ if checkpoint_pending:
+  save(ROOT/"vietlott-draws.json",cache)
  monthly={}
  remaining={}
  for product,(maxn,target) in CONFIG.items():
@@ -101,6 +108,8 @@ def research(previous):
          "evaluations":sum(r.get("tickets",0) for r in cache.values() if isinstance(r,dict))*6,
          "new_draw_portfolios_this_cycle":touched,
          "new_tickets_evaluated_this_cycle":new_tickets,
+         "checkpoint_records_per_write":4,
+         "complete_draw_portfolios_measured_not_estimated":True,
          "new_numbers_compared_this_cycle":new_tickets*6,
          "historical_draw_portfolios_checked":len(cache),
          "remaining_full_history_draws":remaining,
