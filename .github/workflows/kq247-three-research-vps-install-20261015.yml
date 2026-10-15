@@ -51,13 +51,7 @@ jobs:
             python3 "$BASE/bin/$domain.py" --self-test
           done
           python3 "$BASE/bin/common.py"
-          # The user paused SEO explicitly. Pause only three dedicated SEO timers.
-          for timer in kq247-google-web-discovery.timer kq247-google-web-seo.timer kq247-seo-unified.timer; do
-            if systemctl list-unit-files "$timer" --no-legend | grep -q "$timer"; then
-              systemctl disable --now "$timer" || true
-              echo "KQ247_SEO_PAUSED=$timer"
-            fi
-          done
+          # SEO must continue alongside research. Never stop, disable or restart SEO timers.
           python3 - <<'PY'
           from pathlib import Path
           root=Path('/etc/systemd/system')
