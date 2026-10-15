@@ -432,6 +432,8 @@ def main():
          "five_minute_discovery_ledger_consumed":(ROOT/"google-web-discovery.sqlite3").is_file(),
          "sources_checked_this_run":len(sources),
          "sources_http200_this_run":sum(s.get("http")==200 for s in sources),
+         "scan_host_mix":{"vn":sum((s.get("host") or "").endswith(".vn") for s in sources),
+                          "other":sum(not (s.get("host") or "").endswith(".vn") for s in sources)},
          "new_web_contribution_candidates_this_run":sum(s.get("candidate_count",0) for s in sources),
          "source_pages_with_forms_this_run":sum(bool(s.get("forms_observed_on_source_page")) for s in sources),
          "source_pages_with_post_forms_this_run":sum(bool(s.get("post_forms_observed_on_source_page")) for s in sources),
@@ -454,6 +456,8 @@ def main():
  print("KQ247_GOOGLE_WEB_STATUS="+json.dumps(
    {k:result[k] for k in ("checked_at_utc","sources_checked_this_run","sources_http200_this_run",
                           "new_web_contribution_candidates_this_run","web_backlinks",
+                          "candidate_pages_inspected_this_run","credible_website_submission_forms_this_run",
+                          "publisher_review_queue","scan_host_mix","all_hosts_ever_checked",
                           "new_verified_web_backlinks_this_run","elapsed_seconds")},
     ensure_ascii=False))
 if __name__=="__main__":main()
