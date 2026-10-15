@@ -31,3 +31,10 @@
 - Hoàn thiện giám sát nội dung cho từng dịch vụ: bản chính/khách, thời gian snapshot, độ mới dữ liệu, bot một bản tin/đài/trận, SEO số backlink đã duyệt, nghiên cứu đầu vào và quota CPU/disk.
 - Xác minh các timer selfheal tiếp tục chạy sau reboot, giám sát lưu nhật ký, và kiểm tra phục hồi thực tế bằng test lỗi an toàn, không phá hoại sản xuất.
 - Cập nhật tài liệu này sau mỗi lượt có commit/run/trạng thái xác minh.
+
+## Vietlott R35 — triển khai bị chặn bởi quyền repo private (15/10 lúc 22:40 VN)
+- Đã soát VPS bằng workflow `38760764316` và `38761033760`: dịch vụ `kq247-vietlott-vps` vẫn R40/USER33 `status=failed`; source hiện có trên VPS không chứa luật R35/điều kiện giờ 20h; không có `/opt/kq247/vietlott/current/.git`, và VPS chưa đọc được repo `liemtv87-lang/vietlott-auto-hoc`.
+- Bootstrap khóa ED25519 **chỉ đọc** trên VPS thành công, workflow `38761511656`. Public key (không phải private key): `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMe7If2a28PXyesp0YH6UIgNCBdVJGAhEpzzFMjp6OW8 kq247-vietlott-readonly-vps-20261015`.
+- Cần chủ repo private thêm khóa tại `https://github.com/liemtv87-lang/vietlott-auto-hoc/settings/keys`, KHÔNG bật quyền write. Không thể thực hiện thao tác quản trị này qua các GitHub connector hiện có.
+- Workflow `kq247-vietlott-r35-private-stage.yml` đã tạo, hai run `38762033188`, `38762305880` dừng an toàn ở bước `WAITING_FOR_READONLY_DEPLOY_KEY` (exit 3), **không thay runtime/snapshot/container live**. Khi khóa được cấp quyền, rerun workflow để lấy commit private pin `e9bca84c3d2ac67b528eb4ae02e2fddee84d3500`, chạy kiểm thử offline, mở stage readonly cổng `127.0.0.1:18141` và audit.
+- Repo private đã chốt mốc snapshot sau 20h VN, gồm R35 và giới hạn 180.000/450.000; **chưa có chứng cứ code đã lên VPS**. Private CI run `38760456429` fail trước khi có steps, cần kiểm thử trên VPS sau khi quyền clone được cấp. Không báo đồng bộ toàn bộ hoặc chuyển link khách cho đến khi R35 pass release gate với hai snapshot.
