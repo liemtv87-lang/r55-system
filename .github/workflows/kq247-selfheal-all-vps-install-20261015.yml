@@ -1,0 +1,112 @@
+name: KQ247 Selfheal All VPS Scopes Install 20261015
+on:
+  push:
+    branches: [main]
+    paths:
+      - ops/selfheal/kq247_selfheal.py
+      - ops/selfheal/test_selfheal.py
+      - .github/workflows/kq247-selfheal-all-vps-install-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-selfheal-vps-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source and blocked operations
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/selfheal/kq247_selfheal.py
+          python3 -m unittest discover -s ops/selfheal -p 'test_*.py' -v
+          python3 - <<'PY'
+          import pathlib,ast
+          src=pathlib.Path('ops/selfheal/kq247_selfheal.py').read_text()
+          node=ast.parse(src)
+          literals=[v.value for v in ast.walk(node) if isinstance(v,ast.Constant) and isinstance(v.value,str)]
+          assert not any(x in ('stop','restart','rm','compose up','delete') for x in literals)
+          assert 'VIETLOTT_EXPECTED_RUNTIME = "R41_VPS_USER35"' in src
+          assert 'unsafe_to_requeue_non_idempotent_job' in src
+          print('KQ247_SELFHEAL_DEPLOY_SAFETY=PASS')
+          PY
+      - name: Install SSH tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Stage and enable isolated selfheal timers only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          remote=root@64.120.92.172
+          opts=(-o StrictHostKeyChecking=yes -o ConnectTimeout=20)
+          sshpass -e ssh -T "${opts[@]}" "$remote" 'install -d -m 0755 /opt/kq247/ops/selfheal; install -d -m 0700 /opt/kq247/ops/selfheal/state'
+          sshpass -e scp -q "${opts[@]}" ops/selfheal/kq247_selfheal.py "$remote:/opt/kq247/ops/selfheal/kq247_selfheal.py.new"
+          sshpass -e ssh -T "${opts[@]}" "$remote" 'bash -se' <<'VPS'
+          set -euo pipefail
+          root=/opt/kq247/ops/selfheal
+          python3 -m py_compile "$root/kq247_selfheal.py.new"
+          if [ -f "$root/kq247_selfheal.py" ]; then
+            sha=$(sha256sum "$root/kq247_selfheal.py" | awk '{print $1}')
+            test -s "$root/backup-$sha.py" || cp -p "$root/kq247_selfheal.py" "$root/backup-$sha.py"
+          fi
+          install -m 0755 "$root/kq247_selfheal.py.new" "$root/kq247_selfheal.py.stage"
+          mv -f "$root/kq247_selfheal.py.stage" "$root/kq247_selfheal.py"
+          rm -f "$root/kq247_selfheal.py.new"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort || true)
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/etc/systemd/system')
+          scopes=('football','xs','vietlott','bots','sales','seo-web','seo-telegram','research','ops')
+          for scope in scopes:
+              service='''[Unit]
+          Description=KQ247 guarded selfheal for SCOPE
+          After=docker.service
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/python3 /opt/kq247/ops/selfheal/kq247_selfheal.py --scope SCOPE
+          WorkingDirectory=/opt/kq247/ops/selfheal
+          TimeoutStartSec=120
+          Nice=8
+          NoNewPrivileges=true
+          [Install]
+          WantedBy=multi-user.target
+          '''.replace('SCOPE',scope)
+              timer='''[Unit]
+          Description=KQ247 independent selfheal timer for SCOPE
+          [Timer]
+          OnActiveSec=2min
+          OnUnitInactiveSec=10min
+          AccuracySec=1min
+          RandomizedDelaySec=90s
+          Unit=kq247-selfheal-SCOPE.service
+          [Install]
+          WantedBy=timers.target
+          '''.replace('SCOPE',scope)
+              (root/f'kq247-selfheal-{scope}.service').write_text(service)
+              (root/f'kq247-selfheal-{scope}.timer').write_text(timer)
+          PY
+          systemctl daemon-reload
+          for scope in football xs vietlott bots sales seo-web seo-telegram research ops; do
+            systemctl enable --now "kq247-selfheal-$scope.timer"
+            systemctl is-active --quiet "kq247-selfheal-$scope.timer"
+          done
+          python3 "$root/kq247_selfheal.py" --scope vietlott --dry-run
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort || true)
+          if [ "$before" = "$after" ]; then
+            echo KQ247_PRODUCTION_RUNNING_CONTAINER_IDS_UNCHANGED=YES
+          else
+            echo KQ247_PRODUCTION_CONTAINER_IDS_CHANGED_DURING_AUDIT=RECHECK
+          fi
+          echo KQ247_SELFHEAL_TIMER_COUNT=$(systemctl list-unit-files --type=timer --no-legend | grep -Ec '^kq247-selfheal-.*\.timer[[:space:]]+enabled')
+          echo KQ247_SELFHEAL_BINARY_SHA256=$(sha256sum "$root/kq247_selfheal.py" | awk '{print $1}')
+          echo KQ247_SELFHEAL_VPS_INSTALL=COMPLETE
+          VPS
