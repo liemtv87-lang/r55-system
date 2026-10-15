@@ -40,6 +40,13 @@ WATCH = "--watch" in sys.argv
 POLL_SECONDS = max(60,min(1800,int(os.environ.get("KQ247_POST_POLL_S","120"))))
 # Retry only a proven pre-submit GET failure, never a sent form or unknown POST.
 RETRY_GET_AFTER_S = max(3600,int(os.environ.get("KQ247_RETRY_GET_AFTER_S","3600")))
+# Reinspect only conclusively pre-POST failures after the site may have changed.
+# Never repeat submissions, unknown outcomes, pending review or a post-click error.
+RETRY_READONLY_AFTER_S = max(86400,int(os.environ.get("KQ247_RETRY_READONLY_AFTER_S","86400")))
+REINSPECT_ONLY_STATES = frozenset({
+    "no_eligible_form", "free_not_verified", "captcha",
+    "submit_disabled", "required_option_not_available"
+})
 # The crawler can add new form candidates dynamically. Each one must still pass
 # the on-page free/public/no-login/no-captcha/same-origin POST eligibility checks.
 # Never send merely because a site appears in the discovery database.
@@ -84,11 +91,18 @@ def pair_ready(con, host, grp):
     row=con.execute("SELECT state,at_utc FROM submissions WHERE host=? AND grp=?", (host,grp)).fetchone()
     if not row: return True
     state, timestamp=row
-    if state != "unavailable": return False
+    if state == "unavailable":
+        delay = RETRY_GET_AFTER_S
+    elif state in REINSPECT_ONLY_STATES:
+        delay = RETRY_READONLY_AFTER_S
+    else:
+        # This includes attempted_no_retry, posted/pending/unknown, and
+        # inspection_started (which cannot prove a POST never occurred).
+        return False
     try:
         last=datetime.datetime.fromisoformat(timestamp)
         if last.tzinfo is None: return False
-        return (datetime.datetime.now(datetime.timezone.utc)-last).total_seconds()>=RETRY_GET_AFTER_S
+        return (datetime.datetime.now(datetime.timezone.utc)-last).total_seconds()>=delay
     except (ValueError, TypeError):
         return False
 
