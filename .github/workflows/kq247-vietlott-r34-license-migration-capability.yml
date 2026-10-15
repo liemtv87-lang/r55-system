@@ -1,0 +1,44 @@
+name: KQ247 Vietlott R34 Local License Migration Capability
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-license-migration-capability.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Print metadata only, no credentials or customer/license rows
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo KQ247_R34_LOCAL_PG_TABLE_NAMES_BEGIN
+          docker exec -i kq247-r55-postgres sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
+          SELECT table_schema||'.'||table_name FROM information_schema.tables
+          WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')
+          ORDER BY 1 LIMIT 100;
+          SQL
+          echo KQ247_R34_LOCAL_PG_TABLE_NAMES_END
+          echo KQ247_R34_EXISTING_CONTAINER_AUTH_CONFIG_KEYS_BEGIN
+          docker ps --format '{{.Names}}' | grep -E '^kq247-' | while read -r name;do
+            keys=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$name" |
+                   cut -d= -f1 | grep -Ei 'AUTH|LICENSE|NEON|DATABASE_URL|DB_URL' |
+                   sort -u | head -30 | tr '\n' ',' || true)
+            test -n "$keys" && printf '%s keys:%s\n' "$name" "$keys"
+          done
+          echo KQ247_R34_EXISTING_CONTAINER_AUTH_CONFIG_KEYS_END
+          echo KQ247_R34_READONLY_LICENSE_METADATA_PROOF=PASS
+          VPS
