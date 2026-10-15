@@ -7,7 +7,7 @@ from common import ROOT,VN,load,save,now,seed,pct,run_job
 GRADE_FILE=os.environ.get("KQ247_R55_GRADES","/opt/kq247/research/inputs/football-grades.json")
 FEATURE_FILE=os.environ.get("KQ247_R55_PREMATCH","/opt/kq247/research/inputs/verified-prematch.json")
 BOOTSTRAP=int(os.environ.get("KQ247_FOOTBALL_BOOTSTRAP","2000000"))
-BACKTEST_DAYS=500
+BACKTEST_DAYS=8 # Bongdalu verified daily archive observed up to eight days; no phantom 500 days
 def settled_rows(data):
  records=data.get("records",[]) if isinstance(data,dict) else data if isinstance(data,list) else []
  rows=[]
@@ -100,8 +100,8 @@ def model_grid(rows,seed_offset=0):
 def research(previous):
  d=load(GRADE_FILE)
  rows=settled_rows(d) if d else []
- # Exactly 500 calendar days, not 500 random bootstrap observations.
- asof=dt.datetime.now(VN).date()
+ # Only eight COMPLETED calendar days; never mix in a day still playing.
+ asof=dt.datetime.now(VN).date()-dt.timedelta(days=1)
  first=asof-dt.timedelta(days=BACKTEST_DAYS-1)
  all_dates=[first+dt.timedelta(days=i) for i in range(BACKTEST_DAYS)]
  grouped=collections.defaultdict(list)
@@ -128,17 +128,17 @@ def research(previous):
  feature_rows=prematch_feature_rows(load(FEATURE_FILE))
  study=model_grid(feature_rows)
  result_archive=load(ROOT/"football-bongdalu-results/status.json") or {}
- return {"status":"research_active" if len(covered)==BACKTEST_DAYS and study.get("status")=="model_research" else "blocked_incomplete_500_day_backtest",
+ return {"status":"research_active" if len(covered)==BACKTEST_DAYS and study.get("status")=="model_research" else "blocked_missing_verified_pre_match_backtest",
          "source":"verified R55 graded fixtures; prematch xG only when independently sourced",
          "backtest_window":{"days_required":BACKTEST_DAYS,"first_day":first.isoformat(),
                              "last_day":asof.isoformat(),"days_with_real_settled_fixtures":len(covered),
                              "days_missing_count":len(missing),"missing_days_sample":missing[:14],
                              "full_window_verified":len(covered)==BACKTEST_DAYS},
          "settlement_days":len(rates),"settled_fixtures":len(valid),
-         "historical_result_backfill":{"requested_days":500,
+         "historical_result_backfill":{"requested_days":BACKTEST_DAYS,
           "source_checked_at_utc":result_archive.get("checked_at_utc"),
           "dates_with_verifiable_ft":result_archive.get("days_with_verified_FT_archives",0),
-          "dates_remaining_ft":result_archive.get("days_remaining_without_verified_FT",500),
+          "dates_remaining_ft":result_archive.get("days_remaining_without_verified_FT",BACKTEST_DAYS),
           "dates_attempted_last_cycle":result_archive.get("days_attempted_this_run",0),
           "last_source_errors":result_archive.get("error_samples",[])[:6],
           "pre_match_market_verified":False,
@@ -148,17 +148,17 @@ def research(previous):
          "model_search":study,"evaluations":BOOTSTRAP if sample else 0,
          "iteration":int(previous.get("iteration",0))+1,
          "metrics":{"month_70_percent_verified":False,"promotable":False,
-                    "500_calendar_day_input_ready":len(covered)==BACKTEST_DAYS,
+                    "approved_8_day_market_history_ready":len(covered)==BACKTEST_DAYS,
                     "verified_prematch_rows":len(feature_rows)},
          "target":{"win_rate":70,"market_coverage_minimum":80,
                    "xg_verified_when_available":True,"h2h_primary":False},
-         "promotion_blocker":f"Needs {len(missing)} additional calendar dates of authentic Bongdalu settled matches plus timestamped prekickoff full features. H2H optional. Monte Carlo repeats are not historical dates."}
+         "promotion_blocker":f"User-approved {BACKTEST_DAYS}-day Bongdalu lookback has {len(covered)} prelocked settlement days, missing {len(missing)} days, and {len(feature_rows)} source-verified prematch odds feature rows. Post-match FT alone is not prospective betting history; H2H optional."}
 def test():
  a=[{"payload":{"day":"2026-10-10","detail":[{"id":"x","type":"AH","result":"win"},{"id":"y","type":"OU","result":"push"}]}}]
  assert len(settled_rows({"records":a}))==2
  assert abs(poisson_cdf(0,1)-math.exp(-1))<1e-8
  assert prematch_feature_rows([{"kickoff":"x","home_gf20":1}])==[]
- assert BACKTEST_DAYS==500 and len([dt.date(2026,10,15)-dt.timedelta(days=x) for x in range(BACKTEST_DAYS)])==500
+ assert BACKTEST_DAYS==8 and len([dt.date(2026,10,15)-dt.timedelta(days=x) for x in range(BACKTEST_DAYS)])==8
  print("KQ247_FOOTBALL_SELFTEST=PASS")
 if __name__=="__main__":
  if "--self-test" in sys.argv:test()
