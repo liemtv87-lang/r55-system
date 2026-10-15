@@ -56,7 +56,9 @@ EDITORIAL_SLUGS={"submit-site","submit-website","submit-your-site","submit-your-
  "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
  "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
  "guest-post-submission","contributor-guidelines",
- "guest-post","become-a-contributor","contribute","submit-content"}
+ "guest-post","become-a-contributor","contribute","submit-content",
+ "gui-bai-viet","gui-tin-bai","gui-bai-cong-tac","dang-website","gui-website",
+ "them-trang-web","dang-ky-cong-tac-vien","cong-tac-vien","tro-thanh-cong-tac-vien"}
 EDITORIAL_PREFIXES=("submit-your-site-","submit-your-website-","submit-guest-post-",
  "submit-article-","add-your-site-","write-for-us-","guest-post-guidelines-",
  "guest-post-submission-")
@@ -377,6 +379,8 @@ def selftest():
  assert editorial_submission_candidate("https://news.com/2024/submit-a-false-tip-to-police/") is False
  assert editorial_submission_candidate("https://wordpress.com/wp-content/plugins/forms/submit-spin.svg") is False
  assert editorial_submission_candidate("https://example.com/write-for-us/") is True
+ assert editorial_submission_candidate("https://example.vn/gui-bai-viet/") is True
+ assert editorial_submission_candidate("https://example.vn/cong-tac-vien/") is True
  print("KQ247_GOOGLE_DISCOVERY_SELF_TEST=PASS")
 
 if __name__=="__main__":
