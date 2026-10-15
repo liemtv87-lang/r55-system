@@ -154,7 +154,7 @@ class HtmlScan(HTMLParser):
         if self._button:
             self.buttons.append(data.strip().lower())
 
-def get_page(url):
+def get_page(url, allow_truncated=False):
     from urllib.request import build_opener, HTTPRedirectHandler
     class SafeRedirect(HTTPRedirectHandler):
         def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -171,7 +171,11 @@ def get_page(url):
             if r.status != 200: return None, "http_" + str(r.status)
             if "html" not in r.headers.get("Content-Type","").lower(): return None, "not_html"
             content = r.read(1048577)
-            if len(content) > 1048576: return None, "too_big"
+            if len(content) > 1048576:
+                if not allow_truncated: return None, "too_big"
+                # Discovery feeds can be much larger than 1MiB: parse only a
+                # bounded public HTML prefix, never pretend it was exhaustive.
+                content = content[:1048576]
             return (r.url, content.decode("utf-8", "replace")), None
     except Exception as exc:
         return None, type(exc).__name__
@@ -225,7 +229,7 @@ def refresh_public_feeds(con):
     links_seen = 0
     per_feed = {}
     for feed in PUBLIC_DIRECTORY_FEEDS:
-        page, error = get_page(feed)
+        page, error = get_page(feed, allow_truncated=True)
         if not page:
             per_feed[feed] = error or "unavailable"
             continue
@@ -246,6 +250,7 @@ def refresh_public_feeds(con):
         per_feed[feed] = new_hosts
         found += new_hosts
     state_set(con, "feed_last_checked", int(time.time()))
+    state_set(con, "feed_last_status_json", json.dumps(per_feed, ensure_ascii=False))
     state_set(con, "feed_urls_examined",
               int(state_get(con, "feed_urls_examined")) + links_seen)
     state_set(con, "feed_hosts_added",
@@ -339,6 +344,8 @@ def write_report(con, started, scanned, sources):
       "source_inventory_exists":bool(sources), "inventory_paths":[str(s) for s in sources],
       "inventory_files_count":len(sources),
       "public_feed_urls_examined_total":int(state_get(con,"feed_urls_examined")),
+      "public_feed_last_checked_utc":datetime.datetime.fromtimestamp(int(state_get(con,"feed_last_checked")),datetime.timezone.utc).isoformat() if int(state_get(con,"feed_last_checked")) else None,
+      "public_feed_last_status":json.loads(state_get(con,"feed_last_status_json","{}")),
       "public_feed_hosts_added_total":int(state_get(con,"feed_hosts_added")),
       "inventory_lines_read_total":int(state_get(con,"urls_read")),
       "url_records_actually_read_total":int(state_get(con,"urls_extracted")),
