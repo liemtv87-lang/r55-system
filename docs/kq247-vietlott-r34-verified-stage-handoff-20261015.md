@@ -19,3 +19,14 @@
 4. Re-run genuine historical walk-forward JP/G1 measurements using the same full rules and the actual 5-subset coverage reducer, not just full-universe eligibility.
 
 Logs: https://github.com/liemtv87-lang/r55-system/actions/runs/38772485619 and https://github.com/liemtv87-lang/r55-system/actions/runs/38773048937 .
+
+
+## 16 Oct 2026 00:03 VN — additional independent read-only live proof
+
+- New no-mutation pre-cutover gate `.github/workflows/kq247-vietlott-r34-production-readiness-20261015.yml`, commit `0a623a263c674574f52108e070e9119cc69fe230`, Actions run `38774023994` **SUCCESS**. The prior run failed only because it compared yesterday's immutable snapshot to *today* after local midnight; fixed to take `VIETLOTT_VERIFY_DATE` from the locked snapshot's `analysis_date`.
+- Stage R34 release gate: all structural/source/snapshot/reducer/UI checks PASS for 2026-10-15, both immutable files SHA256 archive PASS; no production containers modified. Customer R34 stage still references external Neon auth. VPS PostgreSQL online but no tables matching `license`, `session`, or `device`.
+- On VPS public production container `kq247-vietlott-vps` still uses `kq247-vietlott-r33-candidate:r33-metadata-parity-20261013`, not R34; local `/api/state` `ready=false`. Public `https://vietlott.64-120-92-172.sslip.io`: `/health` 200, `/api/state` **503**, `/client.html` 200, `/guest-snapshot.html` **404**. The public route/customer sync is *not* verified, and this is a real service issue rather than a successful cutover.
+- Cutover blocking actions: restore/verify mobile guest public route; migrate/bridge old license and device bindings to verified VPS-local compatible backend without invalidating active codes; verify complete public production non-stage gate, TXT/automated 20:05 schedules and bot messages. Keep R33 running until safe atomic zero-loss promotion/rollback. Do not claim already deployed.
+- No real measured R34 reduced-portfolio JP/G1 backtest documented yet.
+
+Audit: https://github.com/liemtv87-lang/r55-system/actions/runs/38774023994
