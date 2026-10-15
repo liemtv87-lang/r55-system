@@ -36,6 +36,9 @@ EXTERNAL_WORKFLOW_HOSTS={"buyinoffer.com","tgden.com","vi.tgdio.com"}
 # Website SEO directories belong to the independent Google/Web candidate audit,
 # NOT to the Telegram group listing submitter. Keeping them here wastes queue slots.
 WEB_ONLY_HOSTS={"freeprwebdirectory.com","sitepromotiondirectory.com","prolinkdirectory.com"}
+# Published editorial rules at /submission-rules/ explicitly reject gambling.
+# Football odds + lottery subjects are ineligible for unreviewed auto-submission.
+TOPIC_POLICY_RESTRICTED_HOSTS={"wtgrouplinks.com"}
 BATCH_LIMIT=min(400,max(1,int(os.environ.get("KQ247_SUBMIT_MAX", "120"))))
 TIME_LIMIT=min(7200,max(60,int(os.environ.get("KQ247_SUBMIT_SECONDS","2400"))))
 PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
@@ -127,6 +130,7 @@ def read_queue(con):
         (h,u) for h,u in rows if h not in ALREADY_SENT_HOSTS
             and h not in EXTERNAL_WORKFLOW_HOSTS
             and h not in WEB_ONLY_HOSTS
+            and h not in TOPIC_POLICY_RESTRICTED_HOSTS
             and urlsplit(u).scheme == "https" and urlsplit(u).hostname in (h, "www." + h)
             and (verified_submission_path(h,urlsplit(u).path) or
                  con.execute("SELECT 1 FROM hosts WHERE host=? AND url=? AND status='form_candidate'",
