@@ -1,0 +1,78 @@
+name: KQ247 Vietlott R35 Verified Historical JP G1 Sample
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-history-prize-sample.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Validate archival three-region full prizes and score actual R35 winners (sample only)
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=kq247-vietlott-r35-regionbackup-stage
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          before=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
+          timeout 480 docker exec -i "$name" node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          import {fetch3RegionSetForDate,prepareFastFilter,fastFilterReason} from './scripts/engine.mjs';
+          const xsmb=JSON.parse(fs.readFileSync('data/xsmb200.json','utf8'));
+          const prior=s=>{const d=new Date(s+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10)};
+          let checked=0,fullyVerified=0,missing=0;
+          for(const [product,maxn] of [['mega645',45],['power655',55]]){
+            const hist=JSON.parse(fs.readFileSync('data/history-'+product+'.json','utf8'));
+            let results={product,requested:4,verified:0,skipped:0,jp:0,jp2:0,g1:0};
+            for(const draw of hist.slice(-4)){
+              const date=prior(draw.date),x=xsmb.find(r=>r.date===date&&r.full?.length===27&&r.confirmations>=2);
+              if(!x){
+                results.skipped++;
+                console.log('KQ247_R35_ARCHIVE_SAMPLE='+JSON.stringify({product,draw:draw.date,analysis_date:date,verified:false,why:'no_two_source_xsmb_full27'}));
+                continue;
+              }
+              let region=null;
+              try{region=await fetch3RegionSetForDate(date,maxn,x.full)}
+              catch(e){console.log('KQ247_R35_ARCHIVE_EXCEPTION='+JSON.stringify({product,date,error:String(e).slice(0,180)}));}
+              if(!region?.ready){
+                results.skipped++;
+                console.log('KQ247_R35_ARCHIVE_SAMPLE='+JSON.stringify({product,draw:draw.date,analysis_date:date,verified:false,counts:region?.complete_regions||null,health:region?.health?.map(z=>({source:z.source,region:z.region,ok:z.ok,prizes:z.prizes||0,error:z.error||null}))||[]}));
+                continue;
+              }
+              const train=hist.filter(y=>y.date<draw.date);
+              const ctx=prepareFastFilter(train,maxn,draw.date,new Set(region.numbers),xsmb);
+              let jp=0,g1=0,jp2=0;
+              if(fastFilterReason(draw.numbers,ctx)==='ok')jp++;
+              const winners=new Set(draw.numbers);
+              for(const miss of draw.numbers){
+                const five=draw.numbers.filter(n=>n!==miss);
+                for(let n=1;n<=maxn;n++){
+                  if(winners.has(n))continue;
+                  if(fastFilterReason([...five,n],ctx)!=='ok')continue;
+                  if(product==='power655'&&n===draw.special)jp2++;
+                  else g1++;
+                }
+              }
+              results.verified++;results.jp+=jp;results.jp2+=jp2;results.g1+=g1;
+              console.log('KQ247_R35_ARCHIVE_SAMPLE='+JSON.stringify({product,draw:draw.date,analysis_date:date,verified:true,counts:region.complete_regions,jp,jp2,g1,scope:'all_35_filter_rules_not_portfolio_reducer'}));
+            }
+            console.log('KQ247_R35_ARCHIVE_SAMPLE_SUMMARY='+JSON.stringify(results));
+          }
+          JS
+          after=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
+          test "$before" = "$after"
+          echo 'KQ247_R35_ARCHIVE_SAMPLE_PRODUCTION_UNCHANGED=YES'
+          VPS
