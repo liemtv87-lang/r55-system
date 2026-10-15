@@ -337,20 +337,34 @@ def evaluate_publisher_form(forms, url, page_title="", html_body=""):
                              "category","categoryid","tags"})
   requires_identity=bool(names & {"password","creditcard","cardnumber",
                                    "billingaddress","paymentmethod"})
+  required_email=any(f.get("required") and (f.get("type","").lower()=="email" or
+                      re.sub(r"[^a-z0-9]","",f.get("name","").lower()) in ("email","owneremail","contactemail"))
+                     for f in form.get("fields",[]) if not f.get("hidden"))
+  requires_terms=any(f.get("required") and f.get("type","").lower()=="checkbox"
+                     for f in form.get("fields",[]))
   if has_site and has_content and not requires_identity:
    suitable.append({"action":form.get("action",""),
-                    "url_field":True,"description_or_title_field":True})
+                    "url_field":True,"description_or_title_field":True,
+                    "requires_owner_email":required_email,
+                    "requires_terms_review":requires_terms})
  # These are only negative safety clues, not proof that the site permits promotion.
  body=html_body.lower()
  forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\s+"
                           r"(?:online\s+)?(?:gambling|betting|casino)|"
                           r"(?:gambling|betting|casino)\s+(?:is\s+)?(?:not\s+allowed|prohibited)",body[:150000]))
  has_captcha=bool(re.search(r'(?:g-recaptcha|h-captcha|cf-turnstile|captcha\.php|captcha\.png|captcha\.jpg|captcha\.jpeg|captcha\.gif)',body))
+ no_email_form=any(not f["requires_owner_email"] for f in suitable)
+ reviewable=any(not f["requires_owner_email"] and not f["requires_terms_review"] for f in suitable)
  status=("blocked_topic_policy" if forbidden else "needs_captcha" if has_captcha else
-         "form_review_required" if suitable else "no_credible_site_submission_form")
+         "form_review_required" if reviewable else
+         "owner_email_required" if suitable and not no_email_form else
+         "requires_terms_review" if suitable else "no_credible_site_submission_form")
  return {"publisher_form_status":status,"credible_site_submission_forms":len(suitable),
          "form_evidence":suitable[:2],"explicit_betting_prohibition":forbidden,
-         "captcha_detected":has_captcha,"posting_permission_verified":False}
+         "captcha_detected":has_captcha,
+         "without_required_owner_email":no_email_form,
+         "without_required_email_or_terms":reviewable,
+         "posting_permission_verified":False}
 
 def inspect_candidate_page(url):
  result={"url":url,"checked_at_utc":utcnow(),"authorized":False,"submission_attempted":False}
@@ -448,6 +462,10 @@ def main():
   assert candidate_page_intent("https://www.sitepromotiondirectory.com/submit.php")==0
   assert candidate_page_intent("https://www.freeprwebdirectory.com/submit.php")==0
   assert candidate_page_intent("https://directory.example.com/news/post.php")==99
+  email_form=Links();email_form.feed('<form method="post"><input name="url"><input name="title"><input type="email" name="owner_email" required></form>')
+  assert evaluate_publisher_form(email_form.forms,"https://directory.example/submit-site")["publisher_form_status"]=="owner_email_required"
+  terms_form=Links();terms_form.feed('<form method="post"><input name="url"><input name="description"><input type="checkbox" name="accept_terms" required></form>')
+  assert evaluate_publisher_form(terms_form.forms,"https://directory.example/submit-site")["publisher_form_status"]=="requires_terms_review"
   assert candidate_page_intent("https://example.com/directory/suggest.php")==1
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit-your-website/")["publisher_form_status"]=="form_review_required"
   comment={"action":"/wp-comments-post.php","method":"post","fields":[{"name":"url"},{"name":"comment"}]}
@@ -495,6 +513,8 @@ def main():
          "new_homepage_editorial_candidates_saved_this_run":homepage_candidates_new,
          "candidate_pages_with_post_forms_this_run":sum(bool(p.get("post_forms_observed")) for p in candidate_pages),
          "candidate_page_inspections":candidate_pages,
+         "candidate_review_status_counts":{state:sum(p.get("publisher_form_status")==state for p in candidate_pages)
+                                           for state in sorted({p.get("publisher_form_status") for p in candidate_pages if p.get("publisher_form_status")})},
          "credible_website_submission_forms_this_run":sum(p.get("credible_site_submission_forms",0) for p in candidate_pages),
          "publisher_review_queue":[{"url":p["url"],"status":p["publisher_form_status"]}
                                    for p in candidate_pages if p.get("publisher_form_status")=="form_review_required"][:50],
