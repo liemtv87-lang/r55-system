@@ -11,7 +11,7 @@ CANDIDATE_HOSTS=(
  "www.bongdalu128.com","www.bongdalu618.com")
 ALLOW=re.compile(r"^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$",re.I)
 DEPTH_DAYS=tuple(range(0,16))+(21,28,35,45,60,75,90,120,150,180,270,365,499)
-MAX_CANDIDATES=max(2,min(12,int(os.environ.get("KQ247_BONG_SOURCE_CANDIDATES","7"))))
+MAX_CANDIDATES=max(2,min(12,int(os.environ.get("KQ247_BONG_SOURCE_CANDIDATES","11"))))
 DEST=ROOT/"bongdalu-source-depth"
 def domain(u):
  try:
@@ -23,7 +23,8 @@ def root(u):
  h=domain(u);return ("https://"+h+"/") if h else None
 def query_candidates():
  # Search is DISCOVERY ONLY; feed and odds both must pass content verification.
- urls=list("https://"+h+"/" for h in CANDIDATE_HOSTS)
+ known=list("https://"+h+"/" for h in CANDIDATE_HOSTS)
+ discovered=[]
  for q in ("Bongdalu h2h football","Bongdalu tỷ số bóng đá"):
   uri="https://html.duckduckgo.com/html/?"+urllib.parse.urlencode({"q":q})
   try:
@@ -33,9 +34,13 @@ def query_candidates():
    for value in links:
     u=urllib.parse.unquote(html.unescape(value))
     candidate=root(u)
-    if candidate and candidate not in urls:urls.append(candidate)
+    if candidate and candidate not in discovered and candidate not in known:discovered.append(candidate)
   except Exception:continue
- return urls[:MAX_CANDIDATES]
+ # Key fix: the previous known-host slice excluded ALL newly discovered domains.
+ cached=load(DEST/"last_verified.json") or {}
+ last=root(cached.get("base")) if isinstance(cached,dict) else None
+ ordered=list(dict.fromkeys(([last] if last else [])+known[:3]+discovered+known[3:]))
+ return ordered[:MAX_CANDIDATES]
 def fetch(base,path,timeout=7):
  endpoint=urllib.parse.urljoin(base,path)
  if not root(base):raise ValueError("source host not on verified Bongdalu pattern")
@@ -136,6 +141,7 @@ def test():
  assert root("http://www.bongdalu811.com") is None
  assert root("https://phishing-bongdalu812.com/") is None
  assert DEPTH_DAYS[-1]==499 and len(DEPTH_DAYS)>14
+ assert MAX_CANDIDATES>=8
  print("KQ247_BONGDALU_DEPTH_SELFTEST=PASS")
 if __name__=="__main__":
  if "--self-test" in sys.argv:test()
