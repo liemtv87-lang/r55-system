@@ -1,0 +1,81 @@
+name: KQ247 Three Research Live Performance and Safety Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-three-research-live-performance-audit-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect live timers, services, performance, real data blockers and Docker health (read-only)
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'python3 -' <<'PY'
+          import datetime as dt,json,os,pathlib,subprocess,time
+          root=pathlib.Path('/opt/kq247/research')
+          def sh(args,timeout=10):
+              try:
+                  r=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+                  return {'code':r.returncode,'output':r.stdout.strip()[:9000],'error':r.stderr.strip()[:350]}
+              except Exception as e:return {'error':type(e).__name__}
+          def data(p):
+              try:return json.loads(p.read_text())
+              except (OSError,ValueError):return None
+          units=['football','xs','vietlott','hourly','fourhour']
+          details={}
+          for x in units:
+              name='kq247-research-'+x
+              timer=name+'.timer'
+              service=name+'.service'
+              props=sh(['systemctl','show',timer,'--property=ActiveState,UnitFileState,NextElapseUSecRealtime,LastTriggerUSec,Triggers','--no-pager'])
+              svc=sh(['systemctl','show',service,'--property=ActiveState,Result,ExecMainCode,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,CPUUsageNSec,MemoryPeak,NRestarts','--no-pager'])
+              log=sh(['journalctl','-u',service,'--since','45 minutes ago','--no-pager','-o','cat','-n','80'],timeout=15)
+              relevant=[line[:900] for line in log.get('output','').splitlines() if
+                        ('KQ247_RESEARCH_' in line or 'Traceback' in line or 'Failed' in line or 'failure' in line)]
+              hist=root/'state'/(x+'.jsonl')
+              eventlist=[]
+              if hist.exists():
+                  for line in hist.read_text().splitlines()[-8:]:
+                      try:
+                          j=json.loads(line)
+                          eventlist.append({k:j.get(k) for k in ('started_at_utc','finished_at_utc','status','evaluations','metrics','source')})
+                      except ValueError:pass
+              details[x]={'timer':props,'service':svc,'recent_events':eventlist,
+                          'journal_recent':relevant[-12:],
+                          'last_report':data(root/'state'/(x+'.json')),
+                          'last_error':data(root/'state'/(x+'.error.json'))}
+          status={}
+          for unit in ('kq247-google-web-discovery.timer','kq247-google-web-seo.timer','kq247-seo-unified.timer'):
+              status[unit]=sh(['systemctl','is-active',unit])
+          file_shapes={}
+          for p in ['/opt/kq247/lottery-daily-staging/xsmb-505-all27-prizes-20261014.json',
+                    '/opt/kq247/lottery-daily-staging/xsmb-505-actual-through-20261014.json',
+                    '/opt/kq247/lottery-daily-staging/mtmn-500-actual-targets.json']:
+              obj=data(pathlib.Path(p))
+              file_shapes[p]={'exists':obj is not None,'items':len(obj) if isinstance(obj,(dict,list)) else 0,
+                              'record_keys':list(obj[0]) if isinstance(obj,list) and obj and isinstance(obj[0],dict) else None}
+          result={'checked_at_utc':dt.datetime.now(dt.timezone.utc).isoformat(),
+                  'uptime':sh(['uptime']), 'cpu_count':os.cpu_count(),
+                  'memory':sh(['free','-m']), 'disk':sh(['df','-h','/opt/kq247']),
+                  'docker':sh(['docker','ps','--format','{{.Names}}|{{.Status}}']),
+                  'seo_timers':status,'research':details,
+                  'input_files':file_shapes,
+                  'fourhour_latest':data(root/'state'/'four_hour_latest.json'),
+                  'hourly_latest':data(root/'state'/'hourly.json')}
+          print('KQ247_THREE_RESEARCH_AUDIT='+json.dumps(result,ensure_ascii=False))
+          print('KQ247_THREE_RESEARCH_AUDIT_READ_ONLY=YES')
+          PY
