@@ -1,0 +1,83 @@
+name: KQ247 Vietlott R35 JP G1 Coverage Audit
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-jp-g1-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Read R35 backtest counters and prove structural Jackpot ceiling without modifying VPS
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=kq247-vietlott-r35-regionbackup-stage
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:aa7b460afa42'
+          before=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
+          docker exec -i "$name" node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {vietlottHeadAndLast3Gate} from './scripts/engine.mjs';
+          const sum=s=>createHash('sha256').update(fs.readFileSync(s)).digest('hex');
+          const asof=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+          const cutoff=new Date(asof+'T00:00:00Z');cutoff.setUTCDate(cutoff.getUTCDate()-364);
+          let merged=null, mergedValid=false;
+          if(fs.existsSync('public/backtest-60.json')){
+            try{
+              merged=JSON.parse(fs.readFileSync('public/backtest-60.json','utf8'));
+              mergedValid=merged?.schema_version==='R19_USER35_ALL_METHODS_SAME_DAY_30DRAWS_60DRAWS_365D'
+                &&merged?.verification?.hard_rule_count===35
+                &&merged?.verification?.engine_sha256===sum('scripts/engine.mjs')
+                &&merged?.verification?.runner_sha256===sum('scripts/backtest-60-shard.mjs');
+            }catch{}
+          }
+          console.log('KQ247_R35_HISTORICAL_BACKTEST_VERIFIED='+String(mergedValid));
+          for(const [product,maxn] of [['mega645',45],['power655',55]]){
+            const hist=JSON.parse(fs.readFileSync('data/history-'+product+'.json','utf8'));
+            const last30=hist.slice(-30),last60=hist.slice(-60);
+            const year=hist.filter(x=>x.date>=cutoff.toISOString().slice(0,10)&&x.date<=asof);
+            const windows=[['30',last30],['60',last60],['365d',year]];
+            for(const [window,rows] of windows){
+              let jpEligible=0,firstEligible=0,firstTotal=0,top3Fail=0,headsFail=0;
+              for(const draw of rows){
+                const prize=draw.numbers,gate=vietlottHeadAndLast3Gate(prize);
+                if(gate==='ok')jpEligible++;
+                else if(gate==='top3_sum_max110')top3Fail++;
+                else headsFail++;
+                const winners=new Set(prize);
+                for(const miss of prize){
+                  const five=prize.filter(x=>x!==miss);
+                  for(let n=1;n<=maxn;n++){
+                    if(winners.has(n))continue;
+                    if(product==='power655'&&n===draw.special)continue;
+                    firstTotal++;
+                    if(vietlottHeadAndLast3Gate([...five,n])==='ok')firstEligible++;
+                  }
+                }
+              }
+              console.log('KQ247_R35_JP_G1_STATIC_GATE_CEILING='+JSON.stringify({product,window,draws:rows.length,jp_possible_before_33_other_rules:jpEligible,jp_excluded_by_top3_rule:top3Fail,jp_excluded_by_head_rules:headsFail,first_prize_tickets_before_rules:firstTotal,first_prize_tickets_passing_two_recent_gates:firstEligible,warning:'NOT_ACTUAL_R35_BACKTEST; upper bound only'}));
+            }
+            const p=mergedValid?merged.products?.[product]:null;
+            const counters=p?Object.fromEntries(['30','60','150','1500'].map(w=>{const s=p['reduced_stats'+w]||{};const pc=s.prize_counts||{};return [w,{tested:s.draws_tested||0,complete:s.complete===true,jp:(pc.Jackpot||0)+(pc['Jackpot 1']||0)+(pc['Jackpot 2']||0),g1:pc['Giải nhất']||0}]})):null;
+            console.log('KQ247_R35_VERIFIED_WALKFORWARD='+JSON.stringify({product,complete:!!p,stats:counters,warning:p?'PROVISIONAL_SCORE_REDUCER_NOT_COVERAGE_PRODUCTION':'NO_VALID_MERGED_BACKTEST_YET'}));
+          }
+          JS
+          after=$(docker inspect -f '{{.Id}}' kq247-vietlott-vps)
+          test "$before" = "$after"
+          echo 'KQ247_R35_BACKTEST_AUDIT_PRODUCTION_UNCHANGED=YES'
+          VPS
