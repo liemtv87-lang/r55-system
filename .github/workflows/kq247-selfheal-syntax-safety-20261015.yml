@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ops/selfheal/kq247_selfheal.py
+      - ops/selfheal/test_selfheal.py
       - .github/workflows/kq247-selfheal-syntax-safety-20261015.yml
   workflow_dispatch:
 permissions:
@@ -16,6 +17,7 @@ jobs:
       - run: |
           python3 -m py_compile ops/selfheal/kq247_selfheal.py
           python3 ops/selfheal/kq247_selfheal.py --help
+          python3 -m unittest discover -s ops/selfheal -p 'test_*.py' -v
           python3 - <<'PY'
           import ast,pathlib
           tree=ast.parse(pathlib.Path('ops/selfheal/kq247_selfheal.py').read_text())
