@@ -267,6 +267,10 @@ def candidate_page_intent(uri):
   if (("wpbdp_view" in query and "submit_listing" in query["wpbdp_view"])
       or ("action" in query and any(v in ("addlink","submitlink","addsite") for v in query["action"]))):
    if "directory" in path or "danh-ba" in path:return 1
+  # Generic open-source contribution pages are not link submission forms.
+  if leaf=="contribute":return 99
+  site_host=p.hostname.lower().removeprefix("www.")
+  if leaf in ("dang-ky","dang-ki","add","submit") and any(k in site_host for k in ("danhba","danh-ba","webdirectory","webdanhba")):return 1
   if leaf=="suggest.php" and "/directory/" in path:return 1
   if leaf in exact:return 0
   if leaf.startswith(("submit-your-site-","submit-your-website-","submit-guest-post-",
@@ -497,6 +501,9 @@ def main():
   assert candidate_page_intent("https://directory.example.com/news/post.php")==99
   assert candidate_page_intent("https://publisher.vn/directory/?wpbdp_view=submit_listing")==1
   assert candidate_page_intent("https://publisher.vn/news/?action=addlink")==99
+  assert candidate_page_intent("https://danhba.id.vn/dang-ky/")==1
+  assert candidate_page_intent("https://almalinux.org/ar/contribute/")==99
+  assert candidate_page_intent("https://joinpeertube.org/contribute")==99
   assert set(candidate_funnel_counts()) >= {"sitemap_candidate_urls","matching_submission_intent","unique_candidate_hosts"}
   email_form=Links();email_form.feed('<form method="post"><input name="url"><input name="title"><input type="email" name="owner_email" required></form>')
   assert evaluate_publisher_form(email_form.forms,"https://directory.example/submit-site")["publisher_form_status"]=="owner_email_required"
