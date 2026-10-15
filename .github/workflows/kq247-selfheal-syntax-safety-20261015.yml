@@ -16,4 +16,10 @@ jobs:
       - run: |
           python3 -m py_compile ops/selfheal/kq247_selfheal.py
           python3 ops/selfheal/kq247_selfheal.py --help
-          ! grep -E 'docker[[:space:]]+restart|docker[[:space:]]+stop|docker[[:space:]]+rm' ops/selfheal/kq247_selfheal.py
+          python3 - <<'PY'
+          import ast,pathlib
+          tree=ast.parse(pathlib.Path('ops/selfheal/kq247_selfheal.py').read_text())
+          names=[n for n in ast.walk(tree) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
+          assert not any(n.value in ('restart','stop','rm') for n in names)
+          print('KQ247_SELFHEAL_STATIC_SAFETY=PASS')
+          PY
