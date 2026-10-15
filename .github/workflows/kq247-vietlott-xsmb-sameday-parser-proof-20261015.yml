@@ -1,0 +1,48 @@
+name: KQ247 Vietlott Same-Day XSMB 27-Prize Parser Proof
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietlott-xsmb-sameday-parser-proof-20261015.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch latest engine implementation
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 https://github.com/liemtv87-lang/vietlott-auto-hoc.git source
+          node --check source/scripts/engine.mjs
+      - name: Check dated full 27-prize rows from independent public sources
+        run: |
+          node --input-type=module <<'JS'
+          import {parseXsmb60} from './source/scripts/engine.mjs';
+          const day='2026-10-15';
+          const urls=[
+            'https://xosodaiphat.com/xsmb-15-10-2026.html',
+            'https://www.minhngoc.net/ket-qua-xo-so/mien-bac/15-10-2026.html',
+            'https://ketqua.vn/xsmb/15-10-2026'
+          ];
+          const results=[];
+          for(const url of urls){
+            try{
+              const r=await fetch(url,{signal:AbortSignal.timeout(15000),headers:{'user-agent':'Mozilla/5.0','accept-language':'vi-VN'}});
+              const html=await r.text();
+              const parsed=parseXsmb60(html).filter(row=>row.date===day&&row.full?.length===27);
+              const row=parsed[0]||null;
+              results.push({url,source_http:r.status,html_chars:html.length,
+               parsed:!!row,full_count:row?.full.length||0,special:row?.full[0]||null,
+               tail:row?.full.slice(-4),signature:row?.full.join('|')});
+            }catch(e){results.push({url,error:e.name+': '+String(e.message||'').slice(0,90)})}
+          }
+          console.log('KQ247_SAMEDAY_PARSER_PROOF='+JSON.stringify(results));
+          const by=new Map();
+          for(const x of results.filter(x=>x.parsed)){
+           const same=by.get(x.signature)||0;by.set(x.signature,same+1);
+          }
+          if(![...by.values()].some(n=>n>=2))throw new Error('No two independently matching 27-prize sources. Do not deploy unverified parser.');
+          console.log('KQ247_XSMB_15102026_TWO_SOURCE_PROOF=PASS');
+          JS
