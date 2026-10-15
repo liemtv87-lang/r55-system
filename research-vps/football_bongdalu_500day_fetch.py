@@ -10,7 +10,41 @@ VALID_HOSTS={"www.bongdalu812.com","www.bongdalu.com","www.bongdalu802.com","www
 BATCH=max(1,min(24,int(os.environ.get("KQ247_FOOTBALL_DAYS_PER_CYCLE","8"))))
 DIR=ROOT/"football-bongdalu-results"
 INDEX=DIR/"index.json"
-MAX_AGE=500
+# User-approved scope: at most eight genuinely retrievable recent calendar days.
+MAX_AGE=8
+SOURCE_DIR=ROOT/"bongdalu-source-depth"
+SOURCE_STATUS=SOURCE_DIR/"status.json"
+SOURCE_CACHE=SOURCE_DIR/"last_verified.json"
+ALLOWED_BONG_HOST=re.compile(r"(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)",re.I)
+def safe_base(url):
+ try:
+  parsed=urllib.parse.urlsplit(url)
+  if parsed.scheme!="https" or not ALLOWED_BONG_HOST.fullmatch(parsed.hostname or ""):return None
+  return parsed.scheme+"://"+parsed.hostname.lower()+"/"
+ except (ValueError,TypeError,AttributeError):return None
+def scope(today):
+ # Never assume a contiguous 8 days: use only positively probed dates.
+ audit=load(SOURCE_STATUS) or {}
+ cached=load(SOURCE_CACHE) or {}
+ verified_base=safe_base(cached.get("base"))
+ if not verified_base or not cached.get("current_football_feed_verified") or not cached.get("current_odds_verified"):
+  return None,[],{"reason":"no_verified_live_feed_and_odds"}
+ try:stale=(dt.datetime.now(dt.timezone.utc)-dt.datetime.fromisoformat(cached["verified_at_utc"])).total_seconds()>86400
+ except (TypeError,ValueError,KeyError):stale=True
+ if stale:return None,[],{"reason":"verified_bongdalu_source_expired"}
+ result=next((r for r in audit.get("results",[]) if safe_base(r.get("base"))==verified_base and r.get("health",{}).get("ok")),None)
+ if result is None:return None,[],{"reason":"host_not_in_verified_archival_probes"}
+ earliest=today-dt.timedelta(days=MAX_AGE)
+ latest=today-dt.timedelta(days=1)
+ dates=[]
+ for date,obs in result.get("archives",{}).items():
+  try:day=dt.date.fromisoformat(date)
+  except (TypeError,ValueError):continue
+  if earliest<=day<=latest and int(obs.get("count",0))>0:dates.append(date)
+ dates=sorted(set(dates))
+ return verified_base,dates,{"reason":"verified_Bongdalu_dated_result_feed","window_days":MAX_AGE,
+                              "source_probe_utc":audit.get("checked_at_utc"),
+                              "allowed_dates":dates,"historical_prematch_odds_verified":False}
 def fields(src):
  out=[];cur="";quote=None;escape=False
  for ch in src:
@@ -24,15 +58,14 @@ def fields(src):
   else:cur+=ch
  out.append(cur.strip())
  return out
-def fetch_for_day(day):
- base=urllib.parse.urlsplit(BASE)
- if base.scheme!="https" or base.hostname not in VALID_HOSTS:raise ValueError("unverified Bongdalu base")
- uri=urllib.parse.urljoin(BASE,"ajax/SoccerAjax?"+urllib.parse.urlencode(
+def fetch_for_day(day,base):
+ if not safe_base(base):raise ValueError("unverified Bongdalu base")
+ uri=urllib.parse.urljoin(base,"ajax/SoccerAjax?"+urllib.parse.urlencode(
   {"type":6,"date":day,"order":"league","timezone":0}))
- req=urllib.request.Request(uri,headers={"User-Agent":"Mozilla/5.0 (KQ247 read-only research)","Accept":"application/json","Referer":BASE})
+ req=urllib.request.Request(uri,headers={"User-Agent":"Mozilla/5.0 (KQ247 read-only research)","Accept":"application/json","Referer":base})
  with urllib.request.urlopen(req,timeout=18) as response:
   target=urllib.parse.urlsplit(response.url)
-  if target.scheme!="https" or target.hostname not in VALID_HOSTS:raise ValueError("untrusted redirect")
+  if not safe_base(response.url):raise ValueError("untrusted redirect")
   raw=response.read(2500001)
   encoding=(response.headers.get("Content-Encoding") or "").lower()
  if not raw or len(raw)>2500000:raise ValueError("invalid response size")
@@ -86,7 +119,7 @@ def wanted(today):
 def run():
  DIR.mkdir(parents=True,exist_ok=True)
  today=dt.datetime.now(VN).date()
- days=wanted(today)
+ base,days,basis=scope(today)
  old=load(INDEX) or {"dates":{}}
  states=old.get("dates") if isinstance(old.get("dates"),dict) else {}
  due=[day for day in days if states.get(day,{}).get("state")!="verified_ft_archive"]
@@ -98,7 +131,7 @@ def run():
  for day in due[:BATCH]:
   tried+=1
   try:
-   uri,raw,data=fetch_for_day(day)
+   uri,raw,data=fetch_for_day(day,base)
    fixtures=parse_ft(data,day)
    if not fixtures:
     matched=re.findall(r"A\[\d+\]\s*=\s*\[([^\r\n;]*)\]",data)
@@ -124,9 +157,10 @@ def run():
               "last_attempt":now()})
   time.sleep(0.2)
  verified=[s for day,s in states.items() if day in days and s.get("state")=="verified_ft_archive"]
- report={"checked_at_utc":now(),"requested_days":MAX_AGE,
+ report={"checked_at_utc":now(),"requested_days":len(days),"configured_max_days":MAX_AGE,
+         "source_base":base,"verified_source_scope":basis,
          "days_with_verified_FT_archives":len(verified),
-         "days_remaining_without_verified_FT":MAX_AGE-len(verified),
+         "days_remaining_without_verified_FT":max(0,len(days)-len(verified)),
          "days_attempted_this_run":tried,"days_verified_this_run":success,
          "total_raw_ft_fixtures":sum(x.get("matches",0) for x in verified),
          "error_samples":problems[:10],
@@ -138,9 +172,12 @@ def test():
  data="A[1]=[3000123,1,1,0,Home,Away,2025,9,17,3,2];"
  # Explicit parser test matching JS A-index conventions, without inventing odds.
  assert len(fields("'first, second',3"))==2
- assert len(wanted(dt.date(2026,10,15)))==500
- assert wanted(dt.date(2026,10,15))[0]=="2025-06-03"
- assert MAX_AGE==500
+ assert MAX_AGE==8
+ assert len(wanted(dt.date(2026,10,15)))==8
+ assert wanted(dt.date(2026,10,15))[0]=="2026-10-08"
+ assert safe_base("https://www.bongdalu811.com/match/h2h-12")=="https://www.bongdalu811.com/"
+ assert safe_base("https://evil-bongdalu811.com/") is None
+ assert safe_base("http://www.bongdalu812.com/") is None
  assert json.loads(gzip.decompress(gzip.compress(b'{"ErrCode":0,"Data":"A[1]=[1];"}')))["ErrCode"]==0
  assert bool(re.search(r"A\[\d+\]\s*=\s*\[","A[19]=[123];"))
  assert parse_ft('A[1]=[3000123,1,1,0,"Home","Away","2025,9,17,00,00,00",-1,3,2,0];',"2025-10-17")[0]["fixture_id"]=="3000123"
