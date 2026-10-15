@@ -161,6 +161,24 @@ def priority(url,kind=""):
  # Vietnam hosts first. A .vn domain alone is NOT a publication permission.
  return 0 if h.endswith((".vn",".com.vn",".net.vn",".org.vn",".edu.vn")) or kind.startswith("VN_") else 1
 
+# Explicit VN-facing .com sources: do not assume every outbound host from a VN catalog is VN.
+VN_NON_DOT_VN_HOSTS=("vietnamnavigation.com","xosodaiphat.com","ketqua.net","vncapitals.com")
+
+def source_priority(uri):
+ h=host(uri)
+ return 0 if h.endswith(".vn") or h in VN_NON_DOT_VN_HOSTS else 1
+
+def index_followup_intent(base,uri):
+ """Only crawl directory/forum indexes, not generic pages containing web or site."""
+ p=urlparse.urlsplit(uri)
+ if p.scheme!="https" or host(uri)!=host(base) or len(p.path)>150 or len(p.query)>100:return False
+ path=urlparse.unquote(p.path).lower()
+ markers=("directory","danh-ba","danh-sach","forum","dien-dan","site-list",
+          "websites","catalog","submit-site","web-directory")
+ if any(m in path for m in markers):return True
+ root=urlparse.urlsplit(base).path.lower()
+ return any(m in root for m in markers) and bool(re.search(r"(?:^|[?&])(?:page|p)=\d+(?:&|$)",p.query.lower()))
+
 def inspect_index_host_group(items):
  """Read index pages serially per host, concurrently across distinct hosts.
  Do not share SQLite across workers or issue simultaneous fetches to one host.
@@ -221,7 +239,7 @@ def discover_directories(db):
     if p.scheme!="https" or not h or h in SKIP_HOSTS:continue
     if h!=host(base):
      seen.setdefault(h,{"host":h,"url":"https://"+h+"/",
-                        "category":category,"priority":priority(u,category)})
+                        "category":category,"priority":source_priority(u)})
      # Preserve direct contributor-page URLs for separate review.
      # Discovery alone never grants permission to POST.
      if editorial_submission_candidate(u):
@@ -230,10 +248,7 @@ def discover_directories(db):
         ON CONFLICT(url) DO UPDATE SET last_seen=excluded.last_seen""",
         (u,h,now,now,"unverified"))
       if not known:index_candidates_new+=1
-    elif nested<35 and len(p.path)<150 and len(p.query)<100 and any(
-       marker in p.path.lower()+("?"+p.query.lower()) for marker in
-       ("page","category","sports","the-thao","vietnam","website","browse",
-        "directory","site","forum","web","football","links","vi/","p=")):
+    elif nested<35 and index_followup_intent(base,u):
      db.execute("INSERT OR IGNORE INTO index_frontier VALUES(?,?,?,?)",
                 (u,category,None,None))
      nested+=1
@@ -335,6 +350,10 @@ def run():
    existing.add(h);new_sites+=1
  # Do not treat extracted links as sites that permit submission.
  db.commit()
+ # Repair stale priorities assigned to international URLs from VN-labelled indexes.
+ db.execute("UPDATE sites SET priority=1 WHERE priority=0 AND host NOT LIKE '%.vn' AND host NOT IN ('vietnamnavigation.com','xosodaiphat.com','ketqua.net','vncapitals.com')")
+ db.execute("UPDATE sites SET priority=0 WHERE host LIKE '%.vn' OR host IN ('vietnamnavigation.com','xosodaiphat.com','ketqua.net','vncapitals.com')")
+ db.commit()
  rows=db.execute("SELECT host,source_url,category,priority FROM sites ORDER BY priority ASC, COALESCE(last_scanned,'') ASC,host LIMIT ?",(MAX_HOSTS,)).fetchall()
  jobs=[]
  for h,u,c,p in rows:
@@ -404,6 +423,13 @@ def run():
 def selftest():
  assert priority("https://test.com.vn/")==0
  assert priority("https://example.com/")==1
+ assert source_priority("https://international.com/")==1
+ assert source_priority("https://international.com/")==source_priority("https://international.com/")
+ assert source_priority("https://vietnamnavigation.com/")==0
+ assert source_priority("https://forum.vn/")==0
+ assert index_followup_intent("https://list.vn/danh-ba/","https://list.vn/danh-ba/page/2")
+ assert not index_followup_intent("https://news.vn/","https://news.vn/web-design-trends")
+ assert not index_followup_intent("https://directory.vn/","https://unrelated.com/directory")
  assert parse_sitemap(b'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://abc.vn/foo</loc></url></urlset>')[1]==["https://abc.vn/foo"]
  assert not https_on_host("https://evil.com/a","abc.vn")
  assert host("https://www.test.com.vn/foo")=="test.com.vn"
