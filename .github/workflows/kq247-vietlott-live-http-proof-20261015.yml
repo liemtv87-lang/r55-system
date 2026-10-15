@@ -1,0 +1,43 @@
+name: KQ247 Vietlott Independent Live HTTP Readiness 20261015
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-live-http-proof-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Check live primary, customer, and locked data without changing VPS
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,urllib.error
+          base='https://vietlott.64-120-92-172.sslip.io'
+          for path in ('/health','/api/state','/client.html','/?client=1','/reduced-pool-mega645.json','/reduced-pool-power655.json'):
+            request=urllib.request.Request(base+path,headers={'User-Agent':'KQ247-read-only-verifier/1.0'})
+            try:
+              with urllib.request.urlopen(request,timeout=13) as r:
+                code=r.status
+                b=r.read(1024*1024) if path not in ('/reduced-pool-mega645.json','/reduced-pool-power655.json') else r.read(2048)
+            except urllib.error.HTTPError as e:
+              code=e.code;b=e.read(2048)
+            except Exception as e:
+              print('KQ247_LIVE_HTTP='+json.dumps({'path':path,'error':str(e)[:140]}));continue
+            row={'path':path,'http':code,'bytes_sample':len(b)}
+            if path.endswith('html') or path=='/?client=1':
+              row['customer_present']=b'B\xe1\xba\xa2N KH\xc3\x81CH' in b or b'CLIENT_MODE' in b
+            else:
+              try:
+                data=json.loads(b)
+                for key in ('ready','data_ready','status','expected_analysis_date','runtime','message','error'):
+                  if key in data:row[key]=data[key]
+                if path=='/api/state':
+                  row['snapshots']={}
+                  for k in ('mega645','power655'):
+                    s=(data.get('products',{}).get(k,{}) or {}).get('snapshot',{}) or {}
+                    row['snapshots'][k]={x:s.get(x) for x in ('analysis_date','target_date','locked','reduced_total','ruleset_version')}
+              except Exception:pass
+            print('KQ247_LIVE_HTTP='+json.dumps(row,ensure_ascii=False))
+          PY
