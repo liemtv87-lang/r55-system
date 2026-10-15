@@ -1,0 +1,62 @@
+name: KQ247 Vietlott R35 Isolated Snapshot Integrity
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-stage-snapshot-integrity.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r35-candidate-snapshot-only
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Calculate and verify R35 candidate portfolios ONLY inside isolated VPS candidate
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=kq247-vietlott-r35-regionbackup-stage
+          tag=kq247-vietlott-r35-stage:aa7b460afa42
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = "$tag"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort || true)
+          echo KQ247_R35_ISOLATED_SNAPSHOT_DATE=$(TZ=Asia/Ho_Chi_Minh date +%F)
+          echo KQ247_R35_ISOLATED_SNAPSHOT_BUILD=BEGIN
+          timeout 1050 docker exec -e FAST_SNAPSHOT_REPAIR=1 "$name" node scripts/update-data.mjs
+          echo KQ247_R35_ISOLATED_SNAPSHOT_BUILD=FINISHED
+          echo KQ247_R35_READONLY_RELEASE_GATE
+          docker exec "$name" node scripts/vps-release-gate.mjs --stage
+          echo KQ247_R35_VPS_RELEASE_GATE=PASS
+          docker exec -i "$name" node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const s=JSON.parse(fs.readFileSync('public/state.json','utf8'));
+          const result={ruleset:s.ruleset_version,ready:s.ready,analysis_date:s.generated_at_vn?.slice(0,10),products:{}};
+          for(const p of ['mega645','power655']){
+            const snap=s.products?.[p]?.snapshot||{};
+            const f=JSON.parse(fs.readFileSync('public/filtered-pool-'+p+'.json','utf8'));
+            const r=JSON.parse(fs.readFileSync('public/reduced-pool-'+p+'.json','utf8'));
+            result.products[p]={target_date:snap.target_date,analysis_date:snap.analysis_date,locked:snap.locked,
+              source_total:f.keys.length,final_total:r.keys.length,final_max:p==='mega645'?180000:450000,
+              strict_subset:r.keys.every(key=>f.keys.includes(key))};
+            if(!snap.locked||r.keys.length===0||r.keys.length>(p==='mega645'?180000:450000))throw Error('INVALID_STAGE_PORTFOLIO_'+p);
+          }
+          console.log('KQ247_R35_ISOLATED_SNAPSHOT='+JSON.stringify(result));
+          JS
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort || true)
+          test "$before" = "$after"
+          echo KQ247_R35_PRODUCTION_CONTAINERS_UNCHANGED=YES
+          echo KQ247_R35_PUBLIC_CUTOVER=NOT_PERFORMED
+          VPS
