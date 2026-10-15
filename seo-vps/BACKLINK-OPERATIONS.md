@@ -38,3 +38,9 @@ The verifier is read-only. It does not fill third-party forms, bypass CAPTCHA, i
 - Google discovery at 09:15 UTC: 14 catalog indexes, 14,133 known hosts, 15 new that cycle, 17,973 candidate URL records, 400 inspected sitemap source hosts, 413,139 sitemap URL records read. None are verified registrations.
 - Commit 8c4e242 adds the already owner-authored public GitHub README as an external HTML anchor verification prospect for the two exact KQ247 landing pages. Do not count unless audit confirms links in public HTML. Verify most recent deploy result.
 - Next check candidate_selection_funnel and source_homepage_publisher_review_queue, prioritize truthful Vietnamese directory forms; preserve running football, lottery and bot containers. No CAPTCHA, account or topic restrictions bypass, no duplicate submissions.
+
+## Follow-up 2026-10-15 16:18 VN — measured external HTML links
+
+- Google-Web verifier deployment run 38711838244 at 09:18 UTC succeeded. 400 source hosts checked (269 HTTP 200). It independently confirmed 1 published public HTML backlink to the football first-party landing page and 1 to lottery, each from 1 external referring domain: the existing public repo README on github.com. These links were already author-owned and published; this is an improvement in detection, NOT two new third-party submissions.
+- New commit b011a59 instruments remote self-test for exact candidate_funnel_counts, selected candidate URLs and unique source hosts. Must inspect workflow run 38712069814 before deciding whether 17,973 candidate URLs collapse because of bad intent filters or concentrated hosts.
+- Automatic submission to generic third-party web publishers remains disabled; no validated eligible free publisher form yet. Telegram directory ledger remains 3 verified public links per group, as of last live audit. Do not claim 100 new backlinks per hour.
