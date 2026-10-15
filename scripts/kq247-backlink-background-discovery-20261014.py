@@ -24,13 +24,13 @@ DB = ROOT / "sources.sqlite3"
 REPORT = ROOT / "latest.json"
 INPUTS = [ROOT / "url-inventory.txt", Path("/opt/pwremote/kq247-domain-first/url-inventory.txt")]
 TARGETS = ["https://t.me/keochuyengia79", "https://t.me/xsbm999"]
-WORKERS = max(1, min(10, int(os.environ.get("KQ247_WORKERS", "6"))))
+WORKERS = max(1, min(10, int(os.environ.get("KQ247_WORKERS", "10"))))
 MAX_SECONDS = max(60, min(14400, int(os.environ.get("KQ247_MAX_SECONDS", "10800"))))
-MAX_HTTP_HOSTS = max(25, min(150000, int(os.environ.get("KQ247_MAX_HTTP_HOSTS", "20000"))))
+MAX_HTTP_HOSTS = max(25, min(150000, int(os.environ.get("KQ247_MAX_HTTP_HOSTS", "30000"))))
 MAX_URL_LINES = max(1000, min(2000000000, int(os.environ.get("KQ247_MAX_URL_LINES", "2000000000"))))
 BATCH = 25000
 WATCH = ("--watch" in sys.argv)
-IDLE_SECONDS = max(60, min(1800, int(os.environ.get("KQ247_IDLE_SECONDS", "120"))))
+IDLE_SECONDS = max(60, min(1800, int(os.environ.get("KQ247_IDLE_SECONDS", "60"))))
 STALE_DAYS = max(7, min(90, int(os.environ.get("KQ247_STALE_DAYS", "7"))))
 PATH_RE = re.compile(r"submit|publish|add[-_/]?(?:group|channel|link|listing)|suggest|directory|register|addgroup|dang[-_/]?(?:tin|bai)|them[-_/]?nhom", re.I)
 DOMAIN_RE = re.compile(r"(telegram|telegr|tg(?:find|hub|link|mania|dir|group|radar|box)|group|directory|link|forum|listing|submit|community)", re.I)
@@ -44,6 +44,12 @@ PUBLIC_DIRECTORY_FEEDS = [
     "https://telegramdirectory.tech/",
     "https://telegramgroups.co/",
     "https://groupverse.co.in/",
+    "https://groupsgyani.org/submit-telegram-group-and-channel-links",
+    "https://www.telegram-groups.com/",
+    "https://telegramchannels.io/",
+    "https://groupssor.com/",
+    "https://vi.tgdio.com/groups",
+    "https://tg-hub.com/submit-telegram-channel-and-group-links/",
 ]
 FEED_REFRESH_SECONDS = 3600
 SEED = [
