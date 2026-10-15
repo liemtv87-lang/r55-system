@@ -29,7 +29,7 @@ jobs:
           for cname in kq247-vietlott-r34-stage-20261015 kq247-vietlott-r34-full150-stage-20261016 kq247-vietlott-vps;do
             echo "KQ247_CONTAINER=$cname"
             docker inspect -f 'IMAGE={{.Config.Image}} RUNNING={{.State.Running}}' "$cname"
-            docker exec "$cname" node - <<'JS'
+            docker exec -i "$cname" node - <<'JS'
           const fs=require('fs');
           for(const p of ['data/history-mega645.json','data/history-power655.json','data/xsmb200.json','data/snapshot-mega645.json','data/snapshot-power655.json','public/filtered-pool-mega645.json','public/filtered-pool-power655.json','public/filter-context-mega645.json','public/filter-context-power655.json','public/backtest-60.json']){
             if(!fs.existsSync('/app/'+p)){console.log('FILE '+p+' MISSING');continue}
