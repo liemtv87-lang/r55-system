@@ -1,0 +1,63 @@
+name: KQ247 Vietlott R34 150 Historical Input Coverage Audit
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-150-input-coverage-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Read-only 150 draw coverage check from existing VPS immutable source
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          docker exec -i kq247-vietlott-r34-stage-20261015 node - <<'JS'
+          const fs=require('fs');
+          const xs=JSON.parse(fs.readFileSync('data/xsmb200.json','utf8'));
+          const byDate=new Map(xs.map(x=>[x.date,x]));
+          const dateBefore=day=>{const d=new Date(day+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);return d.toISOString().slice(0,10)};
+          const verified=x=>x?.full?.length===27&&Number(x.confirmations||0)>=2&&new Set(x.sources||[]).size>=2;
+          console.log('R34_150_SAVED_XSMB_META='+JSON.stringify({
+            saved_dates:xs.length,full27:xs.filter(x=>x?.full?.length===27).length,
+            confirmed_independently:xs.filter(verified).length,
+            earliest:xs.at(-1)?.date,latest:xs[0]?.date
+          }));
+          for(const product of ['mega645','power655']){
+            const hist=JSON.parse(fs.readFileSync('data/history-'+product+'.json','utf8'));
+            const eligible=hist.filter(x=>x.date<='2026-10-15');
+            const ds=eligible.slice(-150);
+            let match=0,confirmed=0,missing=0,notFull=0;
+            for(const d of ds){
+              const x=byDate.get(dateBefore(d.date));
+              if(!x){missing++;continue}
+              match++;
+              if(x.full?.length!==27)notFull++;
+              if(verified(x))confirmed++;
+            }
+            console.log('R34_150_HISTORICAL_COVERAGE='+JSON.stringify({
+              product,history:hist.length,requested:150,eligible:ds.length,
+              tested_source_day_start:ds[0]?.date,tested_source_day_end:ds.at(-1)?.date,
+              prior_day_xsmb_found:match,prior_day_xsmb_independently_confirmed:confirmed,
+              prior_day_xsmb_missing:missing,prior_day_xsmb_not_full: notFull
+            }));
+          }
+          JS
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test "$before" = "$after"
+          echo R34_150_SOURCE_COVERAGE_AUDIT_READONLY=PASS
+          VPS
