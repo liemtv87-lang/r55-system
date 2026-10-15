@@ -30,6 +30,11 @@ jobs:
                  '/opt/kq247/vietlott/data/snapshot-mega645.json',
                  '/opt/kq247/vietlott/public/backtest-60.json',
                  '/opt/kq247/lottery-daily-staging/xsmb-505-actual-through-20261014.json',
+                 '/opt/kq247/lottery-daily-staging/xsmb-505-all27-prizes-20261014.json',
+                 '/opt/kq247/lottery-daily-staging/xsmb-historical-specials-505.json',
+                 '/opt/kq247/lottery-daily-staging/mtmn-500-actual-targets.json',
+                 '/opt/kq247/lottery-daily-staging/mtmn-latest-actual-all18-per-station.json',
+                 '/opt/kq247/lottery-daily-staging/mtmn-500-full18-archive-backfill.json',
                  '/opt/kq247/lottery-daily-staging/mtmn-500-full18-archive-backfill.json']
           def shape(v,depth=0):
               if depth>=2:return type(v).__name__
@@ -44,7 +49,7 @@ jobs:
               try:
                   v=json.loads(p.read_text())
                   data[filename]={'bytes':p.stat().st_size,'shape':shape(v)}
-                  if 'xsmb-505' in filename:
+                  if 'xsmb-505' in filename or 'historical-specials' in filename or 'mtmn-' in filename:
                       data[filename]['top_level_type']=type(v).__name__
                       data[filename]['keys_or_length']=list(v.keys())[:24] if isinstance(v,dict) else len(v) if isinstance(v,list) else None
                       lists=[(k,x) for k,x in v.items() if isinstance(x,list)] if isinstance(v,dict) else [('array',v)] if isinstance(v,list) else []
