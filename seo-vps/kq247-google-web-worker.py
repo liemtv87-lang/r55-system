@@ -304,9 +304,9 @@ def evaluate_publisher_form(forms, url, page_title="", html_body=""):
                     "url_field":True,"description_or_title_field":True})
  # These are only negative safety clues, not proof that the site permits promotion.
  body=html_body.lower()
- forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\\s+"
-                          r"(?:online\\s+)?(?:gambling|betting|casino)|"
-                          r"(?:gambling|betting|casino)\\s+(?:is\\s+)?(?:not\\s+allowed|prohibited)",body[:150000]))
+ forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\s+"
+                          r"(?:online\s+)?(?:gambling|betting|casino)|"
+                          r"(?:gambling|betting|casino)\s+(?:is\s+)?(?:not\s+allowed|prohibited)",body[:150000]))
  has_captcha=("g-recaptcha" in body or "h-captcha" in body or "cf-turnstile" in body)
  status=("blocked_topic_policy" if forbidden else "needs_captcha" if has_captcha else
          "form_review_required" if suitable else "no_credible_site_submission_form")
