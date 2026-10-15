@@ -69,7 +69,9 @@ echo "Chọn New self-hosted runner, Linux. Dán mã đăng ký một lần vào
 read -r -s -p "GitHub runner registration token: " token
 echo
 [[ -n "$token" ]] || fail "MISSING_GITHUB_RUNNER_TOKEN"
-runuser -u "$user" -- "$dir/config.sh" --unattended \
+# GitHub config.sh must run from its own directory; root home is inaccessible to CI user.
+cd "$dir"
+runuser -u "$user" -- ./config.sh --unattended \
  --url "$repo" --token "$token" --name "$name" \
  --labels "$label" --work "_work" --replace ||
  fail "GITHUB_RUNNER_REGISTRATION_FAILED"
