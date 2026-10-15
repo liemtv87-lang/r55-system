@@ -1,0 +1,92 @@
+name: KQ247 Vietlott R34 150-draw Isolated VPS Staging
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-150-isolated-vps-stage-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-150-staging-only
+  cancel-in-progress: false
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Build new pinned, read-only stage without altering public routing or snapshots
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          expected=be9266d890fc2af10a67df64b3d5f55f38065212
+          name=kq247-vietlott-r34-150-stage-20261016
+          tag=kq247-vietlott-r34-150-stage:be9266d890fc
+          target=/opt/kq247/vietlott/versions/r34-150-$expected
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          test -s "$key" && test -s "$known"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          if test -d "$target/.git"; then
+            test "$(git -C "$target" rev-parse HEAD)" = "$expected"
+          else
+            install -d -m 0755 /opt/kq247/vietlott/versions
+            tmp=$(mktemp -d /opt/kq247/vietlott/versions/.clone-r34-150-XXXXXX)
+            trap 'rm -rf "$tmp"' EXIT
+            GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$tmp/source"
+            test "$(git -C "$tmp/source" rev-parse HEAD)" = "$expected"
+            mv "$tmp/source" "$target"
+            trap - EXIT
+          fi
+          echo "R34_150_STAGE_SOURCE_SHA=$expected"
+          if ! docker image inspect "$tag" >/dev/null 2>&1; then
+            docker build --quiet -f "$target/deploy/Dockerfile.vps" -t "$tag" "$target" >/dev/null
+          fi
+          if docker ps -a --format '{{.Names}}' | grep -Fxq "$name"; then
+            test "$(docker inspect -f '{{.Config.Image}}' "$name")" = "$tag"
+            test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          else
+            docker run -d --name "$name" --restart=no --cpus=2 --memory=4g -e VIETLOTT_STAGE_READONLY=1 -e TZ=Asia/Ho_Chi_Minh -p 127.0.0.1:18147:8080 "$tag" >/dev/null
+          fi
+          healthy=0
+          for i in $(seq 1 18); do
+            if curl -fsS --max-time 6 http://127.0.0.1:18147/health >/dev/null 2>&1; then healthy=1;break; fi
+            sleep 2
+          done
+          test "$healthy" -eq 1 || { docker logs --tail 60 "$name"; exit 4; }
+          echo R34_150_STAGE_HEALTH=PASS
+          for path in / /client.html /guest-snapshot.html /api/state; do
+            code=$(curl -sS --max-time 15 -o /tmp/kq247-r34-150-probe -w '%{http_code}' "http://127.0.0.1:18147$path" || true)
+            echo "R34_150_STAGE_HTTP_$path=$code"
+            test "$code" = 200
+          done
+          docker exec "$name" node scripts/r34-full-primary-contract.test.mjs
+          echo R34_150_STAGE_FULL_POOL_TXT_AND_150_DRAW_UI=PASS
+          docker exec "$name" node -e '
+            const fs=require("fs");
+            const s=JSON.parse(fs.readFileSync("public/state.json","utf8"));
+            const rule="USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1";
+            console.log("R34_150_STAGE_STORED_RULESET="+s.ruleset_version);
+            console.log("R34_150_STAGE_STATE_READY="+s.ready);
+            for(const p of ["mega645","power655"]){
+              const x=s.products?.[p]?.snapshot||{};
+              console.log("R34_150_STAGE_PRODUCT="+p+" locked="+x.locked+" filtered="+x.filtered_total+" reduced="+x.reduced_total);
+            }
+            if(s.ready===true&&s.ruleset_version!==rule)process.exit(3);
+          '
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -v "^$name|" | sort)
+          test "$before" = "$after"
+          echo R34_150_STAGE_OTHER_RUNNING_CONTAINERS_UNCHANGED=YES
+          echo R34_150_STAGE_PUBLIC_CUTOVER=NOT_PERFORMED
+          VPS
