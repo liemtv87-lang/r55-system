@@ -92,7 +92,7 @@ def run():
    attempts=int(states.get(day,{}).get("attempts",0))+1
    states[day]={"state":"retry_pending","attempts":attempts,
                 "last_error":type(e).__name__+":"+str(e)[:130]}
-   problems.append({"day":day,"error":type(e).__name__})
+   problems.append({"day":day,"error":type(e).__name__,"detail":str(e)[:140]})
   save(INDEX,{"version":1,"source":"Bongdalu historical SoccerAjax",
               "asof":today.isoformat(),"window_days":MAX_AGE,"dates":states,
               "last_attempt":now()})
