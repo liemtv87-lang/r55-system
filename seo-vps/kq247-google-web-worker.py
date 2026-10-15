@@ -92,6 +92,7 @@ class Links(html.parser.HTMLParser):
   super().__init__()
   self.links = []
   self.forms = []
+  self._current_form = None
   self.title = ""
   self.h1 = []
   self.meta = {}
@@ -101,7 +102,11 @@ class Links(html.parser.HTMLParser):
  def handle_starttag(self, tag, attrs):
   a=dict(attrs)
   if tag=="a" and a.get("href"): self.links.append(a["href"])
-  elif tag=="form": self.forms.append({"action":a.get("action",""),"method":a.get("method","get").lower()})
+  elif tag=="form":
+   self._current_form={"action":a.get("action",""),"method":a.get("method","get").lower(),"fields":[]}
+   self.forms.append(self._current_form)
+  elif tag in ("input","textarea","select") and self._current_form is not None:
+   self._current_form["fields"].append({"tag":tag,"name":a.get("name",""),"type":a.get("type","text").lower(),"required":"required" in a})
   elif tag in ("title","h1"): self._capture=tag
   elif tag=="meta":
    key=a.get("name",a.get("property","")).lower()
@@ -109,6 +114,7 @@ class Links(html.parser.HTMLParser):
   elif tag=="link" and "canonical" in a.get("rel","").lower(): self.canon.append(a.get("href",""))
   elif tag=="script" and a.get("type","").lower()=="application/ld+json": self.jsonld+=1
  def handle_endtag(self, tag):
+  if tag=="form":self._current_form=None
   if tag==self._capture:self._capture=None
  def handle_data(self, data):
   if self._capture=="title": self.title+=data
@@ -181,7 +187,12 @@ def inspect_source(url):
    verified.append(target)
   if (parsed.hostname or "").lower().removeprefix("www.")==(basehost or "").lower().removeprefix("www.") and any(t in parsed.path.lower() for t in KEYWORDS):
    if absolute not in possible: possible.append(absolute)
- out.update({"potential_contributor_pages":possible[:10],
+ out.update({"forms_observed_on_source_page":len(p.forms),
+             "post_forms_observed_on_source_page":sum(f["method"]=="post" for f in p.forms),
+             "form_details":p.forms[:5],
+             "submission_authorized":False,
+             "submission_status":"not_attempted_unverified_permission",
+             "potential_contributor_pages":possible[:10],
              "candidate_count":len(possible),
              "verified_target_hrefs":verified[:5],
              "html_checked":True})
@@ -228,6 +239,8 @@ def main():
  args=p.parse_args()
  if args.self_test:
   l=Links();l.feed('<html><head><title>OK</title><link rel="canonical" href="https://x"></head><body><h1>Hi</h1><a href="/submit">here</a></body></html>')
+  f=Links();f.feed('<form method="post" action="/submit"><input name="url" required><textarea name="description"></textarea></form>')
+  assert len(f.forms)==1 and f.forms[0]["method"]=="post" and len(f.forms[0]["fields"])==2
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
   assert normalize_target_anchor("https://example.org/page","https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html")==TARGETS["football"]
@@ -253,6 +266,9 @@ def main():
          "sources_checked_this_run":len(sources),
          "sources_http200_this_run":sum(s.get("http")==200 for s in sources),
          "new_web_contribution_candidates_this_run":sum(s.get("candidate_count",0) for s in sources),
+         "source_pages_with_forms_this_run":sum(bool(s.get("forms_observed_on_source_page")) for s in sources),
+         "source_pages_with_post_forms_this_run":sum(bool(s.get("post_forms_observed_on_source_page")) for s in sources),
+         "authorized_submission_sources_this_run":0,
          "sources":sources,
          "automatic_submission":{"enabled":False,"reason":"No independently verified opt-in Web editorial form adapter; no blind POSTs or Telegram directory reuse"},
          "google_indexation":{"indexed_pages":None,"organic_clicks":None,"organic_impressions":None,
