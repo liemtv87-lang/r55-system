@@ -23,6 +23,7 @@ jobs:
           python3 -m py_compile research-vps/*.py
           python3 research-vps/common.py
           python3 research-vps/football.py --self-test
+          python3 research-vps/football_history_merge.py --self-test
           python3 research-vps/xs.py --self-test
           python3 research-vps/vietlott.py --self-test
           python3 research-vps/xsmb_import_2000.py --self-test
@@ -42,8 +43,9 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           REMOTE='root@64.120.92.172'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'install -d -m 0755 /opt/kq247/research/bin /opt/kq247/research/inputs; install -d -m 0700 /opt/kq247/research/state'
-          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 research-vps/{common,football,xs,vietlott,report,xsmb_import_2000,vietlott_import_all}.py "$REMOTE:/opt/kq247/research/bin/"
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 research-vps/{common,football,football_history_merge,xs,vietlott,report,xsmb_import_2000,vietlott_import_all}.py "$REMOTE:/opt/kq247/research/bin/"
           sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 deployment/football-history/learning/grade-2026-10-11.json "$REMOTE:/opt/kq247/research/inputs/football-grades.json"
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 deployment/football-history/learning/summary.json "$REMOTE:/opt/kq247/research/inputs/football-summary.json"
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'bash -se' <<'VPS'
           set -euo pipefail
           BASE=/opt/kq247/research
@@ -53,6 +55,8 @@ jobs:
             python3 "$BASE/bin/$domain.py" --self-test
           done
           python3 "$BASE/bin/common.py"
+          python3 "$BASE/bin/football_history_merge.py" --self-test
+          KQ247_RESEARCH_ROOT=$BASE/state python3 "$BASE/bin/football_history_merge.py"
           # Immutable upstream full-prize CSV; reject if its 27 numbers do not align
           # with the 505 trusted archived days. Isolated research only.
           KQ247_RESEARCH_ROOT=$BASE/state python3 "$BASE/bin/xsmb_import_2000.py"
@@ -64,7 +68,7 @@ jobs:
           from pathlib import Path
           root=Path('/etc/systemd/system')
           basedir='/opt/kq247/research'
-          domains={'football':('00/10','110%','2000M','KQ247_FOOTBALL_BOOTSTRAP=2000000'),
+          domains={'football':('00/10','110%','2000M','KQ247_FOOTBALL_BOOTSTRAP=2000000 KQ247_R55_GRADES=/opt/kq247/research/inputs/football-grades-combined.json'),
                    'xs':('02/10','110%','2200M','KQ247_XS_TRIALS=256 KQ247_XS_HISTORY=/opt/kq247/research/state/xsmb-2000-full27.json'),
                    'vietlott':('04/10','110%','2800M','KQ247_VIETLOTT_DRAWS_PER_CYCLE=32 KQ247_VIETLOTT_DATA=/opt/kq247/research/state/vietlott-history')}
           for d,(minute,cpu,mem,setting) in domains.items():
@@ -134,7 +138,7 @@ jobs:
             systemctl enable --now "kq247-research-$d.timer"
             systemctl is-active --quiet "kq247-research-$d.timer"
           done
-          KQ247_RESEARCH_ROOT=$BASE/state KQ247_FOOTBALL_BOOTSTRAP=20000 python3 "$BASE/bin/football.py"
+          KQ247_RESEARCH_ROOT=$BASE/state KQ247_FOOTBALL_BOOTSTRAP=20000 KQ247_R55_GRADES=$BASE/inputs/football-grades-combined.json python3 "$BASE/bin/football.py"
           KQ247_RESEARCH_ROOT=$BASE/state KQ247_XS_TRIALS=8 KQ247_XS_HISTORY=$BASE/state/xsmb-2000-full27.json python3 "$BASE/bin/xs.py"
           KQ247_RESEARCH_ROOT=$BASE/state KQ247_VIETLOTT_DRAWS_PER_CYCLE=2 KQ247_VIETLOTT_DATA=$BASE/state/vietlott-history python3 "$BASE/bin/vietlott.py"
           KQ247_RESEARCH_ROOT=$BASE/state python3 "$BASE/bin/report.py"
