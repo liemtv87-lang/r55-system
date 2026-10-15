@@ -29,7 +29,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          expected=88642358bb029c7134f18efa914b76c8dadc92ed
+          expected=cbbe8cd0919d828d5a20c195fb0646a5c80a9838
           key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
           known=/opt/kq247/ops/deploy/keys/github_known_hosts
           test -s "$key" && test -s "$known"
@@ -45,16 +45,16 @@ jobs:
             set -eu
             for file in vietlott-vps-server.mjs scripts/engine.mjs scripts/update-data.mjs scripts/needs-repair.mjs scripts/backtest-60-shard.mjs scripts/merge-backtest-60.mjs scripts/vps-release-gate.mjs; do node --check "$file"; done
             echo KQ247_R34_150_SYNTAX=PASS
-            node scripts/r34-full-primary-contract.test.mjs
-            node scripts/r35-contract.test.mjs
-            node scripts/xsmb-verified-daily.mjs
-            node scripts/region-completeness.test.mjs
-            node test.mjs
-            node test-daily.mjs
-            node test-export.mjs
-            node test-snapshot.mjs
-            node scripts/reduce-coverage.test.mjs
-            node scripts/verify-fast-pool-filter.mjs
+            fail=0
+            for script in scripts/r34-full-primary-contract.test.mjs scripts/r35-contract.test.mjs scripts/xsmb-verified-daily.mjs scripts/region-completeness.test.mjs test.mjs test-daily.mjs test-export.mjs test-snapshot.mjs scripts/reduce-coverage.test.mjs scripts/verify-fast-pool-filter.mjs; do
+              if timeout 180 node "$script"; then
+                echo "KQ247_R34_TEST_PASS=$script"
+              else
+                fail=1
+                echo "KQ247_R34_TEST_FAIL=$script"
+              fi
+            done
+            test "$fail" -eq 0
             echo KQ247_R34_150_OFFLINE_SUITE=PASS
           '
           after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
