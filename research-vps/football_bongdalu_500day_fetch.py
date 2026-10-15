@@ -71,6 +71,8 @@ def run():
  old=load(INDEX) or {"dates":{}}
  states=old.get("dates") if isinstance(old.get("dates"),dict) else {}
  due=[day for day in days if states.get(day,{}).get("state")!="verified_ft_archive"]
+ # Never retry the same broken earliest dates forever: first visit all 500 days.
+ due.sort(key=lambda day:(int(states.get(day,{}).get("attempts",0)),day))
  tried=0;success=0;problems=[]
  for day in due[:BATCH]:
   tried+=1
