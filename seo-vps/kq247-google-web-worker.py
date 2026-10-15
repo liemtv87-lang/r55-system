@@ -140,20 +140,20 @@ class Links(html.parser.HTMLParser):
   a=dict(attrs)
   if tag=="a" and a.get("href"): self.links.append(a["href"])
   elif tag=="form":
-   self._current_form={"action":a.get("action",""),"method":a.get("method","get").lower(),"fields":[]}
+   self._current_form={"action":a.get("action") or "","method":(a.get("method") or "get").lower(),"fields":[]}
    self.forms.append(self._current_form)
   elif tag in ("input","textarea","select") and self._current_form is not None:
-   style=a.get("style","").lower().replace(" ","")
-   hidden=(a.get("type","text").lower()=="hidden" or "display:none" in style or
+   style=(a.get("style") or "").lower().replace(" ","")
+   hidden=((a.get("type") or "text").lower()=="hidden" or "display:none" in style or
            ("position:absolute" in style and ("-9999px" in style or "-9999em" in style)) or
-           (a.get("aria-hidden","").lower()=="true" and a.get("tabindex")=="-1"))
-   self._current_form["fields"].append({"tag":tag,"name":a.get("name",""),"type":a.get("type","text").lower(),"required":"required" in a,"hidden":hidden})
+           ((a.get("aria-hidden") or "").lower()=="true" and a.get("tabindex")=="-1"))
+   self._current_form["fields"].append({"tag":tag,"name":a.get("name") or "","type":(a.get("type") or "text").lower(),"required":"required" in a,"hidden":hidden})
   elif tag in ("title","h1"): self._capture=tag
   elif tag=="meta":
-   key=a.get("name",a.get("property","")).lower()
-   if key: self.meta[key]=a.get("content","")
-  elif tag=="link" and "canonical" in a.get("rel","").lower(): self.canon.append(a.get("href",""))
-  elif tag=="script" and a.get("type","").lower()=="application/ld+json": self.jsonld+=1
+   key=(a.get("name") or a.get("property") or "").lower()
+   if key: self.meta[key]=a.get("content") or ""
+  elif tag=="link" and "canonical" in (a.get("rel") or "").lower(): self.canon.append(a.get("href") or "")
+  elif tag=="script" and (a.get("type") or "").lower()=="application/ld+json": self.jsonld+=1
  def handle_endtag(self, tag):
   if tag=="form":self._current_form=None
   if tag==self._capture:self._capture=None
@@ -494,6 +494,9 @@ def main():
  if args.self_test:
   l=Links();l.feed('<html><head><title>OK</title><link rel="canonical" href="https://x"></head><body><h1>Hi</h1><a href="/submit">here</a></body></html>')
   f=Links();f.feed('<form method="post" action="/submit"><input name="url" required><textarea name="description"></textarea></form>')
+  malformed=Links();malformed.feed('<form method><input name type style aria-hidden><select name></select></form><script type></script><link rel><meta name>')
+  assert len(malformed.forms)==1 and malformed.forms[0]['method']=='get'
+  assert malformed.forms[0]['fields'][0]['type']=='text' and malformed.jsonld==0
   assert len(f.forms)==1 and f.forms[0]["method"]=="post" and len(f.forms[0]["fields"])==2
   assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
