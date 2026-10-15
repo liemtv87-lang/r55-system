@@ -34,7 +34,7 @@ jobs:
                   elif tag=='script' and d.get('src'):self.scripts.append(d['src'][:150])
               def handle_endtag(self,tag):
                   if tag=='form':self.current=None
-          for base in ('https://www.groupssor.com/submit/','https://groupssor.com/submit/'):
+          for base in ('https://www.groupssor.com/submit/','https://groupssor.com/submit/','https://telegroups.org/submit'):
               try:
                   req=urllib.request.Request(base,headers={'User-Agent':'Mozilla/5.0 KQ247ReadOnlyAudit/1.0'})
                   with urllib.request.urlopen(req,timeout=12) as response:
@@ -105,7 +105,7 @@ jobs:
           print('SEO_FORM_CANDIDATES',json.dumps(report['form_candidates'],ensure_ascii=False))
           print('SEO_SUBMISSIONS',json.dumps(report['submissions'],ensure_ascii=False))
           # Site-specific evidence for already attempted vs never sent.
-          interesting=['groupssor.com','groupverse.co.in','telegram-groups.com','groupsgyani.org',
+          interesting=['groupssor.com','groupverse.co.in','telegroups.org','telegram-groups.com','groupsgyani.org',
                        'telegrmgrouplink.com','en.search-t.me','groupmandi.com',
                        'telegramgroup.arkservices.in']
           db=sqlite3.connect('file:'+str(root/'sources.sqlite3')+'?mode=ro',uri=True,timeout=6)
