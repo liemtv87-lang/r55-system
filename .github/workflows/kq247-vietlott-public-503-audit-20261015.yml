@@ -1,0 +1,44 @@
+name: KQ247 Vietlott Public Snapshot Availability
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietlott-public-503-audit-20261015.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Check HTTPS customer and state without login or changing anything
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request,urllib.error
+          base='https://vietlott.64-120-92-172.sslip.io'
+          for route in ('/health','/api/state','/state.json','/status','/client.html','/?client=1'):
+           try:
+            with urllib.request.urlopen(base+route,timeout=20) as r:
+             code=r.status; body=r.read(100000)
+           except urllib.error.HTTPError as e:
+            code=e.code; body=e.read(100000)
+           except Exception as e:
+            print('KQ247_PUBLIC_CHECK',route,type(e).__name__);continue
+           row={'route':route,'http':code,'bytes':len(body)}
+           if route in ('/api/state','/state.json','/status','/health'):
+            try:
+             d=json.loads(body)
+             if route=='/status':row.update({'job_status':d.get('status'),'job_type':d.get('type'),'finished':d.get('finished_at'),'error_kind':str(d.get('error',''))[:130]})
+             elif route=='/health':row.update({'service_status':d.get('status'),'runtime':d.get('runtime')})
+             else:
+              row.update({'ready':d.get('ready'),'message':str(d.get('message',''))[:130],
+                          'generated':d.get('generated_at'),
+                          'products':{p:{k:(d.get('products',{}).get(p,{}).get('snapshot') or {}).get(k) for k in ('locked','target_date','reduced_total')} for p in ('mega645','power655')}})
+            except (ValueError,TypeError):row['response_type']='not_json'
+           elif route=='/?client=1':
+            html=body.decode('utf8','replace')
+            style=html.split('</style>',1)[0]
+            row['customer_final_pool_css_visible']='.client-snapshot-only .result-hero,' not in style and '.client-mode .result-hero' not in style
+            row['pool_export_element']='id="copyHard"' in html
+           print('KQ247_PUBLIC_CHECK='+json.dumps(row,ensure_ascii=False))
+          PY
