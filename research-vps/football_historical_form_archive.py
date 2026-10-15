@@ -79,6 +79,15 @@ def run():
     raw=res.read(1200001)
    if len(raw)>1200000 or len(raw)<2000:raise ValueError("unsupported response length")
    html=raw.decode("utf-8","replace")
+   if fid=="2991083":
+    scripts=re.findall(r'<script[^>]+src=["\']([^"\']+)',html,re.I)
+    dynamic_refs=re.findall(r'["\']([^"\']{3,160}(?:Ajax|ajax|H2H|h2h|analysis)[^"\']{0,70})["\']',html,re.I)
+    detail={"fixture_id":fid,"html_size":len(html),"script_sources":scripts[:40],
+            "dynamic_reference_samples":dynamic_refs[:28],
+            "has_dated_table_in_source":bool(DATE_RE.search(html)),
+            "html_sha256":hashlib.sha256(raw).hexdigest(),"read_only":True}
+    save(DEST/"canary-dynamic-source.json",detail)
+    print("KQ247_R55_CANARY_JS_SOURCES="+json.dumps(detail,ensure_ascii=False),flush=True)
    rows=extract(html,today)
    if not rows:
     raw_date_count=len(DATE_RE.findall(html))
