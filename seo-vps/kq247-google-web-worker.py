@@ -40,9 +40,9 @@ KEYWORDS = ("lien-he","lien_he","gui-bai","gui-tin","dang-bai","dang-tin",
 UA = "KQ247GoogleWebSEO/1.0 (+public technical audit; non-invasive)"
 MAX_BYTES = 450_000
 TIMEOUT = 9
-MAX_WORKERS = 10
+MAX_WORKERS = 16
 SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
-MAX_SEEDS = 180
+MAX_SEEDS = 260
 
 def source_seeds():
  """Curated independent Google WEB website inventory. Never grants POST permission."""
@@ -198,7 +198,7 @@ def inspect_source(url):
              "html_checked":True})
  return out
 
-def candidate_pages_to_inspect(limit=80):
+def candidate_pages_to_inspect(limit=120):
  """Inspect discovered contribution pages, not just site homepages."""
  try:
   with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as db:
