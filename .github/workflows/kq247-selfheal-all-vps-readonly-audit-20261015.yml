@@ -1,0 +1,53 @@
+name: KQ247 Selfheal All VPS Runtime Audit 20261015
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-selfheal-all-vps-readonly-audit-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Confirm 9 VPS selfheal timers and inspect isolated scope reports
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          for scope in football xs vietlott bots sales seo-web seo-telegram research ops; do
+            name="kq247-selfheal-$scope.timer"
+            status=$(systemctl is-active "$name" || true)
+            enabled=$(systemctl is-enabled "$name" || true)
+            echo "KQ247_SCOPE_TIMER scope=$scope active=$status enabled=$enabled"
+          done
+          python3 - <<'PY'
+          import pathlib,json,os
+          root=pathlib.Path("/opt/kq247/ops/selfheal")
+          expected=("football","xs","vietlott","bots","sales","seo-web","seo-telegram","research","ops")
+          reports={}
+          for scope in expected:
+              p=root/"state"/(scope+".json")
+              row=json.loads(p.read_text()) if p.is_file() else {}
+              latest=row.get("latest",{})
+              events=latest.get("events",[])
+              reports[scope]={"report_present":bool(latest),"checked_at":latest.get("checked_at_utc"),
+                              "event_count":len(events),"statuses":[str(x.get("status")) for x in events if x.get("status")],
+                              "containers_not_restarted":latest.get("docker_stop_or_restart"),
+                              "snapshots_not_overridden":latest.get("production_snapshot_override")}
+          print("KQ247_SCOPE_REPORTS="+json.dumps(reports,ensure_ascii=False))
+          print("KQ247_SELFHEAL_CODE_BYTES="+str((root/"kq247_selfheal.py").stat().st_size))
+          PY
+          echo KQ247_VIETLOTT_STATUS_HTTP=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' http://127.0.0.1:18088/api/state || true)
+          echo KQ247_ALL_SCOPES_READONLY_AUDIT=COMPLETE
+          VPS
