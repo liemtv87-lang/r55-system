@@ -29,7 +29,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          expected=be9266d890fc2af10a67df64b3d5f55f38065212
+          expected=30715c4af16ba59cb8b6ba713daa3df15caafa7e
           key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
           known=/opt/kq247/ops/deploy/keys/github_known_hosts
           test -s "$key" && test -s "$known"
@@ -46,7 +46,7 @@ jobs:
             for file in vietlott-vps-server.mjs scripts/engine.mjs scripts/update-data.mjs scripts/needs-repair.mjs scripts/backtest-60-shard.mjs scripts/merge-backtest-60.mjs scripts/vps-release-gate.mjs; do node --check "$file"; done
             echo KQ247_R34_150_SYNTAX=PASS
             fail=0
-            for script in scripts/r34-full-primary-contract.test.mjs scripts/r35-contract.test.mjs scripts/xsmb-verified-daily.mjs scripts/region-completeness.test.mjs test.mjs test-daily.mjs test-export.mjs test-snapshot.mjs scripts/reduce-coverage.test.mjs scripts/verify-fast-pool-filter.mjs; do
+            for script in scripts/r34-full-primary-contract.test.mjs scripts/r35-contract.test.mjs scripts/xsmb-verified-daily.mjs scripts/region-completeness.test.mjs test.mjs test-daily.mjs test-export.mjs test-snapshot.mjs scripts/reduce-coverage.test.mjs scripts/verify-fast-pool-filter.mjs scripts/r34-backtest-reduced-parity.test.mjs; do
               if timeout 180 node "$script"; then
                 echo "KQ247_R34_TEST_PASS=$script"
               else
