@@ -1,0 +1,102 @@
+name: KQ247 Vietlott R34 Production Cutover Readiness (Read Only)
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-production-readiness-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-production-readiness
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Read VPS R34 stage, production, customer code and auth readiness with zero mutation
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo KQ247_R34_READONLY_AUDIT_BEGIN
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          name=kq247-vietlott-r34-stage-20261015
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r34-stage:319d54228db7'
+          curl -fsS --max-time 12 http://127.0.0.1:18146/health >/dev/null
+          echo KQ247_R34_STAGE_HTTP=PASS
+          docker exec "$name" node scripts/vps-release-gate.mjs --stage
+          echo KQ247_R34_STAGE_SNAPSHOT_GATE=PASS
+          for product in mega645 power655;do
+             docker exec "$name" test -s "/app/data/snapshot-$product.json"
+             docker exec "$name" test -s "/app/public/reduced-pool-$product.json"
+          done
+          backup_root=/opt/kq247/vietlott/snapshot-backups
+          archive="$backup_root/r34-20261015-c88d7eaab00c519d"
+          test -d "$archive"
+          (cd "$archive" && sha256sum --check --status SHA256SUMS)
+          echo KQ247_R34_LOCKED_SNAP_BACKUP_VERIFIED=YES
+          if docker exec "$name" sh -c 'grep -q "\.neon\.tech" /app/public/client.html';then
+            echo KQ247_R34_STAGE_CUSTOMER_AUTH=EXTERNAL_NEON
+          else echo KQ247_R34_STAGE_CUSTOMER_AUTH=NO_NEON_REFERENCE;fi
+          if docker inspect kq247-r55-postgres >/dev/null 2>&1;then
+             echo KQ247_LOCAL_POSTGRES_RUNNING="$(docker inspect -f '{{.State.Running}}' kq247-r55-postgres)"
+             echo KQ247_LOCAL_AUTH_SCHEMA_MATCHES_BEGIN
+             docker exec -i kq247-r55-postgres sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
+          SELECT table_schema||'.'||table_name FROM information_schema.tables
+          WHERE table_type='BASE TABLE' AND
+          (table_name ILIKE '%licen%' OR table_name ILIKE '%session%' OR table_name ILIKE '%device%')
+          ORDER BY 1 LIMIT 20;
+          SQL
+             echo KQ247_LOCAL_AUTH_SCHEMA_MATCHES_END
+          fi
+          echo KQ247_VIETLOTT_RUNNING_CONTAINERS_BEGIN
+          docker ps --format '{{.Names}}|{{.Image}}' | grep -i vietlott || true
+          echo KQ247_VIETLOTT_RUNNING_CONTAINERS_END
+          if docker inspect kq247-vietlott-vps >/dev/null 2>&1;then
+              echo KQ247_LIVE_VIETLOTT_IMAGE="$(docker inspect -f '{{.Config.Image}}' kq247-vietlott-vps)"
+              curl -sS --max-time 12 http://127.0.0.1:18088/api/state | python3 -c '
+          import sys,json
+          try:
+              d=json.load(sys.stdin); print("KQ247_LIVE_RULESET="+str(d.get("ruleset_version"))); print("KQ247_LIVE_READY="+str(d.get("ready")))
+          except Exception as e:print("KQ247_LIVE_READ_ERROR="+type(e).__name__)
+          ' || true
+          fi
+          echo KQ247_VIETLOTT_TIMERS_BEGIN
+          systemctl list-timers --all --no-pager 2>/dev/null | grep -i vietlott | head -15 || true
+          echo KQ247_VIETLOTT_TIMERS_END
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test "$before" = "$after"
+          echo KQ247_R34_READONLY_PRODUCTION_UNCHANGED=YES
+          echo KQ247_R34_READONLY_AUDIT_END
+          VPS
+      - name: Probe current public primary and customer without switching routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=https://vietlott.64-120-92-172.sslip.io
+          for path in /health /api/state /client.html /guest-snapshot.html;do
+             code=$(curl -sSL --max-time 15 -o /tmp/kq247-r34-probe -w '%{http_code}' "$BASE$path" || true)
+             echo "KQ247_PUBLIC_${path}=HTTP_${code}"
+             if [ "$path" = /api/state ] && [ "$code" = 200 ];then
+                python3 - <<'PY'
+          import json
+          with open('/tmp/kq247-r34-probe') as f:d=json.load(f)
+          print('KQ247_PUBLIC_RULESET='+str(d.get('ruleset_version')))
+          for p in ('mega645','power655'):
+              s=d.get('products',{}).get(p,{}).get('snapshot',{})
+              print('KQ247_PUBLIC_'+p.upper()+'_LOCKED='+str(s.get('locked')))
+              print('KQ247_PUBLIC_'+p.upper()+'_TARGET='+str(s.get('target_date')))
+          PY
+             fi
+          done
