@@ -1,0 +1,90 @@
+name: KQ247 Vietlott R34 Verify and Backup Locked Stage SNAP
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-stage-snapshot-backup.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-snapshot-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Verify and atomically archive locked R34 Mega/Power files on VPS only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          umask 077
+          name=kq247-vietlott-r34-stage-20261015
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r34-stage:319d54228db7'
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
+          echo 'KQ247_R34_PREBACKUP_GATE_BEGIN'
+          docker exec "$name" node scripts/vps-release-gate.mjs --stage
+          echo 'KQ247_R34_PREBACKUP_GATE=PASS'
+          root=/opt/kq247/vietlott/snapshot-backups
+          install -d -m 0700 "$root"
+          work=$(mktemp -d "$root/.r34-archive-XXXXXX")
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/public" "$work/data"
+          for p in mega645 power655;do
+            for part in "data/snapshot-$p.json" "data/history-$p.json" "public/filtered-pool-$p.json" "public/reduced-pool-$p.json" "public/filter-context-$p.json";do
+              docker cp "$name:/app/$part" "$work/$part"
+            done
+          done
+          for part in public/state.json data/xsmb200.json;do
+            docker cp "$name:/app/$part" "$work/$part"
+          done
+          python3 - "$work" <<'PY'
+          import json, pathlib, sys
+          root=pathlib.Path(sys.argv[1])
+          load=lambda p:json.loads((root/p).read_text())
+          state=load('public/state.json')
+          assert state['ruleset_version']=='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1'
+          for product,cap in [('mega645',180000),('power655',450000)]:
+              snap=load('data/snapshot-'+product+'.json')
+              full=load('public/filtered-pool-'+product+'.json')
+              reduced=load('public/reduced-pool-'+product+'.json')
+              published=state['products'][product]['snapshot']
+              assert snap['locked'] and published['locked'] and full['locked'] and reduced['locked']
+              assert snap['analysis_date']==state['generated_at_vn'][:10]==published['analysis_date']
+              assert snap['target_date']==full['target_date']==reduced['target_date']==published['target_date']
+              assert snap['ruleset_version']==full['ruleset_version']==reduced['ruleset_version']==state['ruleset_version']
+              assert 0<len(reduced['keys'])<=cap
+              assert len(full['keys'])==full['valid_total']
+              assert len(reduced['keys'])==reduced['valid_total']
+              assert set(reduced['keys']).issubset(set(full['keys']))
+              print('KQ247_R34_BACKUP_VALIDATED '+product+' target='+snap['target_date']+' count='+str(len(reduced['keys'])))
+          PY
+          (cd "$work" && find data public -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+          checksum=$(sha256sum "$work/SHA256SUMS" | cut -c1-16)
+          date=$(TZ=Asia/Ho_Chi_Minh date +%Y%m%d)
+          dest="$root/r34-$date-$checksum"
+          if test -d "$dest";then
+            echo "KQ247_R34_BACKUP_ALREADY_EXISTS=$dest"
+          else
+            mv -T "$work" "$dest"
+            trap - EXIT
+            echo "KQ247_R34_BACKUP_COMMITTED=$dest"
+          fi
+          (cd "$dest" && sha256sum --check --status SHA256SUMS)
+          echo KQ247_R34_BACKUP_RESTORE_CHECKSUMS=PASS
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
+          test "$before" = "$after"
+          echo KQ247_R34_PRODUCTION_UNCHANGED=YES
+          echo KQ247_R34_SNAPSHOT_BACKUP_STAGE_ONLY=YES
+          VPS
