@@ -25,7 +25,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          sha=961f462e2a23942fe22aefda39f9533ff9828d89
+          sha=50f47523204c696a7ad3c24e5fe75e186e5c7398
           key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
           known=/opt/kq247/ops/deploy/keys/github_known_hosts
           export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
@@ -35,6 +35,8 @@ jobs:
           GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$tmp/source"
           git -C "$tmp/source" checkout --quiet --detach "$sha"
           test "$(git -C "$tmp/source" rev-parse HEAD)" = "$sha"
+          docker run --rm --network none -v "$tmp/source":/work:ro -w /work --entrypoint node node:22-bookworm scripts/xsmb-history-archive.test.mjs
+          echo R34_XSMB_HISTORICAL_FALLBACK_UNIT=PASS
           timeout 180 docker run --rm --cpus=2 --memory=2g --network bridge -v "$tmp/source":/work:ro -w /work --entrypoint node node:22-bookworm \
             scripts/xsmb-history-archive.mjs 2025-10-30 2026-04-15 2026-10-14
           test "$before" = "$(docker ps --format '{{.Names}}|{{.ID}}' | sort)"
