@@ -59,16 +59,30 @@ def main():
     if b"R21_USER34_FULL_PRIMARY_REDUCED_EXTRA_30_60_150_DRAWS" not in data:raise RuntimeError("Sai schema báo cáo")
     p=root()
     main_html=p/"index.html";guest=p/"guest-snapshot.html";client=p/"client.html"
-    if not client.is_file() or not guest.is_file():raise RuntimeError("Bản khách hoặc guest route chưa có file, không thể cài đồng bộ; cần xác minh route")
-    targets=[main_html,guest]
+    if not main_html.is_file() or not client.is_file():
+        raise RuntimeError("Thiếu index.html hoặc trang kích hoạt client.html trong live bind mount")
+    main_bytes=main_html.read_bytes()
+    client_bytes=client.read_bytes()
+    # Existing customer wrapper deliberately reuses the live index via ?client=1.
+    # It does NOT request /guest-snapshot.html. Do not fabricate or replace it.
+    shared_client=(b"?client=1" in client_bytes and
+                   b"const CLIENT_MODE=" in main_bytes and
+                   (b".client-mode aside" in main_bytes or b".client-snapshot-only aside" in main_bytes))
+    guest_available=guest.is_file()
+    if not guest_available and not shared_client:
+        raise RuntimeError("Khách không dùng ?client=1 và thiếu guest route; từ chối cài sai đường dẫn")
+    targets=[main_html]+([guest] if guest_available else [])
     previous={path:path.read_bytes() for path in targets}
-    if len(previous[main_html])<25000 or len(previous[guest])<25000:raise RuntimeError("HTML không đúng cấu trúc dự kiến")
+    if any(len(raw)<25000 for raw in previous.values()):
+        raise RuntimeError("HTML không đúng cấu trúc dự kiến")
     patched={path:inject(b) for path,b in previous.items()}
     static=p/PAGE;old_static=static.read_bytes() if static.exists() else None
     dont_touch=[q for q in [client,p/"state.json"] if q.exists()]
     dont_touch+=list(p.glob("*pool*.json"))
     unchanged={q:digest(q.read_bytes()) for q in dont_touch}
-    checks=[("/",previous[main_html]),("/guest-snapshot.html",previous[guest]),("/client.html",None)]
+    checks=[("/",previous[main_html]),("/?client=1",previous[main_html]),("/client.html",client_bytes)]
+    if guest_available:
+        checks.append(("/guest-snapshot.html",previous[guest]))
     for route,raw in checks:
         code,page=http(args.port,route)
         if code!=200:raise RuntimeError("Route "+route+" trả "+str(code))
@@ -76,7 +90,7 @@ def main():
             raise RuntimeError("HTTP "+route+" không khớp live bind mount; từ chối sửa nhầm trang")
     print("R34_150_DRAW_REPORT_VERIFIED_SHA256="+HASH)
     print("LIVE_ROOT="+str(p))
-    print("UI_TARGETS=index.html,guest-snapshot.html; CLIENT_AUTH_UNCHANGED=YES")
+    print("UI_TARGETS="+(",".join(f.name for f in targets))+"; SHARED_CLIENT_MODE="+str(shared_client)+"; CLIENT_AUTH_UNCHANGED=YES")
     if args.check:
         print("PRECHECK=PASS; NO_FILES_CHANGED=YES")
         return
@@ -91,14 +105,15 @@ def main():
             if f.read_text("utf8").count(BEGIN)!=1:raise RuntimeError("HTML chưa có panel "+f.name)
         for f,h in unchanged.items():
             if digest(f.read_bytes())!=h:raise RuntimeError("Một file cần bảo toàn đã thay đổi: "+str(f))
-        for route in ["/","/?client=1","/guest-snapshot.html"]:
+        for route in ["/","/?client=1"]+(["/guest-snapshot.html"] if guest_available else []):
             code,page=http(args.port,route)
             if code!=200 or BEGIN.encode() not in page:raise RuntimeError("HTTP panel failed "+route)
         code,page=http(args.port,"/"+PAGE)
         if code!=200 or digest(page)!=HASH:raise RuntimeError("HTTP report failed")
-        code,_=http(args.port,"/client.html")
-        if code!=200:raise RuntimeError("Customer activation page not reachable")
-        print("APPLIED=YES; LIVE_MAIN_GUEST_STATS=HTTP_PASS")
+        code,served_client=http(args.port,"/client.html")
+        if code!=200 or digest(served_client)!=digest(client_bytes):
+            raise RuntimeError("Customer activation page changed or not reachable")
+        print("APPLIED=YES; LIVE_MAIN_AND_SHARED_CUSTOMER_STATS=HTTP_PASS")
         print("BACKUP="+str(backup))
         print("SNAPSHOT_AUTH_BOTS_AND_CONTAINERS_NOT_MODIFIED=YES")
     except Exception:
