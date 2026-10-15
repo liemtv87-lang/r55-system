@@ -49,9 +49,17 @@ SEARCH_PAGES=[
  ("https://famemedia.vn/website-dat-backlink/","VN_public_directory_sources"),
  ("https://www.thietkewebchuanseo.com/seo-offpage.htm","VN_public_directory_sources")
 ]
-TOKENS=("dang-bai","dang-tin","gui-bai","gui-tin","lien-he","lien_he",
-        "cong-tac-vien","contact","submit","contribute","guest-post",
-        "add-url","add-site","them-website","dang-ky","quang-cao")
+# Only real contribution page slugs, not a substring in arbitrary news articles.
+# This is only a candidate signal, NOT publication permission.
+EDITORIAL_SLUGS={"submit-site","submit-website","submit-your-site","submit-your-website",
+ "submit-url","submit-link","submit-article","submit-post","submit-guest-post",
+ "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
+ "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
+ "guest-post-submission","contributor-guidelines",
+ "guest-post","become-a-contributor","contribute","submit-content"}
+EDITORIAL_PREFIXES=("submit-your-site-","submit-your-website-","submit-guest-post-",
+ "submit-article-","add-your-site-","write-for-us-","guest-post-guidelines-",
+ "guest-post-submission-")
 UA="KQ247GoogleWebDiscovery/1.0 (5-minute read-only public indexing)"
 SKIP_HOSTS={"t.me","telegram.me","facebook.com","google.com","youtube.com",
             "64-120-92-172.sslip.io","t.co","twitter.com","x.com"}
@@ -68,6 +76,17 @@ def https_on_host(value,domain):
   p=urlparse.urlsplit(value)
   return p.scheme=="https" and host(value)==domain and not p.username
  except ValueError:return False
+
+def editorial_submission_candidate(uri):
+ """Conservative sitemap triage; generic 'submit' articles are not forms."""
+ try:
+  p=urlparse.urlsplit(uri)
+  path=urlparse.unquote(p.path).lower().rstrip("/")
+  leaf=path.rsplit("/",1)[-1]
+  if p.scheme!="https" or not leaf or len(uri)>1200:return False
+  if "/wp-content/" in path or leaf.endswith((".svg",".png",".jpg",".jpeg",".webp",".pdf",".css",".js",".xml")):return False
+  return leaf in EDITORIAL_SLUGS or leaf.startswith(EDITORIAL_PREFIXES)
+ except (ValueError,UnicodeError):return False
 
 def fetch(uri, cap=MAX_BYTES_PER_SITEMAP):
  try:
@@ -235,7 +254,7 @@ def sitemap_scan(job):
    for link in locs[:MAX_INVENTORY_URLS_PER_HOST]:
     if not https_on_host(link,h):continue
     path=urlparse.urlsplit(link).path.lower()
-    if any(token in path for token in TOKENS):forms.add(link)
+    if editorial_submission_candidate(link):forms.add(link)
     if any(token in path for token in ("bong-da","bongda","the-thao","xoso","xo-so","xsmb","xsmt","xsmn","telegram")):topic+=1
  return {"host":h,"requests":attempts,"urls":read_count,"candidate_pages":sorted(forms)[:50],
          "topic_urls":topic,"sitemap_pages":pages,"sitemaps":discovered_sitemaps[:20],
@@ -347,6 +366,10 @@ def selftest():
  assert not https_on_host("https://evil.com/a","abc.vn")
  assert host("https://www.test.com.vn/foo")=="test.com.vn"
  assert len(load_candidates())>=40
+ assert editorial_submission_candidate("https://xoso.vn/submit-your-website/") is True
+ assert editorial_submission_candidate("https://news.com/2024/submit-a-false-tip-to-police/") is False
+ assert editorial_submission_candidate("https://wordpress.com/wp-content/plugins/forms/submit-spin.svg") is False
+ assert editorial_submission_candidate("https://example.com/write-for-us/") is True
  print("KQ247_GOOGLE_DISCOVERY_SELF_TEST=PASS")
 
 if __name__=="__main__":
