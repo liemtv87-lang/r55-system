@@ -24,8 +24,10 @@ import xml.etree.ElementTree as ET
 ROOT=Path(os.environ.get("KQ247_GOOGLE_ROOT","/opt/kq247/google-web-seo"))
 PUBLIC=Path(os.environ.get("KQ247_PUBLIC_ROOT","/opt/kq247/deployment/football-original/public"))
 SEEDS_FILE=Path(__file__).resolve().parent/"google-web-source-seeds.json"
-MAX_HOSTS=min(600,max(40,int(os.environ.get('KQ247_GOOGLE_MAX_HOSTS','260'))))
-MAX_WORKERS=min(32,max(4,int(os.environ.get('KQ247_GOOGLE_WORKERS','20'))))
+# Scale to 400 distinct hosts / 28 cross-host workers per 5-minute cycle.
+# Hard limits and per-host quotas are unchanged; no third-party submissions.
+MAX_HOSTS=min(600,max(40,int(os.environ.get('KQ247_GOOGLE_MAX_HOSTS','400'))))
+MAX_WORKERS=min(32,max(4,int(os.environ.get('KQ247_GOOGLE_WORKERS','28'))))
 MAX_SITEMAPS_PER_HOST=10
 MAX_INVENTORY_URLS_PER_HOST=12000
 MAX_BYTES_PER_SITEMAP=3_500_000
