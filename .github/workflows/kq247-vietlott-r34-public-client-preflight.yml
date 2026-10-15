@@ -1,0 +1,43 @@
+name: KQ247 Vietlott R34 Public Client Source Readiness
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-public-client-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Read-only check VPS customer license backend and old production route
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo KQ247_R34_ROUTER_SERVICE_NAMES_BEGIN
+          docker ps --format '{{.Names}} {{.Image}} {{.Status}}' | grep -Ei 'vietlott|auth|postgres|caddy|nginx|proxy' || true
+          echo KQ247_R34_ROUTER_SERVICE_NAMES_END
+          echo KQ247_R34_LOCAL_AUTH_FILE_PRESENCE_BEGIN
+          find /opt/kq247 -maxdepth 5 -type f \( -iname '*license*' -o -iname '*activation*' -o -iname '*auth*db*' -o -iname '*client*db*' \) -printf '%p\n' 2>/dev/null | head -30 || true
+          echo KQ247_R34_LOCAL_AUTH_FILE_PRESENCE_END
+          echo KQ247_R34_LEGACY_CLIENT_AUTH_PRESENT
+          docker exec kq247-vietlott-vps sh -lc "grep -q -E 'neon\\.tech|kq247auth' /app/public/client.html && echo EXTERNAL_AUTH_PRESENT || echo NO_EXTERNAL_AUTH"
+          echo KQ247_R34_STAGE_CLIENT_AUTH_PRESENT
+          docker exec kq247-vietlott-r34-stage-20261015 sh -lc "grep -q -E 'neon\\.tech|kq247auth' /app/public/client.html && echo EXTERNAL_AUTH_PRESENT || echo NO_EXTERNAL_AUTH"
+          echo KQ247_R34_CURRENT_PUBLIC_STATE
+          for u in http://127.0.0.1:18146/health http://127.0.0.1:18146/api/state;do
+            curl -sS -o /dev/null -w 'KQ247_R34_STAGE_HTTP=%{http_code}\n' --max-time 5 "$u" || true
+          done
+          echo KQ247_R34_CLIENT_PREFLIGHT_READONLY=YES
+          VPS
