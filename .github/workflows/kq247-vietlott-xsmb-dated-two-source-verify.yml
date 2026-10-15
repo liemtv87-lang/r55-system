@@ -1,0 +1,21 @@
+name: KQ247 Independent XSMB Daily Full27 Verify
+on:
+  push:
+    branches: [main]
+    paths:
+      - deployment/vietlott/xsmb-verified-daily.mjs
+      - .github/workflows/kq247-vietlott-xsmb-dated-two-source-verify.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify parser and two independent XSMB public pages
+        run: |
+          set -euo pipefail
+          node --check deployment/vietlott/xsmb-verified-daily.mjs
+          node deployment/vietlott/xsmb-verified-daily.mjs
+          node deployment/vietlott/xsmb-verified-daily.mjs 2026-10-15
