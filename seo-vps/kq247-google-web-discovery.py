@@ -379,6 +379,9 @@ def run():
  db.commit()
  total_sites=db.execute("SELECT COUNT(*) FROM sites").fetchone()[0]
  total_forms=db.execute("SELECT COUNT(*) FROM candidate_pages").fetchone()[0]
+ total_vn_tld_sites=db.execute("SELECT COUNT(*) FROM sites WHERE host LIKE '%.vn'").fetchone()[0]
+ total_vn_priority_sites=db.execute("SELECT COUNT(*) FROM sites WHERE priority=0").fetchone()[0]
+ incorrect_vn_priority_sites=db.execute("SELECT COUNT(*) FROM sites WHERE priority=0 AND host NOT LIKE '%.vn' AND host NOT IN ('vietnamnavigation.com','xosodaiphat.com','ketqua.net','vncapitals.com')").fetchone()[0]
  index_frontier_count=db.execute("SELECT COUNT(*) FROM index_frontier").fetchone()[0]
  # Durable accounting of reads (including repeated URLs across cycles).
  # Not a unique-URL count and never a claimed backlink count.
@@ -399,6 +402,11 @@ def run():
          "index_frontier_total_pages":index_frontier_count,
          "source_hosts_new_this_run":new_sites,"source_hosts_known_total":total_sites,
          "source_hosts_examined_this_run":host_count,
+         "source_hosts_actual_vn_tld_examined_this_run":sum(r["host"].endswith(".vn") for r in results),
+         "source_hosts_vn_priority_examined_this_run":sum(r.get("priority")==0 for r in results),
+         "source_hosts_actual_vn_tld_known_total":total_vn_tld_sites,
+         "source_hosts_vn_priority_known_total":total_vn_priority_sites,
+         "source_hosts_false_vn_priority_known_total":incorrect_vn_priority_sites,
          "host_budget_per_cycle":MAX_HOSTS,"worker_count":MAX_WORKERS,
          "sitemap_url_records_read_this_run":ur,
          "cumulative_sitemap_url_records_read":cumulative_url_records,
@@ -423,6 +431,8 @@ def run():
 def selftest():
  assert priority("https://test.com.vn/")==0
  assert priority("https://example.com/")==1
+ assert source_priority("https://international-directory.com/")==1
+ assert source_priority("https://xosodaiphat.com/")==0
  assert source_priority("https://international.com/")==1
  assert source_priority("https://international.com/")==source_priority("https://international.com/")
  assert source_priority("https://vietnamnavigation.com/")==0
