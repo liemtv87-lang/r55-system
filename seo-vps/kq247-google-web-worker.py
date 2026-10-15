@@ -245,6 +245,7 @@ def candidate_page_intent(uri):
   if "/wp-content/" in path or leaf.endswith((".svg",".png",".jpg",".jpeg",".webp",".pdf",".css",".js",".xml")):return 99
   exact={"submit-site","submit-website","submit-your-site","submit-your-website",
          "submit-url","submit-link","submit-article","submit-post","submit-guest-post",
+         "submit.php","addurl.php","add-url.php","submit-link.php",
          "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
          "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
          "guest-post-submission","contributor-guidelines",
@@ -444,6 +445,9 @@ def main():
   assert evaluate_publisher_form(service.forms,"https://veri.bet/submit-service/")["credible_site_submission_forms"]==1
   assert evaluate_publisher_form(service.forms,"https://example.org/submit-service/",html_body='<img src="includes/captcha.php?84">')["publisher_form_status"]=="needs_captcha"
   assert candidate_page_intent("https://veri.bet/submit-service")==0
+  assert candidate_page_intent("https://www.sitepromotiondirectory.com/submit.php")==0
+  assert candidate_page_intent("https://www.freeprwebdirectory.com/submit.php")==0
+  assert candidate_page_intent("https://directory.example.com/news/post.php")==99
   assert candidate_page_intent("https://example.com/directory/suggest.php")==1
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit-your-website/")["publisher_form_status"]=="form_review_required"
   comment={"action":"/wp-comments-post.php","method":"post","fields":[{"name":"url"},{"name":"comment"}]}
