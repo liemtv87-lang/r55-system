@@ -113,6 +113,14 @@ def main():
  if not discovery_service["ok"]:
   run_cmd(["systemctl","start","kq247-backlink-discovery.service"],20)
   discovery_pids=alive_processes()
+ # Restore only the isolated opt-in directory submitter if it unexpectedly stopped.
+ # Keep its SQLite submission dedup ledger intact; no general Docker restart.
+ poster_check=run_cmd(["docker","inspect","-f","{{.State.Running}}","seo-kq247-opt-in-directory"],8)
+ poster_running=poster_check.get("ok") and poster_check.get("out","").strip()=="true"
+ if not poster_running and poster_check.get("ok"):
+  run_cmd(["docker","start","seo-kq247-opt-in-directory"],25)
+  poster_check=run_cmd(["docker","inspect","-f","{{.State.Running}}","seo-kq247-opt-in-directory"],8)
+  poster_running=poster_check.get("ok") and poster_check.get("out","").strip()=="true"
  results={}
  if previous!=hour:
   with concurrent.futures.ThreadPoolExecutor(max_workers=len(SERVICES)) as pool:
@@ -126,6 +134,7 @@ def main():
   all_ok=True
   results={"hourly_actions":"already_completed_this_hour"}
  payload=collect(now,results,discovery_pids)
+ payload["poster_running"]=bool(poster_running)
  payload["hourly_complete"]=all_ok
  payload["hourly_window_utc"]=hour
  payload["supervisor_active"]=discovery_service.get("ok") or bool(discovery_pids)
