@@ -1,0 +1,47 @@
+name: KQ247 Resume All Existing SEO Timers on VPS
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-seo-resume-vps-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  resume-seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Resume SEO safely without stopping any research timers or Docker containers
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-|seo-)' | sort || true)"
+          for t in kq247-google-web-discovery.timer kq247-google-web-seo.timer kq247-seo-unified.timer; do
+            test -f "/etc/systemd/system/$t"
+            systemctl enable --now "$t"
+            systemctl is-enabled --quiet "$t"
+            systemctl is-active --quiet "$t"
+            echo "KQ247_SEO_RESUMED=$t"
+          done
+          for t in kq247-research-football.timer kq247-research-xs.timer kq247-research-vietlott.timer kq247-research-hourly.timer kq247-research-fourhour.timer; do
+            systemctl is-active --quiet "$t"
+            echo "KQ247_RESEARCH_PRESERVED=$t"
+          done
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-|seo-)' | sort || true)"
+          test "$before" = "$after"
+          echo 'KQ247_ALL_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          echo 'KQ247_ALL_THREE_SEO_TIMERS_ACTIVE=YES'
+          echo 'KQ247_ALL_FIVE_RESEARCH_TIMERS_ACTIVE=YES'
+          systemctl list-timers --all --no-pager | grep -E 'kq247-(research-|google-web-|seo-unified)'
+          VPS
