@@ -1,0 +1,64 @@
+name: KQ247 Vietlott Isolation and Guest UI Inventory 20261015
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietlott-isolation-inventory-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect only production mounts, guest CSS and distinct schedules
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          echo KQ247_SCANNED_SERVER_FINGERPRINT
+          ssh-keygen -lf "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -F 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo KQ247_LIVE_ISOLATION_INVENTORY_BEGIN
+          docker ps --format '{{.Names}}|{{.Status}}|{{.Ports}}' | grep -Ei 'kq247|vietlott|football|lottery' || true
+          for n in kq247-vietlott-vps kq247-vietlott-r33-candidate kq247-football-staging; do
+            echo "DOCKER_INSTANCE=$n"
+            docker inspect -f 'RUNNING={{.State.Running}} MOUNTS={{range .Mounts}}{{.Source}}=>{{.Destination}};{{end}}' "$n" 2>/dev/null || true
+          done
+          for p in /opt/kq247/vietlott/public/index.html /opt/kq247/vietlott/public/client.html /opt/kq247/vietlott-r33-primary/public/index.html /opt/kq247/vietlott-r33-primary/public/client.html /opt/kq247/vietlott-r33-stage/public/index.html; do
+            if [ -f "$p" ]; then
+              stat -c 'FILE=%n BYTES=%s' "$p"
+              sha256sum "$p"
+            fi
+          done
+          python3 - <<'PY'
+          import json,pathlib,re
+          for fp in ('/opt/kq247/vietlott/public/index.html','/opt/kq247/vietlott/public/client.html'):
+            p=pathlib.Path(fp)
+            if not p.is_file():continue
+            s=p.read_text(errors='replace')
+            keys=['.client-snapshot-only .result-hero,','.client-snapshot-only aside','const CLIENT_MODE=','const CLIENT_SNAPSHOT_ONLY=','iframe id="frame"','f.src=MAIN+','id="hardCard"','id="searchCard"','ensureLatestLink']
+            print('HTML_AUDIT',json.dumps({'file':fp,'matches':{k:s.count(k) for k in keys},'style_head':s[s.find('.client-snapshot-only'):s.find('.client-snapshot-only')+500]},ensure_ascii=False))
+          PY
+          echo KQ247_SCHEDULES
+          systemctl list-timers --all --no-legend --no-pager | grep -Ei 'kq247|vietlott|seo|research' | tail -90 || true
+          echo KQ247_VIETLOTT_CRONS
+          (crontab -l 2>/dev/null || true) | grep -Ei 'kq247|vietlott|seo|lottery|football' | cut -c 1-220 || true
+          echo KQ247_SYSTEMD_PATHS
+          systemctl list-unit-files --no-legend --no-pager | grep -Ei 'kq247|vietlott' | head -100 || true
+          echo KQ247_HTTP_ROUTES
+          for path in / /client.html /guest.html /api/state /health; do
+            echo "HTTP_$path=$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' "http://127.0.0.1:18088$path" || true)"
+          done
+          echo KQ247_LIVE_ISOLATION_INVENTORY_END
+          VPS
