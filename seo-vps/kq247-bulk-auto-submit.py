@@ -258,7 +258,12 @@ def attempt_groupssor(page, con, host, url, group_key, group):
                     (o["label"].casefold()==want.casefold() or o["value"].casefold()==want.casefold())),None)
                 if chosen:break
             if chosen is None:
-                write_result(con,host,group_key,url,"required_option_not_available",field)
+                if field in ("country","language"):
+                    # Never claim that a Vietnamese group is located in another
+                    # country or language merely to pass publisher validation.
+                    write_result(con,host,group_key,url,"unsupported_vietnam_locale",field)
+                else:
+                    write_result(con,host,group_key,url,"required_option_not_available",field)
                 return True
             selected[field]=chosen["value"]
         form.locator('input[name="platform"][value="telegram"]').check(force=True)
