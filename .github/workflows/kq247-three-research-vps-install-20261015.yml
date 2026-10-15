@@ -58,6 +58,7 @@ jobs:
           done
           python3 "$BASE/bin/common.py"
           python3 "$BASE/bin/install_football_fetch_timer.py"
+          systemctl start kq247-research-football-fetch.service
           python3 "$BASE/bin/football_history_merge.py" --self-test
           KQ247_RESEARCH_ROOT=$BASE/state python3 "$BASE/bin/football_history_merge.py"
           # Immutable upstream full-prize CSV; reject if its 27 numbers do not align
