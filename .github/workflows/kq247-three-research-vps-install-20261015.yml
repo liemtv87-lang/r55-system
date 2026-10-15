@@ -1,0 +1,144 @@
+name: KQ247 Three Separate 10min VPS Researchers
+on:
+  push:
+    branches: [main]
+    paths:
+      - research-vps/**
+      - .github/workflows/kq247-three-research-vps-install-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-three-research-vps-installer
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test each unique engine offline
+        run: |
+          set -euo pipefail
+          python3 -m py_compile research-vps/*.py
+          python3 research-vps/common.py
+          python3 research-vps/football.py --self-test
+          python3 research-vps/xs.py --self-test
+          python3 research-vps/vietlott.py --self-test
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install isolated research units without altering production containers
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE='root@64.120.92.172'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'install -d -m 0755 /opt/kq247/research/bin /opt/kq247/research/inputs; install -d -m 0700 /opt/kq247/research/state'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 research-vps/{common,football,xs,vietlott,report}.py "$REMOTE:/opt/kq247/research/bin/"
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 deployment/football-history/learning/grade-2026-10-11.json "$REMOTE:/opt/kq247/research/inputs/football-grades.json"
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'bash -se' <<'VPS'
+          set -euo pipefail
+          BASE=/opt/kq247/research
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
+          for domain in football xs vietlott; do
+            python3 -m py_compile "$BASE/bin/$domain.py"
+            python3 "$BASE/bin/$domain.py" --self-test
+          done
+          python3 "$BASE/bin/common.py"
+          # The user paused SEO explicitly. Pause only three dedicated SEO timers.
+          for timer in kq247-google-web-discovery.timer kq247-google-web-seo.timer kq247-seo-unified.timer; do
+            if systemctl list-unit-files "$timer" --no-legend | grep -q "$timer"; then
+              systemctl disable --now "$timer" || true
+              echo "KQ247_SEO_PAUSED=$timer"
+            fi
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/etc/systemd/system')
+          basedir='/opt/kq247/research'
+          domains={'football':('00/10','110%','2000M','KQ247_FOOTBALL_BOOTSTRAP=2000000'),
+                   'xs':('02/10','110%','2200M','KQ247_XS_TRIALS=256'),
+                   'vietlott':('04/10','110%','2800M','KQ247_VIETLOTT_DRAWS_PER_CYCLE=4')}
+          for d,(minute,cpu,mem,setting) in domains.items():
+              service=f"""[Unit]
+          Description=KQ247 isolated {d} research
+          After=local-fs.target
+          [Service]
+          Type=oneshot
+          WorkingDirectory={basedir}/bin
+          Environment=KQ247_RESEARCH_ROOT={basedir}/state
+          Environment={setting}
+          ExecStart=/usr/bin/python3 {basedir}/bin/{d}.py
+          TimeoutStartSec=540
+          CPUQuota={cpu}
+          MemoryMax={mem}
+          Nice=8
+          IOWeight=50
+          NoNewPrivileges=true
+          ProtectSystem=strict
+          ReadWritePaths={basedir}/state
+          ProtectHome=true
+          PrivateTmp=true
+          PrivateDevices=true
+          PrivateNetwork=true
+          """
+              timer=f"""[Unit]
+          Description=KQ247 {d} independent 10-minute research
+          [Timer]
+          OnCalendar=*-*-* *:{minute}:00
+          AccuracySec=1s
+          RandomizedDelaySec=0
+          Persistent=true
+          Unit=kq247-research-{d}.service
+          [Install]
+          WantedBy=timers.target
+          """
+              (root/f'kq247-research-{d}.service').write_text(service)
+              (root/f'kq247-research-{d}.timer').write_text(timer)
+          for d,calendar,arg in [('hourly','hourly',''),('fourhour','*-*-* 00/4:00:00','--four-hour')]:
+              (root/f'kq247-research-{d}.service').write_text(f"""[Unit]
+          Description=KQ247 three-research {d} reporting
+          [Service]
+          Type=oneshot
+          WorkingDirectory={basedir}/bin
+          Environment=KQ247_RESEARCH_ROOT={basedir}/state
+          ExecStart=/usr/bin/python3 {basedir}/bin/report.py {arg}
+          TimeoutStartSec=60
+          NoNewPrivileges=true
+          ProtectSystem=strict
+          ReadWritePaths={basedir}/state
+          PrivateNetwork=true
+          """)
+              (root/f'kq247-research-{d}.timer').write_text(f"""[Unit]
+          Description=KQ247 {d} research report cadence
+          [Timer]
+          OnCalendar={calendar}
+          RandomizedDelaySec=0
+          AccuracySec=1min
+          Persistent=true
+          Unit=kq247-research-{d}.service
+          [Install]
+          WantedBy=timers.target
+          """)
+          PY
+          systemctl daemon-reload
+          for d in football xs vietlott hourly fourhour; do
+            systemctl enable --now "kq247-research-$d.timer"
+            systemctl is-active --quiet "kq247-research-$d.timer"
+          done
+          KQ247_RESEARCH_ROOT=$BASE/state KQ247_FOOTBALL_BOOTSTRAP=20000 python3 "$BASE/bin/football.py"
+          KQ247_RESEARCH_ROOT=$BASE/state KQ247_XS_TRIALS=8 python3 "$BASE/bin/xs.py"
+          KQ247_RESEARCH_ROOT=$BASE/state KQ247_VIETLOTT_DRAWS_PER_CYCLE=2 python3 "$BASE/bin/vietlott.py"
+          KQ247_RESEARCH_ROOT=$BASE/state python3 "$BASE/bin/report.py"
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -E ' (kq247-|r55-)' | sort || true)"
+          test "$before" = "$after"
+          echo 'KQ247_ALL_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          echo 'KQ247_THREE_RESEARCH_TIMERS_ACTIVE=YES'
+          systemctl list-timers --all --no-pager | grep -E 'kq247-research-(football|xs|vietlott|hourly|fourhour)'
+          VPS
