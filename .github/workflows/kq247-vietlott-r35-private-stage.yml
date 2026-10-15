@@ -65,7 +65,7 @@ jobs:
           fi
           test "$(git -C "$dest" rev-parse HEAD)" = "$expected"
           echo "KQ247_VIETLOTT_STAGED_SOURCE_COMMIT=$expected"
-          docker run --rm --network none --cpus=2 --memory=2g -v "$dest":/work:ro -w /work --entrypoint sh node:22-bookworm-slim -ec '
+          docker run --rm --network none --cpus=2 --memory=2g -v "$dest":/work:ro -w /work --entrypoint sh node:22-bookworm -ec '
             set -eu
             node --check vietlott-vps-server.mjs
             node --check scripts/update-data.mjs
