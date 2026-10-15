@@ -57,7 +57,10 @@ jobs:
               except Exception as e:data[filename]={'error':type(e).__name__}
           for loc in ['/opt/kq247/lottery-daily-staging','/opt/kq247/lottery-daily-staging/data',
                       '/opt/kq247/lottery-daily-staging/public-locked',
-                      '/opt/kq247/vietlott-r33-primary/data']:
+                      '/opt/kq247/vietlott-r33-primary/data',
+                      '/opt/kq247/football-history',
+                      '/opt/kq247/football-native',
+                      '/opt/kq247/research/inputs']:
               p=pathlib.Path(loc)
               data[loc]={'exists':p.exists(),'names':[x.name for x in list(p.iterdir())[:40]] if p.is_dir() else []}
           for db in ['postgres','kq247','football','r55']:
@@ -69,6 +72,15 @@ jobs:
                    'psql','-d',db,'-Atc',"""SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND (table_name LIKE 'football_%' OR table_name LIKE 'r55_%' OR table_name LIKE '%settle%') ORDER BY 1 LIMIT 35"""],capture_output=True,text=True,timeout=6)
                   data['football_tables']=run2.stdout.strip().splitlines()
                   break
+          # Identify the actual 500-day football data reservoir (names/counts only).
+          run=subprocess.run(['docker','exec','-u','postgres','kq247-r55-postgres','psql','-d','postgres',
+                    '-Atc',"SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name LIMIT 70"],
+                    capture_output=True,text=True,timeout=8)
+          data['postgres_all_tables']=run.stdout.strip().splitlines() if run.returncode==0 else []
+          for p in ['/opt/kq247/vietlott/data','/opt/kq247/football-history','/opt/kq247/football-native','/opt/kq247/research/inputs']:
+              root=pathlib.Path(p)
+              if not root.is_dir():continue
+              data[p+'_history_files']=[{'name':q.name,'size':q.stat().st_size} for q in list(root.iterdir())[:35] if q.is_file()]
           print('KQ247_INPUT_SHAPES='+json.dumps(data,ensure_ascii=False))
           print('KQ247_RESEARCH_SHAPES_READ_ONLY=YES')
           PY
