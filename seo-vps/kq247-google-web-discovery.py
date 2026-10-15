@@ -53,6 +53,7 @@ SEARCH_PAGES=[
 # This is only a candidate signal, NOT publication permission.
 EDITORIAL_SLUGS={"submit-site","submit-website","submit-your-site","submit-your-website",
  "submit-url","submit-link","submit-article","submit-post","submit-guest-post",
+ "submit.php","addurl.php","add-url.php","submit-link.php",
  "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
  "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
  "guest-post-submission","contributor-guidelines",
@@ -392,6 +393,9 @@ def selftest():
  assert editorial_submission_candidate("https://example.com/write-for-us/") is True
  assert editorial_submission_candidate("https://directory.example.com/directory/suggest.php") is True
  assert editorial_submission_candidate("https://example.org/submit-service") is True
+ assert editorial_submission_candidate("https://www.freeprwebdirectory.com/submit.php") is True
+ assert editorial_submission_candidate("https://www.sitepromotiondirectory.com/submit.php") is True
+ assert editorial_submission_candidate("https://example.vn/article/post.php") is False
  assert editorial_submission_candidate("https://example.org/news/suggest.php") is False
  assert editorial_submission_candidate("https://example.vn/gui-bai-viet/") is True
  assert editorial_submission_candidate("https://example.vn/cong-tac-vien/") is True
