@@ -1,0 +1,60 @@
+name: KQ247 Vietlott R35 VPS Source Readonly Inventory
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-vps-source-inventory.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read VPS source availability and versions without mutation
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo 'VIETLOTT_R35_READONLY_VPS_INVENTORY=BEGIN'
+          echo 'RUNNING_CONTAINER_METADATA'
+          docker ps --format '{{.Names}} {{.Image}} {{.Status}}' | grep -E '(vietlott|sales)' || true
+          echo 'ROOT_PATH_METADATA'
+          for path in /opt/kq247/vietlott /opt/kq247/vietlott/current /opt/kq247/vietlott/versions /opt/kq247/vietlott/shared; do
+             if [ -d "$path" ]; then echo "PATH_EXISTS=$path";else echo "PATH_MISSING=$path";fi
+          done
+          echo 'LOCAL_DOCKER_HEALTH'
+          curl -sS --max-time 12 -o /tmp/kq247-vietlott-r35-inventory-health.json -w 'HEALTH_HTTP=%{http_code}\n' http://127.0.0.1:18088/health || true
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('/tmp/kq247-vietlott-r35-inventory-health.json')
+          if p.exists():
+            try:
+              j=json.loads(p.read_text())
+              print('HEALTH_METADATA='+json.dumps({k:j.get(k) for k in ('ok','runtime','status','backtest_status')},ensure_ascii=False))
+            except Exception:print('HEALTH_NON_JSON=true')
+          for directory in ('/opt/kq247/vietlott','/opt/kq247/vietlott/current'):
+            base=pathlib.Path(directory)
+            for relative in ('scripts/update-data.mjs','scripts/snapshot-policy.mjs','scripts/vps-release-gate.mjs','vietlott-vps-server.mjs'):
+              p=base/relative
+              if p.is_file():
+                content=p.read_text(errors='replace')
+                print('SOURCE_META='+json.dumps({'file':str(p),'bytes':p.stat().st_size,'has_r35':('USER_35_HARD_RULES' in content),'has_after_20h':('>=20' in content or '20*60+5' in content)},ensure_ascii=False))
+          PY
+          echo 'PRIVATE_SOURCE_ACCESS_READONLY'
+          if [ -d /opt/kq247/vietlott/current/.git ]; then
+             cd /opt/kq247/vietlott/current
+             echo "VPS_LOCAL_HEAD=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+             if GIT_TERMINAL_PROMPT=0 timeout 15 git ls-remote origin HEAD >/dev/null 2>&1;then echo 'VPS_GIT_ORIGIN_ACCESS=YES';else echo 'VPS_GIT_ORIGIN_ACCESS=NO';fi
+          else echo 'VPS_LOCAL_GIT_CHECKOUT=NO';fi
+          echo 'VIETLOTT_R35_READONLY_VPS_INVENTORY=END'
+          VPS
