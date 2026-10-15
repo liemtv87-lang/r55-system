@@ -5,8 +5,6 @@ on:
     paths:
       - 'seo-monitor/**'
       - '.github/workflows/seo-hourly-audit.yml'
-  schedule:
-    - cron: '17 * * * *'
 permissions:
   contents: read
 concurrency:
