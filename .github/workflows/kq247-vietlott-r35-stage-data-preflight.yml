@@ -1,0 +1,47 @@
+name: KQ247 Vietlott R35 Stage Same-day Data Preflight
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-stage-data-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Verify private stage same-day source and isolation without production mutation
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=kq247-vietlott-r35-stage
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          test "$(docker inspect -f '{{.Config.Image}}' "$name")" = 'kq247-vietlott-r35-stage:35404d0f27f7'
+          echo 'R35_SOURCE_PREFLIGHT_DATE_VN='$(TZ=Asia/Ho_Chi_Minh date +%F)
+          echo 'KQ247_R35_XSMB_SOURCE_VERIFY'
+          if timeout 80 docker exec "$name" node scripts/xsmb-verified-daily.mjs "$(TZ=Asia/Ho_Chi_Minh date +%F)";then
+            echo 'KQ247_R35_XSMB_FULL27_TWO_SOURCE=PASS'
+          else echo 'KQ247_R35_XSMB_FULL27_TWO_SOURCE=NOT_READY';fi
+          echo 'KQ247_R35_STAGE_NEEDS_REPAIR'
+          docker exec "$name" node scripts/needs-repair.mjs --verbose || true
+          echo
+          echo 'KQ247_R35_PRIMARY_AND_CLIENT_STATIC'
+          for url in 'http://127.0.0.1:18141/' 'http://127.0.0.1:18141/guest-snapshot.html' 'http://127.0.0.1:18141/client.html' 'http://127.0.0.1:18141/api/state';do
+             curl -sS --max-time 7 -o /dev/null -w '%{url_effective} HTTP=%{http_code}\n' "$url" || true
+          done
+          echo 'KQ247_R35_LEGACY_AUTH_DEPENDENCY'
+          docker exec "$name" sh -c "grep -o 'https://[^\" ]*neon.tech/' /app/public/client.html | head -1 | sed 's|https://.*|EXTERNAL_NEON_AUTH_PRESENT|' || true"
+          echo 'KQ247_R35_PROD_UNCHANGED'
+          docker inspect -f '{{.Name}} {{.State.Running}} {{.Id}}' kq247-vietlott-vps kq247-vietlott-r33-candidate
+          VPS
