@@ -54,7 +54,7 @@ jobs:
             let mask=0;for(const h of heads)mask|=1<<h;
             const active=Number((mask&3)!==0)+Number((mask&6)!==0)+Number((mask&12)!==0)+Number((mask&24)!==0);
             const r35=active>=1&&active<=3;
-            return {r33,r34,r35,all:r33&&r34&&r35};
+            return {r33,r34,r35,r33_r34:r33&&r34,r33_r35:r33&&r35,r34_r35:r34&&r35,all:r33&&r34&&r35};
           };
           console.log('KQ247_R35_HISTORICAL_BACKTEST_VERIFIED='+String(mergedValid));
           for(const [product,maxn] of [['mega645',45],['power655',55]]){
@@ -64,7 +64,8 @@ jobs:
             const windows=[['30',last30],['60',last60],['365d',year]];
             for(const [window,rows] of windows){
               let jpEligible=0,firstEligible=0,firstTotal=0,top3Fail=0,headsFail=0;
-              const diagnosis={product,window,draws:rows.length,jp:{r33:0,r34:0,r35:0,all:0},g1:{r33:0,r34:0,r35:0,all:0},jp2_power:{r33:0,r34:0,r35:0,all:0}};
+              const zeros=()=>({r33:0,r34:0,r35:0,r33_r34:0,r33_r35:0,r34_r35:0,all:0});
+              const diagnosis={product,window,draws:rows.length,jp:zeros(),g1:zeros(),jp2_power:zeros()};
               const tally=(bucket,nums)=>{const f=flags(nums);for(const [k,v] of Object.entries(f))if(v)bucket[k]++};
               for(const draw of rows){
                 const prize=draw.numbers,gate=vietlottHeadAndLast3Gate(prize);
