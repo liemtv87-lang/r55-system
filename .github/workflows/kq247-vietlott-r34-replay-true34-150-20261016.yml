@@ -1,0 +1,87 @@
+name: KQ247 Vietlott Replay True R34 Full Pool Staging
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-replay-true34-150-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-true34-isolated-replay
+  cancel-in-progress: false
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Recalculate corrected 34-rule locked pools from verified Oct15 input into NEW isolated folder
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          sha=f26ef0fdc70b2b669bf9ea337927b9b2cb568645
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          base=/opt/kq247/vietlott
+          src="$base/versions/r34-true34-$sha"
+          dest="$base/replay/r34-true34-20261015-$sha"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          if test -f "$dest/output/manifest.json";then
+            echo KQ247_R34_ISOLATED_REPLAY_ALREADY_PRESENT=YES
+            test "$before" = "$(docker ps --format '{{.Names}}|{{.ID}}' | sort)"
+            exit 0
+          fi
+          test ! -e "$dest"
+          if test ! -d "$src/.git";then
+            install -d -m 0755 "$base/versions"
+            tmpgit=$(mktemp -d "$base/versions/.r34-src-XXXXXX")
+            trap 'rm -rf "$tmpgit"' EXIT
+            GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$tmpgit/source"
+            test "$(git -C "$tmpgit/source" rev-parse HEAD)" = "$sha"
+            mv "$tmpgit/source" "$src"
+            rmdir "$tmpgit"
+            trap - EXIT
+          fi
+          test "$(git -C "$src" rev-parse HEAD)" = "$sha"
+          install -d -m 0755 "$base/replay"
+          temp=$(mktemp -d "$base/replay/.r34-true34-XXXXXX")
+          trap 'rm -rf "$temp"' EXIT
+          mkdir -p "$temp/input/data" "$temp/input/public" "$temp/output"
+          old=kq247-vietlott-r34-stage-20261015
+          test "$(docker inspect -f '{{.State.Running}}' "$old")" = true
+          for p in mega645 power655;do
+             docker cp "$old:/app/data/history-$p.json" "$temp/input/data/history-$p.json"
+             docker cp "$old:/app/data/snapshot-$p.json" "$temp/input/data/snapshot-$p.json"
+             docker cp "$old:/app/public/filter-context-$p.json" "$temp/input/public/filter-context-$p.json"
+             docker cp "$old:/app/public/filtered-pool-$p.json" "$temp/input/public/filtered-pool-$p.json"
+          done
+          docker cp "$old:/app/data/xsmb200.json" "$temp/input/data/xsmb200.json"
+          docker cp "$old:/app/public/state.json" "$temp/input/public/state.json"
+          echo KQ247_R34_VERIFIED_IMMUTABLE_SOURCE_COPIED=YES
+          timeout 1500 docker run --rm --network none --cpus=2 --memory=6g --pids-limit=128 \
+            -e VIETLOTT_ISOLATED_REPLAY=1 \
+            -v "$src":/work:ro -v "$temp/input":/replay-input:ro \
+            -v "$temp/output":/replay-output:rw -w /work \
+            --entrypoint node node:22-bookworm scripts/replay-r34-locked-stage.mjs
+          for p in mega645 power655;do
+             node -e 'const fs=require("fs");const dir=process.argv[1],p=process.argv[2];const full=JSON.parse(fs.readFileSync(dir+"/public/filtered-pool-"+p+".json")),mini=JSON.parse(fs.readFileSync(dir+"/public/reduced-pool-"+p+".json"));if(full.keys.length!==full.valid_total||mini.keys.length!==mini.valid_total||mini.keys.length>(p==="mega645"?180000:450000))process.exit(3); console.log("KQ247_R34_REPLAY_LOCKED_VERIFIED "+p+" FULL="+full.keys.length+" EXTRA="+mini.keys.length);' "$temp/output" "$p"
+          done
+          (cd "$temp/output" && find . -type f -print0 | sort -z | xargs -0 sha256sum > "$temp/OUTPUT_SHA256SUMS")
+          mv "$temp" "$dest"
+          trap - EXIT
+          (cd "$dest/output" && sha256sum --check --status ../OUTPUT_SHA256SUMS)
+          test "$before" = "$(docker ps --format '{{.Names}}|{{.ID}}' | sort)"
+          echo KQ247_R34_TRUE34_REPLAY_ARCHIVE="$dest"
+          echo KQ247_R34_PRODUCTION_CONTAINERS_UNCHANGED=YES
+          echo KQ247_R34_PUBLIC_CUTOVER=NOT_PERFORMED
+          VPS
