@@ -323,6 +323,22 @@ def candidate_pages_to_inspect(limit=240):
  except (sqlite3.Error,OSError,ValueError):
   return []
 
+def candidate_funnel_counts():
+ """Quantify sitemap URLs versus true submission paths (read-only)."""
+ stats={"sitemap_candidate_urls":0,"matching_submission_intent":0,
+        "matching_vn_intent":0,"unique_candidate_hosts":0}
+ try:
+  with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=5) as db:
+   urls=[row[0] for row in db.execute("SELECT url FROM candidate_pages").fetchall()]
+  stats["sitemap_candidate_urls"]=len(urls)
+  matched=[uri for uri in urls if candidate_page_intent(uri)<99]
+  stats["matching_submission_intent"]=len(matched)
+  stats["matching_vn_intent"]=sum((urllib.parse.urlsplit(uri).hostname or "").endswith(".vn") for uri in matched)
+  stats["unique_candidate_hosts"]=len({urllib.parse.urlsplit(uri).hostname for uri in matched})
+ except (sqlite3.Error,OSError,ValueError):
+  stats["error"]="candidate_ledger_unavailable"
+ return stats
+
 def evaluate_publisher_form(forms, url, page_title="", html_body=""):
  """Evidence only: a form is never permission to submit.
  Ignore search, newsletter, login, WordPress comment and ordinary contact forms.
@@ -470,6 +486,7 @@ def main():
   assert candidate_page_intent("https://directory.example.com/news/post.php")==99
   assert candidate_page_intent("https://publisher.vn/directory/?wpbdp_view=submit_listing")==1
   assert candidate_page_intent("https://publisher.vn/news/?action=addlink")==99
+  assert set(candidate_funnel_counts()) >= {"sitemap_candidate_urls","matching_submission_intent","unique_candidate_hosts"}
   email_form=Links();email_form.feed('<form method="post"><input name="url"><input name="title"><input type="email" name="owner_email" required></form>')
   assert evaluate_publisher_form(email_form.forms,"https://directory.example/submit-site")["publisher_form_status"]=="owner_email_required"
   terms_form=Links();terms_form.feed('<form method="post"><input name="url"><input name="description"><input type="checkbox" name="accept_terms" required></form>')
@@ -518,6 +535,7 @@ def main():
          "authorized_submission_sources_this_run":0,
          "sources":sources,
          "candidate_pages_inspected_this_run":len(candidate_pages),
+         "candidate_selection_funnel":candidate_funnel_counts(),
          "new_homepage_editorial_candidates_saved_this_run":homepage_candidates_new,
          "candidate_pages_with_post_forms_this_run":sum(bool(p.get("post_forms_observed")) for p in candidate_pages),
          "candidate_page_inspections":candidate_pages,
@@ -539,7 +557,7 @@ def main():
                           "new_web_contribution_candidates_this_run","web_backlinks",
                           "candidate_pages_inspected_this_run","new_homepage_editorial_candidates_saved_this_run",
                           "credible_website_submission_forms_this_run",
-                          "publisher_review_queue","scan_host_mix","all_hosts_ever_checked",
+                          "publisher_review_queue","candidate_selection_funnel","scan_host_mix","all_hosts_ever_checked",
                           "new_verified_web_backlinks_this_run","elapsed_seconds")},
     ensure_ascii=False))
 if __name__=="__main__":main()
