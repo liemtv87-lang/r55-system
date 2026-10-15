@@ -341,7 +341,7 @@ def evaluate_publisher_form(forms, url, page_title="", html_body=""):
  forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\s+"
                           r"(?:online\s+)?(?:gambling|betting|casino)|"
                           r"(?:gambling|betting|casino)\s+(?:is\s+)?(?:not\s+allowed|prohibited)",body[:150000]))
- has_captcha=bool(re.search(r'(?:g-recaptcha|h-captcha|cf-turnstile|captcha\\.php|captcha\\.png|captcha\\.jpg|captcha\\.jpeg|captcha\\.gif)',body))
+ has_captcha=bool(re.search(r'(?:g-recaptcha|h-captcha|cf-turnstile|captcha\.php|captcha\.png|captcha\.jpg|captcha\.jpeg|captcha\.gif)',body))
  status=("blocked_topic_policy" if forbidden else "needs_captcha" if has_captcha else
          "form_review_required" if suitable else "no_credible_site_submission_form")
  return {"publisher_form_status":status,"credible_site_submission_forms":len(suitable),
