@@ -199,12 +199,29 @@ def inspect_source(url):
  return out
 
 def candidate_pages_to_inspect(limit=120):
- """Inspect discovered contribution pages, not just site homepages."""
+ """Prioritize real submission-intent pages, rotating through unreviewed URLs.
+ Persist a durable audit cursor: do not inspect the same latest 120 forever.
+ No form presence grants permission to submit content.
+ """
  try:
   with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as db:
-   rows=db.execute("SELECT url FROM candidate_pages WHERE review_status='unverified' ORDER BY last_seen DESC LIMIT ?",(limit,)).fetchall()
-  return [row[0] for row in rows if urllib.parse.urlsplit(row[0]).scheme=="https"]
- except (sqlite3.Error,OSError):
+   rows=db.execute("SELECT url FROM candidate_pages WHERE review_status='unverified'").fetchall()
+  with sqlite3.connect(ROOT/"google-web-seo.sqlite3",timeout=2) as audit:
+   audit.execute("CREATE TABLE IF NOT EXISTS candidate_audits (url TEXT PRIMARY KEY,checked_at TEXT NOT NULL,http INTEGER,post_forms INTEGER,forms INTEGER,error TEXT)")
+   last_checked=dict(audit.execute("SELECT url,checked_at FROM candidate_audits").fetchall())
+  strong=("dang-bai","dang-tin","gui-bai","gui-tin","submit","add-url","add-site","them-website","contribute","guest-post")
+  def rank(uri):
+   p=urllib.parse.urlsplit(uri)
+   host=(p.hostname or "").lower()
+   path=p.path.lower()
+   return (1 if uri in last_checked else 0,
+           0 if any(k in path for k in strong) else 1,
+           0 if host.endswith(".vn") else 1,
+           last_checked.get(uri,""),uri)
+  candidates=[row[0] for row in rows if urllib.parse.urlsplit(row[0]).scheme=="https"]
+  candidates.sort(key=rank)
+  return candidates[:limit]
+ except (sqlite3.Error,OSError,ValueError):
   return []
 
 def inspect_candidate_page(url):
@@ -227,6 +244,11 @@ def store_and_report(landing, sources, status):
  db.execute("CREATE TABLE IF NOT EXISTS history (run_at TEXT,host TEXT,http INTEGER,candidates INTEGER,error TEXT)")
  db.execute("CREATE TABLE IF NOT EXISTS verified (source_url TEXT,target_url TEXT,first_seen TEXT,PRIMARY KEY(source_url,target_url))")
  db.execute("CREATE TABLE IF NOT EXISTS submissions (host TEXT,target_url TEXT,receipt_url TEXT,status TEXT,created_at TEXT,PRIMARY KEY(host,target_url))")
+ db.execute("CREATE TABLE IF NOT EXISTS candidate_audits (url TEXT PRIMARY KEY,checked_at TEXT NOT NULL,http INTEGER,post_forms INTEGER,forms INTEGER,error TEXT)")
+ for page in status.get("candidate_page_inspections",[]):
+  db.execute("INSERT OR REPLACE INTO candidate_audits VALUES(?,?,?,?,?,?)",(
+   page.get("url"),page.get("checked_at_utc"),page.get("http"),
+   page.get("post_forms_observed",0),page.get("forms_observed",0),page.get("error")))
  new_links=[]
  now=status["checked_at_utc"]
  for row in sources:
@@ -247,6 +269,8 @@ def store_and_report(landing, sources, status):
  status["all_hosts_ever_checked"]=db.execute("SELECT COUNT(DISTINCT host) FROM history WHERE host IS NOT NULL").fetchone()[0]
  status["submissions_confirmed"]=db.execute("SELECT COUNT(*) FROM submissions WHERE status='confirmed'").fetchone()[0]
  status["submissions_pending"]=db.execute("SELECT COUNT(*) FROM submissions WHERE status='pending'").fetchone()[0]
+ status["candidate_pages_audited_lifetime"]=db.execute("SELECT COUNT(*) FROM candidate_audits").fetchone()[0]
+ status["candidate_pages_with_post_forms_lifetime"]=db.execute("SELECT COUNT(*) FROM candidate_audits WHERE post_forms>0").fetchone()[0]
  db.commit()
  db.close()
  PUBLIC.mkdir(parents=True,exist_ok=True)
