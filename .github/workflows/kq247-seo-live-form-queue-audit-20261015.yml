@@ -41,6 +41,17 @@ jobs:
                       body=response.read(500000).decode('utf8','replace')
                       dest=response.geturl()
                   p=Extract();p.feed(body)
+                  for sel in re.finditer(r'<select\\b[^>]*>.*?</select>',body,re.I|re.S):
+                      v=sel.group()
+                      opening=v.split('>',1)[0]
+                      attr=re.search(r'(?:name|id)="([^"]+)"',opening,re.I)
+                      options=re.findall(r'<option\\b([^>]*)>(.*?)</option>',v,re.I|re.S)
+                      options=[{'value':(re.search(r'value="([^"]*)"',attrs) or [None,''])[1],
+                                'text':re.sub(r'<[^>]+>','',title).strip()[:80]} for attrs,title in options]
+                      print('GROUPSSOR_SELECT_OPTIONS',{'field':attr.group(1) if attr else '', 'options':options[:40]})
+                  for needle in ('submit-group-form','fetch(','/api/','response.ok','submit-success'):
+                      at=body.find(needle)
+                      if at>=0: print('GROUPSSOR_INLINE_JS',needle,body[max(0,at-100):at+600].replace('\\n',' ')[:750])
                   print('GROUPSSOR_FORM_READONLY',{'url':dest,'forms':p.forms[:5],'scripts':p.scripts[:15],
                         'captcha_markup':any(x in body.lower() for x in ('recaptcha','cf-turnstile','h-captcha')),
                         'form_count':len(p.forms),
