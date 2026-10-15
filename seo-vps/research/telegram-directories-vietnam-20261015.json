@@ -1,0 +1,35 @@
+{
+  "checked_at_utc": "2026-10-15T05:42:58Z",
+  "scope": "Telegram directory only; not Google Web SEO",
+  "targets": [
+    "https://t.me/keochuyengia79",
+    "https://t.me/xsbm999"
+  ],
+  "sources": [
+    {
+      "name": "Taligram",
+      "url": "https://taligram.org/vi/them",
+      "evidence": "Live Vietnamese free submission form with category and language, public group only; moderation; must check terms and prior SQLite receipts before submission",
+      "status": "form_verified_not_submitted"
+    },
+    {
+      "name": "TgramLink",
+      "url": "https://tgramlink.com/vi/submit",
+      "evidence": "Live Vietnamese free form requires group name and public t.me username; explicit duplicate ban and review status lookup; must check prior receipts",
+      "status": "form_verified_not_submitted"
+    }
+  ],
+  "new_verified_public_backlinks": 0,
+  "submission_receipts_created": 0,
+  "last_verified_vps_health_at_utc": "2026-10-15T03:35:52Z",
+  "last_verified_vps": {
+    "scanner_watch": true,
+    "submitter_running": true,
+    "unified_timer_active": true,
+    "known_hosts": 62,
+    "form_candidates": 27,
+    "football_backlinks": 3,
+    "lottery_backlinks": 3
+  },
+  "blocker": "Fresh VPS write/audit unavailable in this run; GitHub write calls failed; no submission attempted without SQLite dedup check."
+}
