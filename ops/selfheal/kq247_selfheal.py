@@ -84,7 +84,8 @@ def discover_timers(scope):
         parts=line.split()
         if len(parts) < 2: continue
         name, status=parts[0], parts[1]
-        if name.startswith("kq247-") and name.endswith(".timer") and status=="enabled" and classify_timer(name)==scope:
+        if (name.startswith("kq247-") and not name.startswith("kq247-selfheal-")
+                and name.endswith(".timer") and status=="enabled" and classify_timer(name)==scope):
             out.append(name)
     return sorted(set(out)), None
 
