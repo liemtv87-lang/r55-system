@@ -15,6 +15,7 @@ import sqlite3
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 
 ROOT = Path(os.environ.get("KQ247_GOOGLE_ROOT", "/opt/kq247/google-web-seo"))
 PUBLIC = Path(os.environ.get("KQ247_PUBLIC_ROOT", "/opt/kq247/deployment/football-original/public"))
@@ -163,6 +164,9 @@ def get(url, *, check_robots=False):
    rp=RobotFileParser()
    rp.parse(rules.splitlines())
    if not rp.can_fetch(UA,url):return {"error":"robots_disallow"}
+  except urllib.error.HTTPError as exc:
+   # A missing robots.txt (404/410) does not prohibit crawling. Other errors fail closed.
+   if exc.code not in (404,410):return {"error":"robots_http_"+str(exc.code)}
   except Exception:return {"error":"robots_not_verified"}
  try:
   req=urllib.request.Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xml,text/plain"})
@@ -248,6 +252,27 @@ def candidate_page_intent(uri):
   return 99
  except (ValueError,UnicodeError):return 99
 
+def remember_publisher_candidates(sources):
+ """Save first-party homepage outbound contributor links for follow-up scrutiny.
+ Candidate discovery is read-only, never consent or a submission.
+ """
+ db=sqlite3.connect(ROOT/"google-web-seo.sqlite3",timeout=5)
+ db.execute("CREATE TABLE IF NOT EXISTS publisher_candidate_pages (url TEXT PRIMARY KEY, host TEXT, first_seen TEXT)")
+ added=0
+ for item in sources:
+  for uri in item.get("potential_contributor_pages",[]):
+   if candidate_page_intent(uri)>=99:continue
+   try:
+    p=urllib.parse.urlsplit(uri)
+    host=(p.hostname or "").lower().removeprefix("www.")
+    if p.scheme!="https" or not host or host in ("localhost","t.me","telegram.me"):continue
+   except ValueError:continue
+   result=db.execute("INSERT OR IGNORE INTO publisher_candidate_pages VALUES(?,?,?)",(uri,host,utcnow()))
+   added+=max(result.rowcount,0)
+ db.commit()
+ db.close()
+ return added
+
 def candidate_pages_to_inspect(limit=240):
  """Rotate only editorial submission-intent pages; not arbitrary keyword articles.
  Reading or finding a POST form never authorizes submitting content.
@@ -257,8 +282,11 @@ def candidate_pages_to_inspect(limit=240):
    rows=db.execute("SELECT url FROM candidate_pages WHERE review_status='unverified'").fetchall()
   with sqlite3.connect(ROOT/"google-web-seo.sqlite3",timeout=2) as audit:
    audit.execute("CREATE TABLE IF NOT EXISTS candidate_audits (url TEXT PRIMARY KEY,checked_at TEXT NOT NULL,http INTEGER,post_forms INTEGER,forms INTEGER,error TEXT)")
+   audit.execute("CREATE TABLE IF NOT EXISTS publisher_candidate_pages (url TEXT PRIMARY KEY, host TEXT, first_seen TEXT)")
    last_checked=dict(audit.execute("SELECT url,checked_at FROM candidate_audits").fetchall())
-  candidates=[row[0] for row in rows if candidate_page_intent(row[0])<99]
+   homepage_candidates=[x[0] for x in audit.execute("SELECT url FROM publisher_candidate_pages ORDER BY first_seen DESC LIMIT 3000").fetchall()]
+  candidates=list(dict.fromkeys([row[0] for row in rows]+homepage_candidates))
+  candidates=[uri for uri in candidates if candidate_page_intent(uri)<99]
   def rank(uri):
    host=(urllib.parse.urlsplit(uri).hostname or "").lower()
    return (candidate_page_intent(uri),
@@ -406,6 +434,7 @@ def main():
   assert evaluate_publisher_form([comment],"https://example.vn/guest-post/")["credible_site_submission_forms"]==0
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="No gambling allowed")["publisher_form_status"]=="blocked_topic_policy"
   assert candidate_page_intent("https://example.vn/submit-your-website/")==0
+  assert candidate_page_intent("https://example.vn/gioi-thieu.html")==99
   assert candidate_page_intent("https://example.com/submit-your-site-for-review/")==1
   assert candidate_page_intent("https://example.org/news/study-contributes-to-care/")==99
   assert candidate_page_intent("https://example.org/wp-content/img/submit-spin.svg")==99
@@ -420,6 +449,7 @@ def main():
   first=list(pool.map(audit_first_party,TARGETS.items()))
   seeds=source_seeds()
   sources=list(pool.map(inspect_source,seeds))
+  homepage_candidates_new=remember_publisher_candidates(sources)
   candidate_pages=list(pool.map(inspect_candidate_page,candidate_pages_to_inspect()))
   other=list(pool.map(lambda u:get(u),[BASE+"/robots.txt",BASE+"/sitemap.xml"]))
  result={"campaign":"google_web_independent","checked_at_utc":utcnow(),
@@ -440,6 +470,7 @@ def main():
          "authorized_submission_sources_this_run":0,
          "sources":sources,
          "candidate_pages_inspected_this_run":len(candidate_pages),
+         "new_homepage_editorial_candidates_saved_this_run":homepage_candidates_new,
          "candidate_pages_with_post_forms_this_run":sum(bool(p.get("post_forms_observed")) for p in candidate_pages),
          "candidate_page_inspections":candidate_pages,
          "credible_website_submission_forms_this_run":sum(p.get("credible_site_submission_forms",0) for p in candidate_pages),
@@ -456,7 +487,8 @@ def main():
  print("KQ247_GOOGLE_WEB_STATUS="+json.dumps(
    {k:result[k] for k in ("checked_at_utc","sources_checked_this_run","sources_http200_this_run",
                           "new_web_contribution_candidates_this_run","web_backlinks",
-                          "candidate_pages_inspected_this_run","credible_website_submission_forms_this_run",
+                          "candidate_pages_inspected_this_run","new_homepage_editorial_candidates_saved_this_run",
+                          "credible_website_submission_forms_this_run",
                           "publisher_review_queue","scan_host_mix","all_hosts_ever_checked",
                           "new_verified_web_backlinks_this_run","elapsed_seconds")},
     ensure_ascii=False))
