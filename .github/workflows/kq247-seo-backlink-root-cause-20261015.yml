@@ -1,0 +1,65 @@
+name: KQ247 SEO Backlink VPS Read-only Root Cause 20261015
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-seo-backlink-root-cause-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Install SSH transport
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect isolated backlink systemd timers and workers without changing services
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'python3 -' <<'PY'
+          import os,subprocess,json,pathlib,datetime
+          root=pathlib.Path('/opt/pwremote/kq247-backlink-background')
+          units=['kq247-seo-backlinks.timer','kq247-seo-backlinks.service','kq247-telegram-playwright.timer','kq247-telegram-playwright.service','kq247-seo-groups.timer','kq247-seo-indexnow.timer','kq247-organic-10k.timer']
+          def cmd(args,timeout=10):
+              try:
+                  r=subprocess.run(args,text=True,capture_output=True,timeout=timeout)
+                  return {'exit':r.returncode,'out':r.stdout.strip()[:1000], 'err':r.stderr.strip()[:180]}
+              except Exception as e:return {'error':type(e).__name__}
+          def json_report(path):
+              try:
+                  p=pathlib.Path(path);data=json.loads(p.read_text())
+                  age=round((datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc)).total_seconds()/60,1)
+                  keep=['updated_utc','updated_at_utc','checked_at_utc','url_records_actually_read_total','unique_hosts_discovered','http_hosts_checked_this_run','verified_new_public_links','counts','hosts_by_status','verified_new_this_hour','new_links_last_hour','checked_this_hour']
+                  return {'age_minutes':age,'bytes':p.stat().st_size,'fields':{k:data.get(k) for k in keep if k in data},'group_summary':{k:{'verified_published':v.get('verified_published')} for k,v in data.get('goals',{}).items()} if 'goals' in data else None}
+              except Exception as e:return {'error':type(e).__name__}
+          print('AUDIT_UTC',datetime.datetime.now(datetime.timezone.utc).isoformat())
+          for unit in units:
+              print('SYSTEMD',unit,json.dumps({'active':cmd(['systemctl','is-active',unit]),'enabled':cmd(['systemctl','is-enabled',unit]),'show':cmd(['systemctl','show',unit,'--property=Result,ExecMainStatus,SubState,ActiveEnterTimestamp,LastTriggerUSec,NextElapseUSecRealtime'])},ensure_ascii=False))
+          print('NEXT_TIMERS',json.dumps(cmd(['systemctl','list-timers','--all','--no-pager']),ensure_ascii=False))
+          pidfile=root/'worker.pid'
+          try:
+              pid=int(pidfile.read_text().strip())
+              args=pathlib.Path('/proc/'+str(pid)+'/cmdline').read_bytes().decode('utf8','replace').split('\x00')
+              good=any('kq247-backlink-background-discovery-20261014.py' in a for a in args) and '--watch' in args
+              print('DISCOVERY_PID',json.dumps({'pid':pid,'alive_matching_process':good}))
+          except Exception as e:print('DISCOVERY_PID',json.dumps({'alive_matching_process':False,'reason':type(e).__name__}))
+          print('POSTER',json.dumps(cmd(['docker','inspect','-f','{{.State.Status}}|{{.State.ExitCode}}|{{.RestartCount}}','seo-kq247-opt-in-directory']),ensure_ascii=False))
+          for p in [root/'latest.json',root/'bulk-posts.json',pathlib.Path('/opt/kq247/deployment/football-original/public/seo-backlinks-status.json'),pathlib.Path('/opt/pwremote/seo-playwright-hourly/state/latest.json')]:
+              print('REPORT',str(p),json.dumps(json_report(p),ensure_ascii=False))
+          for unit in ['kq247-seo-backlinks.service','kq247-telegram-playwright.service']:
+              x=cmd(['journalctl','-u',unit,'-n','12','--no-pager','-o','short-iso'],timeout=10)
+              print('JOURNAL',unit,json.dumps(x,ensure_ascii=False)[:2400])
+          for name in ['worker.log']:
+              p=root/name
+              if p.exists():
+                  lines=p.read_text(errors='replace').splitlines()[-12:]
+                  print('WORKER_LOG_TAIL',json.dumps(lines,ensure_ascii=False)[-2200:])
+          print('SEPARATE_WORKERS_ONLY_READ=YES')
+          PY
