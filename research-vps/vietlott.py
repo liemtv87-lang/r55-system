@@ -29,7 +29,7 @@ def grade(pred,actual,product):
 def one_portfolio(hist,index,product,maxn,target):
  draw=hist[index]
  older=hist[:index]
- if len(older)<35:raise ValueError("insufficient confirmed predraw history")
+ # Draws with fewer than 35 past draws use the same leakage-free cold-start baseline.
  # The seed uses only outcomes available before this draw; never its winning numbers.
  previous_fingerprint=hashlib.sha256(
   "|".join(x["date"]+":"+",".join(map(str,x["nums"])) for x in older[-60:]).encode()).hexdigest()
@@ -50,7 +50,7 @@ def one_portfolio(hist,index,product,maxn,target):
          "predraw_seed_only":True,"simulated_not_purchased":True,"method":"PRECOMMITTED_UNIFORM_COVERAGE_BASELINE_V1"}
 def research(previous):
  cache=load(ROOT/"vietlott-draws.json") or {}
- touched=0;source_rows={};errors=[]
+ touched=0;source_rows={};errors=[];new_tickets=0
  for product,(maxn,target) in CONFIG.items():
   raw=load(os.path.join(SRC,"history-"+product+".json"))
   if not isinstance(raw,list):
@@ -61,8 +61,8 @@ def research(previous):
   source_rows[product]=len(history)
   if len(history)<66:errors.append(product+":history_short");continue
   # All verified historical draws, never truncate to last 110 / 60 / 30.
-  # 35 initial draws serve as strictly past-only features; backtest every eligible draw.
-  pending=[i for i in range(35,len(history))
+  # Include EVERY historic draw; earliest draws are cold-started with no future data.
+  pending=[i for i in range(len(history))
            if product+"|"+history[i]["date"] not in cache]
   pending.sort() # oldest first: complete each month chronologically, with no future results as input
   for i in pending[:max(1,MAX_NEW//2)]:
@@ -71,6 +71,7 @@ def research(previous):
     r=one_portfolio(history,i,product,maxn,target)
     cache[product+"|"+r["date"]]=r
     touched+=1
+    new_tickets+=r["tickets"]
     save(ROOT/"vietlott-draws.json",cache)
    except Exception as e:
     errors.append(product+":"+draw["date"]+":"+type(e).__name__)
@@ -79,7 +80,7 @@ def research(previous):
  for product,(maxn,target) in CONFIG.items():
   rows=[v for k,v in cache.items() if k.startswith(product+"|")
         and isinstance(v,dict) and v.get("tickets")==target]
-  eligible=source_rows.get(product,0)-35
+  eligible=source_rows.get(product,0)
   remaining[product]=max(0,eligible-len(rows))
   months=sorted({r["date"][:7] for r in rows})
   monthly[product]={}
@@ -99,10 +100,13 @@ def research(previous):
          "month_target":{"jackpot":8,"g1":1500},
          "evaluations":sum(r.get("tickets",0) for r in cache.values() if isinstance(r,dict))*6,
          "new_draw_portfolios_this_cycle":touched,
+         "new_tickets_evaluated_this_cycle":new_tickets,
+         "new_numbers_compared_this_cycle":new_tickets*6,
          "historical_draw_portfolios_checked":len(cache),
          "remaining_full_history_draws":remaining,
          "entire_history_backtest_completed":bool(source_rows) and all(v==0 for v in remaining.values()) and len(source_rows)==2,
          "research_draws_from_earliest_eligible":True,
+         "includes_first_35_cold_start_draws":True,
          "monthly":monthly,"errors":errors[-10:],
          "metrics":{"qualified_months":0,"candidate_promotable":False},
          "promotion_blocker":"No independent precommitted prospective month at all required targets; real portfolio and actual prize wins required."}
