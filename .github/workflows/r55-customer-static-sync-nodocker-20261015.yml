@@ -1,0 +1,43 @@
+name: R55 Customer Static HTML Live Sync (No Docker)
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [tests/r55-customer-static-sync.trigger]
+permissions:
+  contents: read
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify customer results come before old statistics
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          h=Path('deployment/football-original/public/client.html').read_text()
+          assert h.index('📋 Dự đoán trận hôm nay') < h.index('📊 Thống kê hàng ngày')
+          for id in ['list','stats','dailyStats','methodStats','summary','gate']:
+              assert h.count('id="'+id+'"') == 1
+          print('R55_CUSTOMER_MATCHES_FIRST_SOURCE=PASS')
+          PY
+      - name: Upload only static customer HTML to the existing Caddy bind mount
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          sshpass -e scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 deployment/football-original/public/client.html root@64.120.92.172:/opt/kq247/deployment/football-original/public/client.html
+      - name: Verify unchanged public URL serves list before stats
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --max-time 20 https://64-120-92-172.sslip.io/client.html -o /tmp/r55-client-live.html
+          python3 - <<'PY'
+          from pathlib import Path
+          h=Path('/tmp/r55-client-live.html').read_text()
+          assert h.index('📋 Dự đoán trận hôm nay') < h.index('📊 Thống kê hàng ngày')
+          assert 'kq247_football_code' in h
+          print('R55_CUSTOMER_MATCHES_ABOVE_STATS_LIVE=PASS')
+          PY

@@ -7,7 +7,7 @@ import {bongMarket as nativeBongMarket,bigMatchInfo as nativeBigMatchInfo,parseF
 // never alternative data providers. All newly found hosts must pass feed verification.
 const BASES=["https://www.bongdalu812.com/","https://www.bongdalu.com/","https://www.bongdalu802.com/","https://www.bongdalu811.com/","https://www.bongdalu628.com/","https://www.bongdalu800.com/","https://www.bongdalu128.com/","https://www.bongdalu618.com/"];
 const VALID_BONG_HOST=/^(?:www\.)?bongdalu(?:\d{0,4})?\.(?:com|net|vn)$|^(?:www\.)?bongdalu\.com\.vn$/i;
-const BOOKS=[["Bet365","8"],["Sbobet","31"],["12Bet","24"],["Crown","3"],["Easybets","12"]];
+const BOOKS=[["Bet365","8"],["Sbobet","31"],["12Bet","24"],["Crown","3"],["Easybets","12"],["Macauslot","1"],["Ladbrokes","4"],["SNAI","7"],["William Hill","9"],["Vcbet","14"],["Mansion88","17"],["Interwetten","19"],["10BET","22"],["Wewbet","35"],["18bet","42"],["HK Jockey Club","48"],["Bwin","49"],["1xbet","50"]];
 const MAX_SOURCE_BYTES=1800000,DAY_MS=86400000;
 const qn=(x)=>Number.isFinite(Number(x))?Number(x):NaN;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -74,7 +74,7 @@ function parseOdds(xmls){
  const out=new Map();
  for(const [id,market] of originals){
   const raw=["homePrice","awayPrice","overPrice","underPrice"].map(k=>Number(market[k]));
-  if(raw.some(n=>!Number.isFinite(n)||n<=0||n>3))continue;
+  if(raw.some(n=>!Number.isFinite(n)||n<=0))continue;
   const ah=Number(market.homeLine),ou=Number(market.ouLine);
   if(!Number.isFinite(ah)||!Number.isFinite(ou)||ou<1.25||ou>7)continue;
   if(Math.abs(4*ah-Math.round(4*ah))>0.01||Math.abs(4*ou-Math.round(4*ou))>0.01)continue;
@@ -96,8 +96,9 @@ const scoreLeague=l=>{
  if(/championship|2\. bundesliga|serie b|ligue 2/.test(s))return 75;
  return 40;
 };
-// Exclude recognisable third/fourth tiers and reserve/youth fixtures; keep first/second divisions.
-const excluded=l=>/(?:\b(?:league|liga|division|div|lig)\s*[-.]?\s*[34]\b|\b(?:iii|iv)\s+(?:liga|league|division)\b|\b(?:third|fourth|3rd|4th)\s+(?:division|league|tier)\b|\b(?:league|division)\s+(?:three|four|iii|iv)\b|(?:primera|segunda)\s+division\s+rfef|\bhungary\s+nb\s+iii\b|\bchinese\s+football\s+association\s+yi\s+league\b|\bj3\s+league\b|\bnorway\s+2[.]liga\b|\bgreece\s+(?:divison|division)\s+c\b|\bserie\s+[cd]\b|\btercera\b|\b(?:youth|reserves?|amateur|friendly|u(?:1[5-9]|2[0-3]))\b)/i.test(String(l||""));
+// Prioritize major games for display and group bot only; exclude exactly the two user-selected fixtures.
+const excluded=x=>["3102824","3102993"].includes(String(x?.bongdaluId??x?.id??"").replace(/^BDL_/i,""));
+const OLD_UNUSED_LEAGUE_FILTER=l=>/(?:\b(?:league|liga|division|div|lig)\s*[-.]?\s*[34]\b|\b(?:iii|iv)\s+(?:liga|league|division)\b|\b(?:third|fourth|3rd|4th)\s+(?:division|league|tier)\b|\b(?:league|division)\s+(?:three|four|iii|iv)\b|(?:primera|segunda)\s+division\s+rfef|\bhungary\s+nb\s+iii\b|\bchinese\s+football\s+association\s+yi\s+league\b|\bj3\s+league\b|\bnorway\s+2[.]liga\b|\bgreece\s+(?:divison|division)\s+c\b|\bserie\s+[cd]\b|\btercera\b|\b(?:youth|reserves?|amateur|friendly|u(?:1[5-9]|2[0-3]))\b)/i.test(String(l||""));
 
 function strictMajorPriority(country,league,home,away){
  const c=String(country||"").toLowerCase(),l=String(league||"").toLowerCase();
@@ -146,7 +147,7 @@ function parseH2HTable(html){
 }
 async function history(base,id){try{
  const html=await get(base,"match/h2h-"+encodeURIComponent(id),"text/html",14000);
- if(!html.includes("table_v1")||!html.includes("table_v2")||!html.includes("table_v3"))return null;
+ if(!html.includes("table_v1")||!html.includes("table_v2"))return null;
  const home=nativeParseFormTable(html,"table_v1","team-home-f"),
        away=nativeParseFormTable(html,"table_v2","team-away-f"),
        h2h=nativeParseH2HTable(html);
@@ -163,7 +164,7 @@ function makeMarket(row,h,learned){
  // Call the production R55 native bongMarket algorithm from the original
  // football-all-refresh-v3 source. No locally invented market prediction.
  const originalMatch={live_id:"bongdalu:"+row.bongdaluId,ts:row.ts,home:row.home,away:row.away,
-    country:row.country,league:row.league,rank:clamp(row.priority>0?row.priority/4:40,0,100)};
+    country:row.country,league:row.league,rank:50};
  const result=nativeBongMarket(originalMatch,{market:mk},h,null,null,null,[]);
  if(!result||!result.ah||!result.ou)return null;
  // v3 checks both handicap directions and both goal-total directions,
@@ -190,7 +191,7 @@ export async function inspectBongdaluHistoryProbe(futureWindowOnly=false){
  const rr=await resolve(),xmls=await Promise.all(BOOKS.map(async([name,id])=>({name,text:await get(rr.base,"gf/data/odds/en/goal"+id+".xml","text/xml",8500).catch(()=>"")})));
  const odds=parseOdds(xmls),records=parseFeed(rr.js,odds).filter(x=>x.market);
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000;
- const eligible=futureWindowOnly?records.filter(x=>x.ts>=start&&x.ts<=end&&!excluded(x.league+" "+x.home+" "+x.away)):records;
+ const eligible=futureWindowOnly?records.filter(x=>x.ts>=start&&x.ts<=end&&!excluded(x)):records;
  const sorted=eligible.sort((a,b)=>b.priority-a.priority||a.ts-b.ts).slice(0,10);
  const rows=await Promise.all(sorted.map(async x=>({x,h:await history(rr.base,x.bongdaluId)})));
  return {ok:true,source:"Bongdalu",tested:rows.length,ready:rows.filter(z=>z.h&&z.h.home.n>0&&z.h.away.n>0).length,
@@ -203,7 +204,7 @@ export async function inspectBongdalu(){
  const odds=parseOdds(xmls),all=parseFeed(r.js,odds);
  const day=vnDay(),start=Date.parse(day+"T06:00:00Z"),end=start+24*3600000+5*60000,now=Date.now();
   const inWindow=all.filter(x=>x.ts>=Math.max(start,now-5*60000)&&x.ts<=end);
-  const eligible=inWindow.filter(x=>x.market&&!excluded(x.league+" "+x.home+" "+x.away));
+  const eligible=inWindow.filter(x=>x.market&&!excluded(x));
   return{base:r.base,fixtureCount:all.length,marketCount:all.filter(x=>x.market).length,windowFixtures:inWindow.length,windowWithMarket:inWindow.filter(x=>x.market).length,eligibleWindowMarket:eligible.length,oddsCount:odds.size,bookmakers:BOOKS.map(x=>x[0]),currentDay:day,examples:eligible.slice(0,3).map(x=>({id:x.id,league:x.league,home:x.home,away:x.away,kickoff:x.kickoff,market:x.market}))};
 }
 export async function previewBongdaluR55Bridge(){return buildBongdaluR55(false)}
@@ -233,8 +234,8 @@ async function buildBongdaluR55(publish,stage=false){
  const windowStart=Date.parse(day+"T06:00:00Z"),windowEnd=windowStart+24*3600000+5*60000,now=Date.now();
  // Take all eligible verified Bongdalu markets (up to 450 for bounded batch work).
   // Never choose a fixed 60 or stop simply because the first 35 picks succeeded.
-  const pool=all.filter(x=>x.ts>=Math.max(stage?now-5*60000:windowStart,now-5*60000)&&x.ts<=windowEnd&&!excluded(x.league+" "+x.home+" "+x.away)&&x.market)
-   .sort((a,b)=>b.priority-a.priority||b.market.bookmakerCount-a.market.bookmakerCount||a.ts-b.ts);
+  const pool=all.filter(x=>x.ts>=Math.max(stage?now-5*60000:windowStart,now-5*60000)&&x.ts<=windowEnd&&!excluded(x)&&x.market)
+   .sort((a,b)=>a.ts-b.ts);
  const learnedQ=await db.query("SELECT payload FROM football_compact_stats WHERE scope='r55_method_rank' LIMIT 1");
  const learned=(learnedQ.rows[0]?.payload?.methods||[]);
  let picked=[],visited=0,withHistory=0;
@@ -244,7 +245,7 @@ async function buildBongdaluR55(publish,stage=false){
   for(const {x,h} of results){visited++;if(h){withHistory++;const m=makeMarket(x,h,learned);if(m)picked.push(m)}}
   // Do not short-circuit after the first 35: process all time-window candidates.
  }
- picked.sort((a,b)=>b.priority-a.priority||b.score-a.score||a.ts-b.ts);
+ picked.sort((a,b)=>a.ts-b.ts||b.score-a.score);
  // Keep all validated selections: never truncate simply because a fixed count was reached.
  if(picked.length<20)return{ok:false,day,error:"bongdalu_verified_pool_less_than_20",seen:pool.length,checked:visited,withHistory,eligible:picked.length,locked:false};
  const snapshot={date:day,source:"Bongdalu pre-match Ensemble v3 H2H/AH/OU",model:"R55 Bongdalu Ensemble v3",locked:true,

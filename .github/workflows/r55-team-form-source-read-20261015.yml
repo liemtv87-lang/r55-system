@@ -1,0 +1,28 @@
+name: R55 Check Bongdalu Team Form Source
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-team-form-source-read-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          const root='https://football.bongdalu812.com/';
+          for(const id of [80597,80877,234]){
+            const html=await (await fetch(root+'team/summary/'+id)).text();
+            const pos=html.toLowerCase().indexOf('lịch thi đấu');
+            console.log('R55_TEAM_SUMMARY_STRUCTURE',JSON.stringify({id,rows:(html.match(/<tr\b/gi)||[]).length,matchLinks:[...html.matchAll(/href=["']([^"']*match[^"']*)/gi)].slice(0,8).map(x=>x[1]),snippet:html.slice(Math.max(0,pos-200),pos+800).replace(/\s+/g,' ')}));
+          }
+          const js=await(await fetch(root+'scripts/v2/team?v=BwYley8BHiCqE2oIpUBAkQXyGFyoSucgjcQ2_IKTBS41')).text();
+          for(const tag of ['getMatch','schedule','history','/api/','team/','result']){
+            const at=js.toLowerCase().indexOf(tag.toLowerCase());
+            console.log('R55_TEAM_JS',JSON.stringify({tag,at,snippet:at<0?'':js.slice(Math.max(0,at-150),at+400)}));
+          }
+          JS

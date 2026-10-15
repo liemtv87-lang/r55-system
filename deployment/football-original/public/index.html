@@ -639,19 +639,22 @@
         );
       }
       async function cp(t) {
+        if (!String(t || '').trim()) throw Error('Không có trận để sao chép.');
         try {
+          if (!navigator.clipboard?.writeText) throw Error('clipboard_unavailable');
           await navigator.clipboard.writeText(t);
         } catch {
           const a = document.createElement('textarea');
           a.value = t;
           document.body.appendChild(a);
           a.select();
-          document.execCommand('copy');
+          const ok = document.execCommand('copy');
           a.remove();
+          if (!ok) throw Error('Không sao chép được. Hãy kiểm tra quyền clipboard.');
         }
       }
       function copyMatch(i) {
-        cp(pickTxt(ALL[i]));
+        cp(pickTxt(ALL[i])).catch(e => { $('runStatus').textContent = '❌ ' + e.message; });
       }
       function upcomingOnly(rows) {
         const now = Date.now();

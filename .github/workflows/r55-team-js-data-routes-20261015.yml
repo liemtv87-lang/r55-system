@@ -1,0 +1,31 @@
+name: R55 Discover Official Team Data JSON Routes
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-team-js-data-routes-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          const base='https://football.bongdalu812.com/';
+          const raw=await(await fetch(base+'scripts/v2/team?v=BwYley8BHiCqE2oIpUBAkQXyGFyoSucgjcQ2_IKTBS41')).text();
+          const literals=[...raw.matchAll(/(['"`])([^\n'"`]{3,180})\1/g)].map(x=>x[2]).filter(x=>/json|match|team|result|history|stats|season|fixture|ajax/i.test(x));
+          console.log('R55_TEAM_JS_LITERALS',JSON.stringify([...new Set(literals)].slice(0,95)));
+          const triggers=['fetch(','$.ajax','$.get(','$.getJSON','/jsData/','teamMatches','matches:','matches=','getMatchData','getMatchList','renderMatches','loadMatches'];
+          for(const tag of triggers){
+            const positions=[];let at=raw.indexOf(tag);
+            while(at>=0&&positions.length<5){positions.push({at,near:raw.slice(Math.max(0,at-150),at+450)});at=raw.indexOf(tag,at+1)}
+            console.log('R55_TEAM_JS_REFS',JSON.stringify({tag,positions}));
+          }
+          const html=await(await fetch(base+'team/summary/80597')).text();
+          const inline=[...html.matchAll(/<script(?:[^>]*?)>([\s\S]{20,2500}?)<\/script>/gi)].map(x=>x[1]).filter(x=>/team|matches|data|season|schedule/i.test(x));
+          console.log('R55_TEAM_INLINE',JSON.stringify(inline.slice(-12).map(x=>x.slice(0,950))));
+          JS

@@ -1,0 +1,33 @@
+name: R55 Two Fixture Exclusion VPS Proof
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-two-fixture-exclusion-proof-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify actual VPS model and read-only preview state
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {db} from 'hatchable';
+          import {isR55IgnoredFixture} from './lib/r55FixtureExclusions.js';
+          const ids=['3102824','3102993'];
+          const ignored=ids.map(id=>({id,ignored:isR55IgnoredFixture({bongdaluId:id})}));
+          const preserved=isR55IgnoredFixture({id:'BDL_3102994'});
+          console.log('R55_VPS_EXCLUSION_CODE',JSON.stringify({ignored,unrelatedAlsoExcluded:preserved}));
+          if(ignored.some(x=>!x.ignored)||preserved)throw Error('wrong_exclusions_on_vps');
+          const day=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+          const scopes=['r55_provisional_'+day,'r55_native_preview_'+day,'r55_build_provisional_'+day,'r55_build_official_'+day];
+          const query="SELECT scope, COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(payload->'matches')='array' THEN payload->'matches' ELSE '[]'::jsonb END),0) AS match_count, COALESCE(jsonb_array_length(CASE WHEN jsonb_typeof(payload->'pool')='array' THEN payload->'pool' ELSE '[]'::jsonb END),0) AS pool_count, (SELECT count(*) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(payload->'matches')='array' THEN payload->'matches' ELSE '[]'::jsonb END) AS row WHERE replace(row->>'id','BDL_','') IN ('3102824','3102993')) AS ignored_stored_matches, (SELECT count(*) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(payload->'pool')='array' THEN payload->'pool' ELSE '[]'::jsonb END) AS row WHERE replace(row->>'id','BDL_','') IN ('3102824','3102993')) AS ignored_stored_pool FROM football_compact_stats WHERE scope = ANY($1::text[])";
+          const q=await db.query(query,[scopes]);
+          console.log('R55_VPS_PREVIEW_SCOPE_AUDIT',JSON.stringify({day,scopes:q.rows}));
+          JS

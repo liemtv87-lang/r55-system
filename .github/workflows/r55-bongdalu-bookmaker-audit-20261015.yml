@@ -1,0 +1,63 @@
+name: R55 Verified Bongdalu Multi-Bookmaker Audit
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/r55-bongdalu-bookmaker-audit-20261015.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Audit current VPS feeds, quotes and exact-line consensus read-only
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          for attempt in $(seq 1 18); do
+            if sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 \
+              'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native sh -c "test -f /app/lib/r55BookmakerConsensus.js && grep -q decimalQuotes /app/lib/bongdaluR55.js"' >/dev/null 2>&1; then break; fi
+            if [ "$attempt" -eq 18 ]; then echo R55_BOOKMAKER_CODE_NOT_DEPLOYED; exit 2; fi
+            sleep 10
+          done
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from "./lib/bongdaluR55.js";
+          const rr=await resolveBongdaluBase();
+          const demoHtml=await getBongdaluText(rr.base,"oddscomp/3073074","text/html",11000).catch(()=>"");
+          const demoRows=[...demoHtml.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map(x=>x[0]);
+          const sampleRows=demoRows.filter(x=>/<td\b/i.test(x)).slice(0,5).map(x=>x.slice(0,1350));
+          console.log("R55_ODDSCOMP_HTML_STRUCTURE",JSON.stringify({
+           size:demoHtml.length,rowCount:demoRows.length,
+           scriptSources:[...demoHtml.matchAll(/<script[^>]+src=["']([^"']+)/gi)].slice(0,8).map(x=>x[1]),
+           firstTags:demoRows.slice(0,12).map(x=>(x.match(/<tr[^>]*>/i)||[])[0]||""),
+           rowSamples:sampleRows}));
+          const xmls=await Promise.all(V.BOOKS.map(async([name,id])=>{
+            try{return {name,id,text:await getBongdaluText(rr.base,"gf/data/odds/en/goal"+id+".xml","text/xml",11000),ok:true}}
+            catch(e){return {name,id,text:"",ok:false,error:String(e.message||e).slice(0,100)}}}));
+          const markets=V.parseOdds(xmls),matches=V.parseFeed(rr.js,markets);
+          const names=[...new Set([...markets.values()].flatMap(x=>x.bookmakerQuotes?.map(q=>q.bookmaker)||[]))];
+          const priced=matches.filter(x=>x.market?.bookmakerQuotes?.length);
+          const withConsensus=priced.filter(x=>x.market.bookmakerConsensus?.AH?.availableBookmakers>0&&x.market.bookmakerConsensus?.OU?.availableBookmakers>0);
+          const audited=await Promise.all(priced.slice(0,8).map(async x=>{
+            try {const h=await V.history(rr.base,x.bongdaluId);return {id:x.id,home:h?.home?.n||0,away:h?.away?.n||0,h2h:h?.h2h?.n||0,
+              historicQuotes:h?.sourceCoverage?.historicalPriceRows||0,oddsPageFetched:!!h?.oddsComparisonFetched,oddsPageCompanies:h?.oddscompCompanies?.length||0};}
+            catch(e){return {id:x.id,error:String(e.message||e).slice(0,100)};}
+          }));
+          const sizes=priced.map(x=>x.market.bookmakerQuotes.length).sort((a,b)=>a-b);
+          const report={source:rr.base,attempted:V.BOOKS.length,
+            liveFeeds:xmls.filter(x=>x.ok).map(x=>x.name),
+            sourceErrors:xmls.filter(x=>!x.ok).map(({name,error})=>({name,error})),
+            verifiedCompanies:names,verifiedCount:names.length,marketIds:markets.size,
+            fixtures:matches.length,withBookmakerQuotes:priced.length,
+            withExactLineConsensus:withConsensus.length,historySample:audited,
+            medianQuotesPerFixture:sizes.length?sizes[Math.floor(sizes.length/2)]:0,
+            maxQuotesPerFixture:sizes.at(-1)||0,
+            examples:priced.slice(0,3).map(x=>({id:x.id,books:x.market.bookmakerCount,consensus:x.market.bookmakerConsensus,quotes:x.market.bookmakerQuotes.slice(0,3)}))};
+          console.log("R55_BONGDALU_BOOKMAKER_AUDIT",JSON.stringify(report));
+          if(!priced.length||!names.length||!withConsensus.length)process.exitCode=2;
+          JS

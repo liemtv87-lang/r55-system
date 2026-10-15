@@ -1,0 +1,43 @@
+name: R55 Post Zero-H2H Full Coverage Proof
+on:
+  push:
+    branches:
+      - r55-bongdalu-deep-history-20261015
+    paths:
+      - .github/workflows/r55-post-h2h-coverage-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify deployed R55 no mandatory H2H and re-evaluate all Bongdalu match predictions
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=30 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native sh -c '\''grep -q "Zero prior head-to-head" /app/lib/r55EnsembleV3.js && ! grep -q "head_to_head_sample_under_4" /app/lib/r55EnsembleV3.js && echo R55_H2H_OPTIONAL_DEPLOYED=PASS'\''' 
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=30 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node worker.mjs model-batch' | tee /tmp/r55-no-h2h-coverage.log
+          python3 - <<'PY'
+          import json
+          raw=open('/tmp/r55-no-h2h-coverage.log',encoding='utf-8').read().splitlines()
+          audits=[json.loads(x.split('R55_NATIVE_FULL_HISTORY_AUDIT ',1)[1]) for x in raw if 'R55_NATIVE_FULL_HISTORY_AUDIT ' in x]
+          if not audits: raise RuntimeError('no coverage audit emitted by VPS')
+          a=audits[-1]
+          eligible=a['eligibleFuture']; modeled=a['modeled']; quality=a['qualityCandidates']
+          assert eligible>0 and modeled<=eligible
+          print('R55_H2H_OPTIONAL_AUDIT',json.dumps({'allFixtures':a['feedFixtures'],'checked':a['historyAttempted'],
+            'historyReady':a['historyReady'],'h2hAvailable':a['h2hAvailable'],
+            'eligibleFuture':eligible,'predictions':modeled,'predictionCoveragePercent':round(modeled/eligible*100,2),
+            'qualityCandidates':quality,'publishableShareOfModeled':round(quality/max(modeled,1)*100,2),
+            'researchOnly':a['researchOnly']},ensure_ascii=False))
+          assert a['historyAttempted']==a['feedFixtures']
+          assert modeled/eligible>=.80,'post-fix modeled-coverage below 80%'
+          PY

@@ -1,0 +1,23 @@
+name: R55 Button Contract Safety Tests
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths:
+      - tests/r55-button-contract.test.mjs
+      - .github/workflows/r55-button-contract-tests-20261015.yml
+      - deployment/football-staging/deploy.sh
+      - deployment/football-staging/public/index.html
+      - deployment/football-original/public/index.html
+      - deployment/football-original/public/client.html
+      - deployment/football-original/api/main-football.js
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: node --test tests/r55-button-contract.test.mjs tests/r55-customer-click-runtime.test.mjs

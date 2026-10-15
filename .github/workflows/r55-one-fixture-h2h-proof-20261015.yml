@@ -1,0 +1,49 @@
+name: R55 One Missing H2H Fixture Proof
+on:
+  push:
+    branches:
+      - r55-bongdalu-deep-history-20261015
+    paths:
+      - .github/workflows/r55-one-fixture-h2h-proof-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read verified Bongdalu fixture history on VPS without changing containers
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from './lib/bongdaluR55.js';
+          const rr=await resolveBongdaluBase();
+          const xmls=await Promise.all(V.BOOKS.map(async ([name,id])=>({name,id,text:await getBongdaluText(rr.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',9000).catch(()=>'' )})));
+          const matches=V.parseFeed(rr.js,V.parseOdds(xmls));
+          const allIds=['3073740','3073212','3073074'];
+          for(const id of allIds){
+            try{
+              const m=matches.find(x=>x.bongdaluId===id);
+              const html=await getBongdaluText(rr.base,'match/h2h-'+id,'text/html',12000);
+              const h=V.parseHistoryHtml(html);
+              const got=await V.history(rr.base,id);
+              const count=id=>{const p=html.indexOf('id="'+id+'"');const t=p<0?'':html.slice(p,html.indexOf('</table>',p)+8);return [...t.matchAll(/<tr\b[^>]*\bid=["']tr[123]_\d+["']/gi)].length;};
+              const out={id,fixture:m?{home:m.home,away:m.away,league:m.league,kickoff:m.kickoff,ah:m.market?.homeLine,ou:m.market?.ouLine}:null,
+                title:(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]?.replace(/\s+/g,' ').slice(0,190)||null,
+                htmlBytes:html.length,tableV1Rows:count('table_v1'),tableV2Rows:count('table_v2'),tableV3Rows:count('table_v3'),
+                embedded:{home:/\bh_data\s*=/.test(html),away:/\ba_data\s*=/.test(html),odds:/\bVs_hOdds\s*=/.test(html)},
+                parsed:{home:h?.home?.n,away:h?.away?.n,h2h:h?.h2h?.n,individualH2h:h?.individualHistory?.h2h?.length,
+                historicalOdds:h?.sourceCoverage?.historicalPriceRows},
+                audit:{status:got?.oddsComparisonStatus,oddscompCount:got?.oddscompCompanies?.length},
+                source:rr.base+'match/h2h-'+id};
+              console.log('R55_MISSING_H2H_FIXTURE_EXAMPLE',JSON.stringify(out));
+            }catch(e){console.log('R55_MISSING_H2H_FIXTURE_ERROR',JSON.stringify({id,error:String(e?.message||e).slice(0,170)}));}
+          }
+          JS

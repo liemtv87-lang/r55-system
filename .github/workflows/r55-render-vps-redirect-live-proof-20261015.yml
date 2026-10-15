@@ -1,0 +1,59 @@
+name: R55 Render to VPS Redirect Live Proof 20261015
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-render-vps-redirect-live-proof-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read actual Render LIVE HTML (not GitHub source)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for page in main client; do
+            if [ "$page" = main ]; then path=/; else path=/client.html; fi
+            for n in 1 2 3 4; do
+              if curl --retry 2 --retry-delay 2 -fsSL --max-time 25 -H 'Cache-Control: no-cache' "https://kq247-football-live.onrender.com${path}?r55_redirect_smoke=${GITHUB_RUN_ID}" -o "/tmp/r55-render-${page}.html"; then break; fi
+              sleep 3
+            done
+            test -s "/tmp/r55-render-${page}.html"
+          done
+      - name: Execute redirect JavaScript safely with simulated old customer license
+        shell: bash
+        run: |
+          node <<'JS'
+          const fs=require('fs'),vm=require('vm'),assert=require('assert');
+          const target='https://64-120-92-172.sslip.io';
+          function script(file,role){
+            const html=fs.readFileSync('/tmp/r55-render-'+file+'.html','utf8');
+            const regex=new RegExp('<script\\s+data-kq247-legacy-vps-redirect="'+role+'">([\\s\\S]*?)<\\/script>','i');
+            const match=html.match(regex);
+            assert.ok(match,'LIVE Render redirect script absent for '+role);
+            return match[1];
+          }
+          function run(source,search,hash,storage={}){
+            let redirected='';
+            const location={search,hash,replace:url=>{redirected=String(url);}};
+            const sandbox={location,localStorage:{getItem:key=>storage[key]||null},TextEncoder,btoa};
+            vm.runInNewContext(source,sandbox,{timeout:1500});
+            return redirected;
+          }
+          const main=script('main','main'),customer=script('client','customer');
+          assert.strictEqual(run(main,'?mode=all','#section'),target+'/?mode=all#section');
+          const fake={'kq247_dev':'TEST_DEVICE_NOT_REAL','kq247_football_code':'TEST_CODE_NOT_REAL'};
+          const dest=run(customer,'?mode=all','',fake);
+          assert.ok(dest.startsWith(target+'/client.html?mode=all#kq247='),dest);
+          const token=dest.split('#kq247=')[1];
+          const payload=JSON.parse(Buffer.from(token.replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8'));
+          assert.strictEqual(payload.dev,fake.kq247_dev);
+          assert.strictEqual(payload.code,fake.kq247_football_code);
+          assert.strictEqual(run(customer,'','#kq247=alreadyissued',fake),target+'/client.html#kq247=alreadyissued');
+          assert.strictEqual(run(customer,'','',{}),target+'/client.html');
+          console.log('R55_RENDER_MAIN_OLD_LINK_REDIRECT=PASS');
+          console.log('R55_RENDER_CUSTOMER_OLD_LINK_REDIRECT=PASS');
+          console.log('R55_RENDER_CUSTOMER_DEVICE_CODE_HANDOFF=PASS (synthetic credentials only)');
+          JS

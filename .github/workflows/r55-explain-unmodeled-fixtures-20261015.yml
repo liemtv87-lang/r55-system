@@ -1,0 +1,48 @@
+name: R55 Read-Only Unmodeled Fixture Diagnosis
+on:
+  push:
+    branches:
+      - r55-bongdalu-deep-history-20261015
+    paths:
+      - .github/workflows/r55-explain-unmodeled-fixtures-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Install SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect all eligible fixtures without publishing or restarting
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from './lib/bongdaluR55.js';
+          const source=await resolveBongdaluBase();
+          const xmls=await Promise.all(V.BOOKS.map(async ([name,id])=>({name,id,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')})));
+          const all=V.parseFeed(source.js,V.parseOdds(xmls)),now=Date.now(),day=V.vnDay();
+          const end=Date.parse(day+'T06:00:00Z')+86400000+300000;
+          const priced=k=>k&&['homePrice','awayPrice','overPrice','underPrice'].every(n=>Number.isFinite(Number(k[n]))&&Number(k[n])>1.05&&Number(k[n])<=4);
+          const eligible=all.filter(m=>m.ts>now&&m.ts<=end&&priced(m.market));
+          const unmodeled=[],reason={},published=[],sample=[];
+          for(let i=0;i<eligible.length;i+=12){
+            const batch=eligible.slice(i,i+12);
+            const z=await Promise.all(batch.map(async m=>{try{return {m,h:await V.history(source.base,m.bongdaluId)}}catch(e){return {m,h:null,error:String(e?.message||e)}}}));
+            for(const {m,h,error} of z){
+              let p=null,problem=error||null;
+              if(h){try{p=V.makeMarket(m,h,[])}catch(e){problem=String(e?.message||e)}}
+              if(!p){unmodeled.push({id:m.id,home:m.home,away:m.away,league:m.league,homeHistory:h?.home?.n||0,awayHistory:h?.away?.n||0,h2h:h?.h2h?.n||0,bookmakers:m.market?.bookmakerCount||0,problem:problem||'model_returned_null'});continue}
+              const r=p.market?.filterReason||'unknown',t=p.market?.researchOnly?'research_only':'quality_accepted';
+              reason[r]=(reason[r]||0)+1;
+              if(t==='quality_accepted')published.push({id:p.id,home:p.home,away:p.away,league:p.league,choice:p.market.type+' '+p.market.pick+' '+p.market.line,odds:p.market.odds,bookmakers:p.bookmakerCount});
+              if(sample.length<8)sample.push({id:p.id,reason:r,type:p.market?.type,pick:p.market?.pick,quotes:p.bookmakerCount});
+            }
+          }
+          console.log('R55_UNMODELED_READONLY',JSON.stringify({day,source:source.base,fixtureFeed:all.length,eligible:eligible.length,modeled:eligible.length-unmodeled.length,missing:unmodeled,qualityReasonCounts:reason,qualityAccepted:published,diagnosticSample:sample}));
+          JS

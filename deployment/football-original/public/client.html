@@ -501,6 +501,13 @@
       </div>
 
       <div class="card">
+        <b>📋 Dự đoán trận hôm nay</b>
+        <div id="stats" class="summary" style="margin-top: 8px"></div>
+        <div id="list">
+          <div class="muted" style="padding: 12px 0">Chưa có dữ liệu.</div>
+        </div>
+      </div>
+      <div class="card">
         <b>📊 Thống kê hàng ngày</b>
         <div id="dailyStats" class="statsgrid" style="margin-top: 8px">
           <div class="muted">Chưa kích hoạt.</div>
@@ -518,13 +525,6 @@
         </div>
       </div>
 
-      <div class="card">
-        <b>4) Kết quả phân tích</b>
-        <div id="stats" class="summary" style="margin-top: 8px"></div>
-        <div id="list">
-          <div class="muted" style="padding: 12px 0">Chưa có dữ liệu.</div>
-        </div>
-      </div>
       <div class="promo">
         <div>* Bán tool Phân tích dự đoán XSMB, MT , MN</div>
         <div>* tool Phân tích, dự đoán kèo bóng đá, chọn xiên 6,8,10 trận.</div>
@@ -582,7 +582,7 @@
     <script>
       const API =
           'https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/',
-        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football',
+        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1',
         PRODUCT = 'football',
         BUY = 'https://t.me/muatool_du_doan_bot?start=from_football_client';
       let current = 5000,
@@ -775,20 +775,28 @@
           : '-';
       }
       async function cp(t) {
+        if (!String(t || '').trim()) throw Error('Không có trận để sao chép.');
         try {
+          if (!navigator.clipboard?.writeText) throw Error('clipboard_unavailable');
           await navigator.clipboard.writeText(t);
         } catch {
           const a = document.createElement('textarea');
           a.value = t;
           document.body.appendChild(a);
           a.select();
-          document.execCommand('copy');
+          const ok = document.execCommand('copy');
           a.remove();
+          if (!ok) throw Error('Không sao chép được. Hãy kiểm tra quyền clipboard.');
         }
       }
-      function copyBuy() {
-        cp(BUY);
-        $('msg').textContent = 'Đã copy link mua tool.';
+      async function copyBuy() {
+        try {
+          await cp(BUY);
+          $('msg').textContent = '✅ Đã copy link mua tool.';
+        } catch (e) {
+          $('msg').textContent = '❌ ' + e.message;
+          return;
+        }
         try { window.kq247GrowthCapture?.('sales bot copied', { sales_bot: 'muatool_du_doan_bot' }); } catch {}
       }
       function methods(x) {
@@ -936,8 +944,13 @@
           : relevant;
         return [...a].sort((a, b) => Number(a.ts || 0) - Number(b.ts || 0));
       }
-      function copyMatch(i) {
-        cp(txt(ALL[i]));
+      async function copyMatch(i) {
+        const match = ALL[i];
+        if (!match) { $('summary').textContent = '❌ Không tìm thấy trận cần copy.'; return; }
+        try {
+          await cp(txt(match));
+          $('summary').textContent = '✅ Đã copy trận ' + match.home + ' - ' + match.away;
+        } catch (e) { $('summary').textContent = '❌ ' + e.message; }
       }
       function toggleCollapse() {
         COLLAPSED = !COLLAPSED;
@@ -1036,7 +1049,7 @@
                 '</h3><div><span class="badge ' +
                 (x.trusted_pick ? 'good' : '') +
                 '">' +
-                (x.trusted_pick ? '✅ Kèo đủ dữ liệu' : '⚠️ Dữ liệu mỏng') +
+                (x.trusted_pick ? '✅ Kèo đã qua kiểm định' : '⚠️ Kèo chưa qua kiểm định') +
                 '</span> <span class="badge">' +
                 esc(bookText(x)) +
                 '</span></div><div class="picks"><div class="pick"><b>KÈO SÁNG NHẤT • ' +
@@ -1049,6 +1062,14 @@
                 esc(x.formHome || x.home_form || '-') +
                 ' / ' +
                 esc(x.formAway || x.away_form || '-') +
+                '</div><div class="small">Lịch sử Bongdalu: Chủ ' +
+                esc(x.history_home_games ?? '-') +
+                '/20 • Khách ' +
+                esc(x.history_away_games ?? '-') +
+                '/20 • Đối đầu ' +
+                esc(x.history_h2h_games ?? '-') +
+                ' • Bản ghi kèo AH/TX: ' +
+                esc(x.history_price_rows ?? '-') +
                 '</div><div class="small">PP: ' +
                 esc(methods(x)) +
                 '</div><div class="actions"><button class="btn copy" onclick="copyMatch(' +
@@ -1061,17 +1082,21 @@
       }
       async function fetchMode(n, mode) {
         // Neon exclusively verifies existing customer codes and expiry.
-        // Predictions always come from the exact same Bongdalu R55 API as the Hatchable main site;
+        // Customer predictions use exactly the SAME data=1 endpoint as the main site;
         // before 13h it marks them provisional, then switches to the locked snapshot.
         const r = await fetch(
           PICKS_API +
-            '?mode=' + encodeURIComponent(mode) +
+            '&mode=' + encodeURIComponent(mode) +
             '&limit=' + encodeURIComponent(n) +
-            '&from_ts=0',
+            '&from_ts=' + Date.now(),
           { cache: 'no-store', signal: AbortSignal.timeout(15000) }
         );
+        const type = String(r.headers.get('content-type') || '').toLowerCase();
+        if (!type.includes('application/json'))
+          throw Error('API trả trang HTML thay vì dữ liệu. Vui lòng bấm CẬP NHẬT.');
         const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) throw Error(j.error || 'Không tải được snapshot bóng đá');
+        if (!r.ok || !j.ok || !Array.isArray(j.predictions))
+          throw Error(j.error || 'Không tải được snapshot bóng đá');
         // Native VPS returns locked predictions but intentionally omits 'found'.
         // An absent field is not the same as no data: verify the snapshot array.
         const hasSnapshot = Array.isArray(j.predictions) && j.predictions.length > 0 &&
@@ -1162,6 +1187,10 @@
       }
       async function ensureLatestLink() {
         importLinkMigration();
+        // The canonical VPS client is already the destination. The licensing
+        // service may still advertise the previous Render URL during rollout;
+        // never redirect a migrated device back into a two-domain loop.
+        if (location.hostname === '64-120-92-172.sslip.io') return true;
         try {
           const r = await fetch(API + '?action=latest-link&product=' + PRODUCT, {
             cache: 'no-store',

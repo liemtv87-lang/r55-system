@@ -1,4 +1,5 @@
 name: R55 VPS Native Full Coverage Test
+# Triggered for the 2026-10-15 80-percent all-priced-fixture on-VPS verification.
 on:
   push:
     paths:

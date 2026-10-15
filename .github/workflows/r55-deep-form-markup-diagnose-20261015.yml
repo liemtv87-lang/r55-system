@@ -1,0 +1,50 @@
+name: R55 Diagnose Raw Bongdalu Form Markup Read Only
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-deep-form-markup-diagnose-20261015.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: SSH helper
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect raw Bongdalu pages with zero extracted form
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 root@64.120.92.172 \
+            'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          import {resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from './lib/bongdaluR55.js';
+          const r=await resolveBongdaluBase();
+          for(const id of ['3102824','3102993','3073777']){
+            let h='';
+            try{h=await getBongdaluText(r.base,'match/h2h-'+id,'text/html',16000)}
+            catch(e){console.log('R55_MARKUP_FETCH_ERROR',JSON.stringify({id,error:String(e)}));continue}
+            const vars={};
+            for(const name of ['h2h_home','h2h_away','h_data','a_data','Vs_hOdds']){
+              const re=new RegExp('\\b(?:var|let|const)\\s+'+name+'\\s*=\\s*([^;]{0,1000})','i');
+              const m=h.match(re);vars[name]={present:!!m,preview:m?.[1]?.slice(0,300)||null}
+            }
+            const tables={};
+            for(const name of ['table_v1','table_v2','table_v3']){
+              const i=h.search(new RegExp('\\bid=["\\\x27]'+name+'["\\\x27]','i'));
+              const a=i>=0?h.slice(i,Math.min(h.length,i+90000)):'';
+              const end=a.indexOf('</table>'),block=end>=0?a.slice(0,end+8):a;
+              tables[name]={present:i>=0,bytes:block.length,rows:(block.match(/<tr\\b/gi)||[]).length,
+                namedRows:(block.match(/id=["\\x27]tr[123]_\\d+/gi)||[]).length,
+                infoCount:(block.match(/\\binfo=/gi)||[]).length,first: block.slice(0,1200).replace(/\\s+/g,' ')}
+            }
+            const matches=[...h.matchAll(/<a\\b[^>]*(?:team|h2h|history|analysis)[^>]*>/gi)].slice(0,18).map(q=>q[0].slice(0,300));
+            const teamIds=[...new Set([...h.matchAll(/(?:teamId|homeId|awayId|h2h_home|h2h_away)\\s*[:=]\\s*["\\x27]?(\\d{2,12})/gi)].map(m=>m[1]))].slice(0,12);
+            const rawVars=[...new Set([...h.matchAll(/\\b(?:var|let|const)\\s+([A-Za-z_][A-Za-z0-9_]{1,35})\\s*=/g)].map(m=>m[1]))].filter(x=>/team|data|form|h2h|odds|match/i.test(x)).slice(0,50);
+            const parsed=V.parseHistoryHtml(h);
+            console.log('R55_RAW_FORM_MARKUP',JSON.stringify({id,url:r.base+'match/h2h-'+id,bytes:h.length,title:h.slice(h.indexOf('<title'),h.indexOf('</title>')+8).slice(0,180),vars,tables,teamIds,rawVars,teamLinks:matches,parsed:{home:parsed?.home?.n,away:parsed?.away?.n,h2h:parsed?.h2h?.n,sourceCoverage:parsed?.sourceCoverage}}));
+          }
+          JS

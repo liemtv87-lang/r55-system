@@ -1,0 +1,24 @@
+name: R55 Odds Challenge Parser Verification
+on:
+  push:
+    branches:
+      - r55-bongdalu-deep-history-20261015
+    paths:
+      - .github/workflows/r55-security-gate-check-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate data-source challenge guards and rich-H2H regression tests
+        run: |
+          node --check deployment/football-native/lib/r55BookmakerPage.js
+          node --check deployment/football-native/lib/bongdaluR55.js
+          node --test deployment/football-native/tests/r55-rich-history.test.mjs

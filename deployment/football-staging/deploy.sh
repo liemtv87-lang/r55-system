@@ -84,8 +84,23 @@ for i in $(seq 1 15); do
   sleep 2
 done
 python3 -c 'import json;d=json.load(open("/tmp/r55-cache-health.json"));assert d["ok"] and d["cachedPredictions"]>=100;print("CACHE_PREDICTIONS="+str(d["cachedPredictions"]))'
-curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main-football?limit=20' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("ok") and len(d.get("predictions",[]))==20;print("VPS_R55_20=PASS")'
-curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main-football?limit=30' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("ok") and len(d.get("predictions",[]))==30;print("VPS_R55_30=PASS")'
+# The 20/30 controls show UP TO the requested count. If kickoff rollover
+# leaves 21 available games, the "30 TRẬN" button must show 21, not invent nine.
+for limit in 20 30; do
+  curl --fail --silent --show-error --max-time 15 "http://127.0.0.1:18080/api/main-football?limit=$limit" \
+    | python3 -c '
+import json,sys
+requested=int(sys.argv[1])
+d=json.load(sys.stdin)
+predictions=d.get("predictions")
+total=d.get("total")
+assert d.get("ok") is True and isinstance(predictions,list) and isinstance(total,int)
+assert len(predictions)==min(requested,total), (requested,total,len(predictions))
+assert len({p.get("id") for p in predictions})==len(predictions), "duplicate fixture"
+assert not {"3102824","3102993"} & {str(p.get("id","")).replace("BDL_","") for p in predictions}, "explicitly excluded fixture"
+print("VPS_R55_"+str(requested)+"=PASS actual="+str(len(predictions))+" available="+str(total))
+' "$limit"
+done
 docker compose exec -T football-native node worker.mjs probe
 docker compose exec -T football-native node worker.mjs model-probe
 docker compose exec -T football-native node worker.mjs snapshot-status

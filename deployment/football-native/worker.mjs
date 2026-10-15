@@ -3,6 +3,7 @@ import {db,closePool} from 'hatchable';
 import {publicHandler} from './publicApi.mjs';
 import {inspectBongdalu,inspectBongdaluHistoryProbe,resolveBongdaluBase,getBongdaluText,verifiedBongdaluInternals as V} from 'lib/bongdaluR55.js';
 import {processBongdaluChunk} from 'lib/r55ChunkedBuild.js';
+import {isR55IgnoredFixture} from 'lib/r55FixtureExclusions.js';
 import {gradeAndLearn} from 'lib/r55Ops.js';
 
 const PORT=3001,DELAY=60_000;
@@ -121,19 +122,22 @@ async function run(){
   // and future kickoff inside the operative window may become forecasts.
   const source=await resolveBongdaluBase();
   const xmls=await Promise.all(V.BOOKS.map(async([name,id])=>({
-    name,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')
+    name,id,text:await getBongdaluText(source.base,'gf/data/odds/en/goal'+id+'.xml','text/xml',12000).catch(()=>'')
   })));
   const markets=V.parseOdds(xmls),records=V.parseFeed(source.js,markets);
   const now=Date.now(),day=V.vnDay();
   const end=Date.parse(day+'T06:00:00Z')+86400000+300000;
-  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&m.market&&!V.excluded(m.league+' '+m.home+' '+m.away));
+  // User denominator: ALL divisions with genuinely priced AH/O-U, never only majors.
+  const priced=k=>k&&["homePrice","awayPrice","overPrice","underPrice"].every(n=>
+    Number.isFinite(Number(k[n]))&&Number(k[n])>1);
+  const eligible=records.filter(m=>m.ts>now&&m.ts<=end&&priced(m.market)&&!isR55IgnoredFixture(m));
   const eligibleIds=new Set(eligible.map(m=>m.id));
   const matches=[],exceptions=[],missingHistory=[];
   let attempted=0,historyReady=0,full20Both=0,partial20=0,h2hAvailable=0,modelAttempted=0;
   for(let i=0;i<records.length;i+=8){
     const batch=records.slice(i,i+8);
     const histories=await Promise.all(batch.map(async m=>{
-      try{return {m,h:await V.history(source.base,m.bongdaluId),err:null}}
+      try{return {m,h:await V.history(source.base,m.bongdaluId,m.ts),err:null}}
       catch(e){return {m,h:null,err:String(e?.message||e).slice(0,100)}}
     }));
     for(const {m,h,err} of histories){

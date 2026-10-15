@@ -21,7 +21,8 @@ async function readExistingLockedMirror(url,original){
   if(d?.ok!==true||d?.locked!==true||d?.source!=='neon_locked_snapshot'||!Array.isArray(d.predictions))throw Error('r55_mirror_not_verified');
   const ids=new Set(),now=Date.now();
   const all=d.predictions.filter(x=>{
-    if(!x?.id||ids.has(x.id)||!(Number(x.ts)>now)||Boolean(x.ah)===Boolean(x.ou))return false;
+    if(!x?.id||['3102824','3102993'].includes(String(x.id).replace(/^BDL_/i,''))||
+      ids.has(x.id)||!(Number(x.ts)>now)||Boolean(x.ah)===Boolean(x.ou))return false;
     ids.add(x.id);return true;
   }).map(x=>({...x,trusted_pick:false,research_only:true,
     verification_status:'legacy_locked_research_unvalidated',

@@ -1,0 +1,64 @@
+name: R55 Button Live Read-Only Audit
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-button-live-readonly-audit-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify current main/customer button endpoints on VPS without modifying state
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'python3 -' <<'PY'
+          import urllib.request,urllib.parse,json
+          root='http://127.0.0.1:18080'
+          excluded={'BDL_3102824','BDL_3102993'}
+          def get_json(q):
+              url=root+'/api/main-football?'+urllib.parse.urlencode(q)
+              with urllib.request.urlopen(url,timeout=18) as r:
+                  data=json.load(r)
+              assert data.get('ok') is True and isinstance(data.get('predictions'),list)
+              return data
+          def ids(data): return [str(x.get('id')) for x in data['predictions']]
+          report={}
+          for engine,base in [('original',{'data':'1'}),('native',{})]:
+              results={}
+              for mode in ['all','featured']:
+                  for cap in [20,30,5000]:
+                      q=dict(base,mode=mode,limit=cap)
+                      d=get_json(q)
+                      matches=ids(d)
+                      assert len(matches)==len(set(matches)),(engine,mode,cap,'duplicate')
+                      assert not excluded.intersection(matches),(engine,mode,cap,'excluded fixture')
+                      assert len(matches)<=cap,(engine,mode,cap,'over-limit')
+                      assert len(matches)<=int(d.get('total',len(matches))),(engine,mode,cap,'over-total')
+                      if mode=='featured':
+                          assert all(x.get('top') is True for x in d['predictions']),(engine,mode,cap,'non-featured')
+                      results[mode,cap]=(d,matches)
+              for mode in ['all','featured']:
+                  a=results[mode,20][1]
+                  b=results[mode,30][1]
+                  c=results[mode,5000][1]
+                  assert set(a).issubset(set(b)) and set(b).issubset(set(c)),(engine,mode,'list mismatch')
+              report[engine]={
+                'all_20':len(results['all',20][1]),'all_30':len(results['all',30][1]),
+                'all_everything':len(results['all',5000][1]),
+                'featured_all':len(results['featured',5000][1]),
+                'date':results['all',5000][0].get('date'),
+                'locked':results['all',5000][0].get('locked')}
+          for name,url in [('main','http://127.0.0.1:18081/'),('client','http://127.0.0.1:18081/client.html')]:
+              with urllib.request.urlopen(url,timeout=15) as r: html=r.read().decode('utf-8')
+              for text in ['onclick="load(20)"','onclick="load(30)"','onclick="refreshCurrent()"','copyMode(5000']:
+                  assert text in html,(name,'button missing',text)
+              report[name+'_bytes']=len(html)
+          print('R55_LIVE_BUTTON_AUDIT='+json.dumps(report,ensure_ascii=False))
+          print('R55_LIVE_BUTTONS=PASS')
+          PY

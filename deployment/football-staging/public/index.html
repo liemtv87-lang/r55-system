@@ -54,15 +54,19 @@ function card(p){
 async function load(){
  status.textContent='Đang cập nhật danh sách trận...';root.replaceChildren();
  try{
-  const params=new URLSearchParams({mode:'all',limit:state.count,from_ts:state.history?'0':'1',preview:state.preview?'1':'0'});
+  // Fetch complete history before selecting 20/30 started fixtures.
+  const params=new URLSearchParams({mode:'all',limit:state.history?'all':state.count,from_ts:state.history?'0':'1',preview:state.preview?'1':'0'});
   const r=await fetch('/api/main-football?'+params,{cache:'no-store'});
   const d=await r.json();if(!r.ok||!d.ok||!Array.isArray(d.predictions))throw Error(d.error||'Không lấy được dữ liệu');
-  const count=d.predictions.length;
+  const startedOnly=state.history?d.predictions.filter(p=>Number(p.ts)>0&&Number(p.ts)<=Date.now())
+    .sort((a,b)=>Number(b.ts)-Number(a.ts)):[...d.predictions];
+  const showing=state.history&&state.count!=='all'?startedOnly.slice(0,Number(state.count)):startedOnly;
+  const count=showing.length;
   summary.textContent='NGÀY '+h(d.date)+' • '+d.snapshot_total+(d.preview?' DỰ ĐOÁN MỚI (CHƯA KHÓA)':' DỰ ĐOÁN ĐÃ KHÓA')+' • ĐANG HIỆN '+count+' TRẬN';
   src.textContent='Nguồn: Bongdalu • '+(d.preview?'Tính mới trên VPS, chỉ tham khảo, không thay snapshot đã khóa':d.legacyFallback?'Dữ liệu khóa đã có — bộ xử lý VPS đang đồng bộ':'Động cơ R55 VPS độc lập')+
    (d.coverage!=null?' • Tỷ lệ phủ '+d.coverage+'%':'');
-  status.textContent=(state.history?'Bao gồm trận đã bắt đầu':'Chỉ hiển thị trận chưa bắt đầu')+' • '+count+' trận';
-  root.innerHTML=d.predictions.map(card).join('')||'<p>Chưa có trận phù hợp trong thời điểm này.</p>';
+  status.textContent=(state.history?'CHỈ trận đã bắt đầu':'Chỉ trận chưa bắt đầu')+' • '+count+' trận';
+  root.innerHTML=showing.map(card).join('')||'<p>Chưa có trận phù hợp trong thời điểm này.</p>';
  }catch(e){status.textContent='Không tải được dữ liệu: '+String(e.message||e);root.replaceChildren();}
 }
 document.querySelectorAll('button[data-count]').forEach(b=>b.addEventListener('click',()=>{

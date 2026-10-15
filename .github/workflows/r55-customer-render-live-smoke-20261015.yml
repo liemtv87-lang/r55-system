@@ -1,0 +1,96 @@
+name: R55 Customer Legacy-Link Live Smoke
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-customer-render-live-smoke-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check old customer URL and exact production prediction endpoint
+        run: |
+          set -euo pipefail
+          URL='https://kq247-football-live.onrender.com/client.html'
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --max-time 20 "$URL" -o /tmp/r55-client-live.html; then break; fi
+            sleep 4
+          done
+          test -s /tmp/r55-client-live.html
+          grep -Fq "PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1'" /tmp/r55-client-live.html
+          if grep -Fq 'kq247-r55-football.hatchable.site/api/main-football' /tmp/r55-client-live.html; then
+            echo 'R55_CUSTOMER_OLD_HATCHABLE_ENDPOINT=FAIL'; exit 1
+          fi
+          for token in 'onclick="load(20)"' 'onclick="load(30)"' 'onclick="load(5000)"' 'onclick="refreshCurrent()"' 'onclick="toggleCollapse()"' "copyMode(20, 'all'" "copyMode(30, 'all'" "copyMode(5000, 'featured'" "copyMode(5000, 'all'" 'async function copyMatch(i)' "await cp(txt(match))" 'kq247_football_code' 'kq247_football_session'; do
+            if ! grep -Fq "$token" /tmp/r55-client-live.html; then
+              echo "R55_CUSTOMER_BUTTON_MISSING: $token";exit 1
+            fi
+          done
+          for limit in 20 30 5000; do
+            curl -fsSL --retry 3 --max-time 20 "https://64-120-92-172.sslip.io/api/main-football?data=1&mode=all&limit=$limit" -o "/tmp/r55-live-$limit.json"
+            python3 - "$limit" <<'PY'
+          import json,sys
+          n=int(sys.argv[1]);d=json.load(open('/tmp/r55-live-'+str(n)+'.json'))
+          assert d.get('ok') is True and isinstance(d.get('predictions'),list),(n,'api_not_ready')
+          a=d['predictions']
+          assert len(a)<=n,(n,'limit_exceeded',len(a))
+          ids=[str(x.get('id')) for x in a]
+          assert len(ids)==len(set(ids)),(n,'duplicate_games')
+          assert not set(ids)&{'BDL_3102824','BDL_3102993'},(n,'excluded_games')
+          print('R55_LIVE_CLIENT_API',json.dumps({'limit':n,'available':len(a),'date':d.get('date'),'locked':d.get('locked')},ensure_ascii=False))
+          PY
+          done
+          MAIN_URL='https://kq247-football-live.onrender.com/'
+          for i in 1 2 3 4 5; do
+            if curl -fsSL --max-time 20 "$MAIN_URL" -o /tmp/r55-main-render.html; then break; fi
+            sleep 4
+          done
+          test -s /tmp/r55-main-render.html
+          grep -Fq "'https://64-120-92-172.sslip.io/api/main-football?data=1'" /tmp/r55-main-render.html
+          if grep -Fq 'kq247bdapi.compute.c-3.ap-southeast-1.aws.neon.tech/?action=football-predictions' /tmp/r55-main-render.html; then
+            echo 'R55_RENDER_MAIN_OLD_NEON_PREDICTION_SOURCE=FAIL'; exit 1
+          fi
+          for token in 'onclick="load(20)"' 'onclick="load(30)"' "copyMode(20, 'all'" "copyMode(30, 'all'" "copyMode(5000, 'featured'" "copyMode(5000, 'all'" 'id="learningState"' 'onclick="refreshCurrent()"' 'onclick="toggleCollapse()"'; do
+            if ! grep -Fq "$token" /tmp/r55-main-render.html; then
+              echo "R55_RENDER_MAIN_BUTTON_MISSING: $token";exit 1
+            fi
+          done
+          # Validate both publicly served Render pages really migrate to the new VPS.
+          # Evaluate only the tiny redirect bootstrap in a sandbox with fictitious
+          # device ID and code hash; never use or print any customer's credentials.
+          node <<'JS'
+          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+          const main=fs.readFileSync('/tmp/r55-main-render.html','utf8');
+          const client=fs.readFileSync('/tmp/r55-client-live.html','utf8');
+          const bootstrap=(html,type)=>{
+            const pattern=new RegExp('<script data-kq247-legacy-vps-redirect="'+type+'">([\\s\\S]*?)<\\/script>');
+            const js=html.match(pattern)?.[1];
+            assert.ok(js,'missing '+type+' redirect in published Render HTML');
+            return js;
+          };
+          const capture=[];
+          vm.runInNewContext(bootstrap(main,'main'),{
+            location:{search:'',hash:'',replace:value=>capture.push(value)}
+          });
+          assert.equal(capture.pop(),'https://64-120-92-172.sslip.io/');
+          vm.runInNewContext(bootstrap(client,'customer'),{
+            location:{search:'',hash:'',replace:value=>capture.push(value)},
+            localStorage:{getItem:k=>({'kq247_dev':'TEST_DEVICE_ONLY','kq247_football_code':'TEST_HASH_ONLY','kq247_football_session':'TEST_SESSION_NOT_TRANSFERRED'})[k]||null},
+            TextEncoder,btoa:v=>Buffer.from(v,'binary').toString('base64'),JSON,Uint8Array
+          });
+          const target=capture.pop();
+          assert.ok(target.startsWith('https://64-120-92-172.sslip.io/client.html#kq247='));
+          const state=JSON.parse(Buffer.from(target.split('#kq247=')[1].replace(/-/g,'+').replace(/_/g,'/'),'base64').toString('utf8'));
+          assert.equal(state.dev,'TEST_DEVICE_ONLY');
+          assert.equal(state.code,'TEST_HASH_ONLY');
+          assert.equal(state.session,'');
+          console.log('R55_RENDER_REDIRECT_AND_CUSTOMER_CODE_MIGRATION=PASS');
+          JS
+          curl -fsSL --retry 3 --max-time 20 'https://64-120-92-172.sslip.io/client.html' -o /tmp/r55-vps-client-target.html
+          grep -Fq "if (location.hostname === '64-120-92-172.sslip.io') return true;" /tmp/r55-vps-client-target.html
+          grep -Fq 'id="gate"' /tmp/r55-vps-client-target.html
+          echo "R55_VPS_CLIENT_NO_REDIRECT_LOOP_AND_LICENSE_GATE=PASS"
+          echo "R55_RENDER_MAIN_CUSTOMER_SAME_VPS_FEED=PASS"
+          echo "R55_CUSTOMER_OLD_LINK_AND_BUTTON_APIS=PASS"

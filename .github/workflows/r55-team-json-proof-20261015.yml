@@ -1,0 +1,26 @@
+name: R55 Team JSON Read Only
+on:
+  push:
+    branches: [r55-bongdalu-deep-history-20261015]
+    paths: [.github/workflows/r55-team-json-proof-20261015.yml]
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          sshpass -e ssh -T -o StrictHostKeyChecking=accept-new root@64.120.92.172 'cd /opt/kq247/deployment/football-staging && docker compose exec -T football-native node --input-type=module' <<'JS'
+          const root='https://football.bongdalu812.com';
+          for(const id of [80597,80877,234]){
+            const p='/jsdata/teamInfo/teamdetail/json/tdl'+id+'_vn.json';
+            const res=await fetch(root+p,{signal:AbortSignal.timeout(12000)});
+            const txt=await res.text();
+            console.log('R55_TEAM_JSON',JSON.stringify({id,status:res.status,length:txt.length,first:txt.slice(0,1100)}));
+          }
+          const js=await(await fetch(root+'/scripts/v2/team?v=BwYley8BHiCqE2oIpUBAkQXyGFyoSucgjcQ2_IKTBS41')).text();
+          const i=js.indexOf('loadData:function');console.log('R55_TEAM_SCHEDULE_ROUTE',js.slice(Math.max(i-300,0),i+1100));
+          JS

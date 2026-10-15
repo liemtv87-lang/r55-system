@@ -5,6 +5,10 @@ import {getCompactR55} from "lib/compactR55.js";
 import {releaseDecision,freshRanking} from "lib/r55ReleaseGate.js";
 export const access="public";
 export const methods=["GET"];
+// User chose to omit these two specific fixtures, not whole competitions.
+// Historical locked archives and settlement records remain unchanged.
+const userExcludedIds=new Set(["3102824","3102993"]);
+const isUserExcluded=m=>userExcludedIds.has(String(m?.bongdaluId??m?.id??"").replace(/^BDL_/i,""));
 // Live view must also filter lower-tier games from older frozen/provisional snapshots.
 const excludedLeague=x=>/(?:\b(?:league|liga|division|div|lig)\s*[-.]?\s*[34]\b|\b(?:iii|iv)\s+(?:liga|league|division)\b|\b(?:third|fourth|3rd|4th)\s+(?:division|league|tier)\b|\b(?:league|division)\s+(?:three|four|iii|iv)\b|(?:primera|segunda)\s+division\s+rfef|\bhungary\s+nb\s+iii\b|\bchinese\s+football\s+association\s+yi\s+league\b|\bj3\s+league\b|\bnorway\s+2[.]liga\b|\bgreece\s+(?:divison|division)\s+c\b|\bserie\s+[cd]\b|\btercera\b|\b(?:youth|reserves?|amateur|friendly|u(?:1[5-9]|2[0-3]))\b)/i.test(String(x?.league||"")+" "+String(x?.home||"")+" "+String(x?.away||""));
 const leagueTier=x=>{
@@ -30,8 +34,13 @@ const toLegacy=(m,validated=false)=>{
  return {id:String(m.id),home:m.home,away:m.away,league:m.league,country:m.country||"",ts:new Date(m.kickoff).getTime(),
   provider:"Bongdalu",source_detail:m.sourceRef||"bongdalu_native_original_v128",trusted_pick:validated,confidence_score:null,model_score:m.score??null,research_only:!validated,verification_status:validated?"walk_forward_passed":"research_unvalidated",
   ah:type==="AH"?choice:null,ou:type==="OU"?choice:null,
-  ah_release:type==="AH",ou_release:type==="OU",bookmaker_count:m.bookmakerCount||1,
-  bookmaker_names:k.bookmaker?[k.bookmaker]:[],learning_methods:[slug(m)],
+  ah_release:type==="AH",ou_release:type==="OU",bookmaker_count:Number(k.bookmakers??m.bookmakerCount??0),
+  bookmaker_names:Array.isArray(k.bookmakerNames)&&k.bookmakerNames.length?k.bookmakerNames:(k.bookmaker?[k.bookmaker]:[]),
+  history_home_games:Number(m.history?.homeGames??0),history_away_games:Number(m.history?.awayGames??0),
+  history_h2h_games:Number(m.history?.h2hGames??0),
+  history_ah_games:Number(m.history?.homeAsianGames??0)+Number(m.history?.awayAsianGames??0),
+  history_price_rows:Number(m.history?.historicalPriceRows??0),
+  learning_methods:[slug(m)],
   method:slug(m),top:priority(m),market_scores:type==="AH"?{ah:Number(k.confidence)||0}:{ou:Number(k.confidence)||0}};
 };
 export default async function(req,res){
@@ -44,32 +53,39 @@ export default async function(req,res){
  const qs=req.query||{};
  const mode=String(qs.mode||"all");
  const limit=Math.min(5000,Math.max(1,Number(qs.limit)||30));
- const [snapshots,results,compact,learned,draft]=await Promise.all([
+ const [snapshots,results,compact,learned,draft,nativePreview]=await Promise.all([
   db.query("SELECT day::text,payload,source,locked_at FROM football_snapshots WHERE day BETWEEN ($1::date - interval '64 days') AND $1::date ORDER BY day DESC LIMIT 65",[day]),
   db.query("SELECT fixture_id::text AS id,home_score,away_score,fixture_status FROM football_final_results WHERE source='bongdalu-ft-verified' AND fixture_status='FT'"),
   getCompactR55(),
   db.query("SELECT payload FROM football_compact_stats WHERE scope='r55_method_rank' LIMIT 1"),
-  db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_provisional_"+calendarDay])
+  db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_provisional_"+calendarDay]),
+  db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_native_preview_"+calendarDay])
  ]);
  const final=new Map(results.rows.map(x=>[x.id,x]));
  // Only a frozen snapshot built from Bongdalu input may be advertised as today's R55 picks.
  const verifiedSnapshots=snapshots.rows.filter(x=>x.source==="bongdalu-r55");
  const legacyLocked=snapshots.rows.some(x=>x.day===day&&x.source!=="bongdalu-r55");
- const latest=verifiedSnapshots.find(x=>x.day===day);
- // Preserve the latest provisional view while 13:00's full-source refresh is processing;
- // replace it with the immutable locked snapshot only after that write succeeds.
- const hasDraft=Array.isArray(draft.rows[0]?.payload?.matches)&&draft.rows[0].payload.matches.length>0;
- // Before 13:00, the window day is yesterday; today's provisional predictions override it.
- // From 13:00 until the official snapshot finishes, keep showing the provisional list.
- // As soon as today's locked snapshot exists, it becomes authoritative.
- const preRelease=hasDraft&&(day!==calendarDay||!latest);
- const payload=preRelease?draft.rows[0].payload:(latest?.payload||{});
+ // Today's verified locked snapshot wins once the 13:00 source refresh finishes.
+ // Until then, the newest COMPLETE same-day Bongdalu preview is shown directly
+ // on the existing main and customer links, never yesterday's stored forecast.
+ // Historical snapshots stay immutable and continue to feed settlement only.
+ const latest=verifiedSnapshots.find(x=>x.day===calendarDay);
+ const provisionalCandidates=[
+  ...draft.rows.filter(r=>r.payload?.scanProgress?.complete===true&&Array.isArray(r.payload?.matches)&&r.payload.matches.length>0).map(r=>({...r,kind:"provisional"})),
+  ...nativePreview.rows.filter(r=>r.payload?.preview===true&&r.payload?.locked===false&&r.payload?.date===calendarDay&&
+    Number(r.payload?.scanProgress?.marketPool)>0&&Array.isArray(r.payload?.matches)&&r.payload.matches.length>0).map(r=>({...r,kind:"native_live_preview"}))
+ ].sort((a,b)=>Date.parse(b.updated_at)-Date.parse(a.updated_at));
+ const fresh=latest?null:(provisionalCandidates[0]||null);
+ const preRelease=!!fresh;
+ const payload=latest?.payload||(fresh?.payload||{});
+ const displayDay=latest?.day||(fresh?calendarDay:calendarDay);
+ const sourceState=latest?"official_locked":fresh?.kind||"today_not_ready";
  const picks=Array.isArray(payload.matches)?payload.matches:[];
  // Keep snapshots immutable; live output includes strictly future kickoff times only.
  // Filter before limit so 20/30 means 20/30 upcoming games, not slots occupied by started games.
  const cutoff=Date.now();
  const startedCount=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return !Number.isFinite(ms)||ms<=cutoff;}).length;
- const upcoming=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return Number.isFinite(ms)&&ms>cutoff&&!excludedLeague(x);});
+ const upcoming=picks.filter(x=>{const ms=Date.parse(String(x?.kickoff||""));return !isUserExcluded(x)&&Number.isFinite(ms)&&ms>cutoff;});
  // Snapshot is ranked strongest-first. Apply limit before any client-side kickoff sort,
  // otherwise 20/30 would incorrectly select the earliest fixtures instead of strongest.
  const methodAudit=learned.rows[0]?.payload;
@@ -79,7 +95,7 @@ export default async function(req,res){
  // forecasts explicitly. Do not silently hide all matches when no model passed.
  const approvedIds=new Set(releasedUpcoming.map(x=>x.id));
  const shown=upcoming.filter(x=>mode!=="featured"||priority(x))
-  .sort((a,b)=>rank(b)-rank(a)||Number(b.market?.expectedEV||0)-Number(a.market?.expectedEV||0)||Number(b.score||0)-Number(a.score||0)||Date.parse(a.kickoff)-Date.parse(b.kickoff))
+  .sort((a,b)=>mode==="featured"?(rank(b)-rank(a)||Date.parse(a.kickoff)-Date.parse(b.kickoff)):Date.parse(a.kickoff)-Date.parse(b.kickoff))
   .slice(0,limit).map(x=>toLegacy(x,approvedIds.has(x.id)));
  const summary=[],perf=new Map();
  const now=Date.now();
@@ -171,8 +187,8 @@ export default async function(req,res){
    ou_selected:x.type==="OU"&&x.eligible===true,
    coverage_gate:x.eligible===true,historical:true});
  }
- return res.json({ok:true,locked:!preRelease&&!!latest,found:preRelease||!!latest,provisional:preRelease,model:payload.model||"R55 - đang chờ snapshot",
-  date:preRelease?calendarDay:day,updated_at:preRelease?draft.rows[0].updated_at:(latest?.locked_at||null),total:upcoming.length,validated_upcoming:releasedUpcoming.length,research_only_upcoming:upcoming.length-releasedUpcoming.length,prediction_coverage_pct:Number(payload.scanProgress?.marketPool)>0?Number((100*picks.length/Number(payload.scanProgress.marketPool)).toFixed(2)):null,prediction_coverage_target_pct:80,snapshot_total:picks.length,hidden_started:startedCount,hidden_lower_tier:picks.length-startedCount-upcoming.length,scan_progress:payload.scanProgress||null,predictions:shown,
+ return res.json({ok:true,locked:!!latest,found:!!latest||preRelease,provisional:preRelease,preview:preRelease,source_state:sourceState,model:payload.model||"R55 - đang chờ dự đoán mới",
+  date:displayDay,updated_at:fresh?.updated_at||latest?.locked_at||null,total:upcoming.length,validated_upcoming:releasedUpcoming.length,research_only_upcoming:upcoming.length-releasedUpcoming.length,prediction_coverage_pct:Number(payload.scanProgress?.marketPool)>0?Number((100*picks.length/Number(payload.scanProgress.marketPool)).toFixed(2)):null,prediction_coverage_target_pct:80,snapshot_total:picks.length,hidden_started:startedCount,hidden_lower_tier:picks.length-startedCount-upcoming.length,scan_progress:payload.scanProgress||null,predictions:shown,
   daily_stats:historyStats,method_performance:[...totalMethods.values()],
   learning_ready:Array.isArray(learned.rows[0]?.payload?.methods)&&learned.rows[0].payload.methods.some(x=>x.eligible===true),stats_restored:false,source:"bongdalu_verified_only",
   note:legacyLocked?"Snapshot cũ không đạt xác minh nguồn Bongdalu.":releasedUpcoming.length===0&&upcoming.length>0?"DỰ BÁO THAM KHẢO: hiện chưa có phương pháp AH/OU vượt chuẩn hồi kiểm; các trận vẫn hiển thị để theo dõi và chấm kết quả thật. Không có tỷ lệ thắng được bảo đảm.":"Dự báo dùng dữ liệu Bongdalu. Chỉ nhãn 'Đủ dữ liệu' mới biểu thị phương pháp qua kiểm định; không có dự đoán nào bảo đảm thắng."});
