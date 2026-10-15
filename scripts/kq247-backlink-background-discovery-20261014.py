@@ -30,7 +30,7 @@ MAX_HTTP_HOSTS = max(25, min(150000, int(os.environ.get("KQ247_MAX_HTTP_HOSTS", 
 MAX_URL_LINES = max(1000, min(2000000000, int(os.environ.get("KQ247_MAX_URL_LINES", "2000000000"))))
 BATCH = 25000
 WATCH = ("--watch" in sys.argv)
-IDLE_SECONDS = max(60, min(1800, int(os.environ.get("KQ247_IDLE_SECONDS", "600"))))
+IDLE_SECONDS = max(60, min(1800, int(os.environ.get("KQ247_IDLE_SECONDS", "120"))))
 STALE_DAYS = max(7, min(90, int(os.environ.get("KQ247_STALE_DAYS", "7"))))
 PATH_RE = re.compile(r"submit|publish|add[-_/]?(?:group|channel|link|listing)|suggest|directory|register|addgroup|dang[-_/]?(?:tin|bai)|them[-_/]?nhom", re.I)
 DOMAIN_RE = re.compile(r"(telegram|telegr|tg(?:find|hub|link|mania|dir|group|radar|box)|group|directory|link|forum|listing|submit|community)", re.I)
@@ -45,7 +45,7 @@ PUBLIC_DIRECTORY_FEEDS = [
     "https://telegramgroups.co/",
     "https://groupverse.co.in/",
 ]
-FEED_REFRESH_SECONDS = 21600
+FEED_REFRESH_SECONDS = 3600
 SEED = [
 "https://groupsgyani.org/submit-telegram-group-and-channel-links",
 "https://telegramgroup.arkservices.in/submit",
@@ -170,8 +170,8 @@ def get_page(url):
         with opener.open(Request(url, headers={"User-Agent":"KQ247BacklinkResearch/2.0 (+public-pages-only)", "Accept":"text/html"}), timeout=7) as r:
             if r.status != 200: return None, "http_" + str(r.status)
             if "html" not in r.headers.get("Content-Type","").lower(): return None, "not_html"
-            content = r.read(240001)
-            if len(content) > 240000: return None, "too_big"
+            content = r.read(1048577)
+            if len(content) > 1048576: return None, "too_big"
             return (r.url, content.decode("utf-8", "replace")), None
     except Exception as exc:
         return None, type(exc).__name__
@@ -234,7 +234,7 @@ def refresh_public_feeds(con):
         parser.feed(raw)
         source = host_url(feed)
         before = con.execute("SELECT COUNT(*) FROM hosts").fetchone()[0]
-        for href in parser.links[:3000]:
+        for href in parser.links[:8000]:
             links_seen += 1
             absolute = urljoin(final, href)
             entry = host_url(absolute)
