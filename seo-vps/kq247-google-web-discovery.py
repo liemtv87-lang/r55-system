@@ -87,7 +87,8 @@ def editorial_submission_candidate(uri):
   leaf=path.rsplit("/",1)[-1]
   if p.scheme!="https" or not leaf or len(uri)>1200:return False
   if "/wp-content/" in path or leaf.endswith((".svg",".png",".jpg",".jpeg",".webp",".pdf",".css",".js",".xml")):return False
-  return leaf in EDITORIAL_SLUGS or leaf.startswith(EDITORIAL_PREFIXES)
+  return (leaf in EDITORIAL_SLUGS or leaf.startswith(EDITORIAL_PREFIXES)
+          or leaf=="submit-service" or (leaf=="suggest.php" and "/directory/" in path))
  except (ValueError,UnicodeError):return False
 
 def fetch(uri, cap=MAX_BYTES_PER_SITEMAP):
@@ -181,6 +182,7 @@ def discover_directories(db):
   selected.append(base)
   if len(selected)>=INDEX_PAGE_BUDGET:break
  seen={}
+ index_candidates_new=0
  visited=[]
  with cf.ThreadPoolExecutor(max_workers=MAX_INDEX_WORKERS) as pool:
   scanned=list(pool.map(inspect_index_host_group,groups.values()))
@@ -196,6 +198,14 @@ def discover_directories(db):
     if h!=host(base):
      seen.setdefault(h,{"host":h,"url":"https://"+h+"/",
                         "category":category,"priority":priority(u,category)})
+     # Preserve direct contributor-page URLs for separate review.
+     # Discovery alone never grants permission to POST.
+     if editorial_submission_candidate(u):
+      known=db.execute("SELECT 1 FROM candidate_pages WHERE url=?",(u,)).fetchone()
+      db.execute("""INSERT INTO candidate_pages VALUES(?,?,?,?,?)
+        ON CONFLICT(url) DO UPDATE SET last_seen=excluded.last_seen""",
+        (u,h,now,now,"unverified"))
+      if not known:index_candidates_new+=1
     elif nested<35 and len(p.path)<150 and len(p.query)<100 and any(
        marker in p.path.lower()+("?"+p.query.lower()) for marker in
        ("page","category","sports","the-thao","vietnam","website","browse",
@@ -207,7 +217,7 @@ def discover_directories(db):
   db.execute("UPDATE index_frontier SET last_checked=?,last_error=? WHERE url=?",
              (at,err,base))
  db.commit()
- return sorted(seen.values(),key=lambda x:(x["priority"],x["host"])),len(visited)
+ return sorted(seen.values(),key=lambda x:(x["priority"],x["host"])),len(visited),index_candidates_new
 
 def sitemap_scan(job):
  h=job["host"]
@@ -289,7 +299,7 @@ def run():
  db=sqlite3.connect(ROOT/"google-web-discovery.sqlite3")
  init_db(db)
  from_config=load_candidates()
- from_directory,index_pages_checked=discover_directories(db)
+ from_directory,index_pages_checked,index_candidates_new=discover_directories(db)
  combined=from_config+from_directory
  existing={r[0] for r in db.execute("SELECT host FROM sites")}
  new_sites=0
@@ -309,7 +319,7 @@ def run():
  # This inventory reads public sitemaps, not all website HTML content.
  with cf.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
   results=list(pool.map(sitemap_scan,jobs))
- host_count=len(results);ur=0;form_new=0;errors=0
+ host_count=len(results);ur=0;form_new=index_candidates_new;errors=0
  for row in results:
   h=row["host"]
   ur+=row["urls"]
@@ -338,6 +348,7 @@ def run():
          "source_ordering":"Vietnam-related and .vn first; round-robin via last_scanned",
          "source_indexes_seeded":len(SEARCH_PAGES),
          "source_index_pages_checked_this_run":index_pages_checked,
+         "contributor_candidates_from_index_links_new_this_run":index_candidates_new,
          "index_page_selection_strategy":"fair_cross_host_frontier_v2",
          "candidate_match_strategy":"explicit_editorial_slug_v2",
          "index_pages_per_host_cap":MAX_INDEX_PAGES_PER_HOST,
@@ -379,6 +390,9 @@ def selftest():
  assert editorial_submission_candidate("https://news.com/2024/submit-a-false-tip-to-police/") is False
  assert editorial_submission_candidate("https://wordpress.com/wp-content/plugins/forms/submit-spin.svg") is False
  assert editorial_submission_candidate("https://example.com/write-for-us/") is True
+ assert editorial_submission_candidate("https://directory.example.com/directory/suggest.php") is True
+ assert editorial_submission_candidate("https://example.org/submit-service") is True
+ assert editorial_submission_candidate("https://example.org/news/suggest.php") is False
  assert editorial_submission_candidate("https://example.vn/gui-bai-viet/") is True
  assert editorial_submission_candidate("https://example.vn/cong-tac-vien/") is True
  print("KQ247_GOOGLE_DISCOVERY_SELF_TEST=PASS")
