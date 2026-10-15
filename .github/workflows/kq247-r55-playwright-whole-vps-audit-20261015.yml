@@ -1,0 +1,84 @@
+name: KQ247 Existing Playwright Whole-VPS Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-r55-playwright-whole-vps-audit-20261015.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Install SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Check Playwright in VPS host, application envs, Docker mounts and containers (read-only)
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'python3 -' <<'PY'
+          import os,pathlib,subprocess,json,time
+          def sh(*args,timeout=15):
+            try:
+              p=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+              return {"code":p.returncode,"out":p.stdout.strip()[:3500],"err":p.stderr.strip()[:300]}
+            except Exception as e:return {"error":type(e).__name__}
+          targets=[
+            "/opt","/home","/root","/usr/local/lib","/usr/lib",
+            "/var/lib","/srv","/app","/workspace","/usr/local/bin","/usr/bin",
+            "/tmp","/mnt","/etc/systemd/system"]
+          markers=("playwright","chromium","chrome-headless-shell","google-chrome",
+                   "puppeteer","ms-playwright","node_modules","browser")
+          found=[]
+          exclude={"proc","sys","dev",".git","__pycache__","cache","snapshots"}
+          for top in targets:
+            p=pathlib.Path(top)
+            if not p.is_dir():continue
+            for dirpath,dirs,files in os.walk(top,followlinks=False):
+              rel=pathlib.Path(dirpath).relative_to(p)
+              depth=len(rel.parts)
+              if depth>=5:dirs[:]=[];continue
+              dirs[:]=[d for d in dirs if d not in exclude]
+              for name in dirs+files:
+                lname=name.lower()
+                if any(marker in lname for marker in markers):
+                  full=os.path.join(dirpath,name)
+                  found.append(full[:300])
+                  if len(found)>=180:break
+              if len(found)>=180:break
+            if len(found)>=180:break
+          docker=sh("docker","ps","--format","{{.Names}}|{{.Image}}")
+          containers=[]
+          for line in docker.get("out","").splitlines():
+            name=line.split("|")[0]
+            if not name:continue
+            mounts=sh("docker","inspect","--format","{{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}",name)
+            # commands only for inspection, no installs, process modifications or downloads
+            probe=sh("docker","exec",name,"sh","-c",
+                     "command -v chromium || command -v google-chrome || command -v node || command -v playwright || true; "
+                     "for x in /app/node_modules/playwright /app/node_modules/playwright-core /opt/node_modules/playwright /usr/local/lib/node_modules/playwright /ms-playwright /root/.cache/ms-playwright; do test ! -e \"$x\" || echo \"$x\"; done",
+                     timeout=8)
+            containers.append({"name":name,"mounts":mounts.get("out"),"executables_and_modules":probe.get("out"),"exec_code":probe.get("code")})
+          result={
+             "checked_utc":__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+             "host_path":os.environ.get("PATH","")[:1400],
+             "host_commands":sh("sh","-c","command -v node; command -v npm; command -v npx; command -v playwright; command -v chromium; command -v google-chrome; true"),
+             "host_python":sh("python3","-c","import importlib.util; print('playwright:',importlib.util.find_spec('playwright'))"),
+             "filesystem_candidates":found,
+             "docker_ps":docker,
+             "containers":containers,
+             "research_existing_services":sh("systemctl","list-unit-files","--type=service","--no-pager"),
+             "related_processes":sh("ps","-eo","pid,user,comm,args","--no-headers")}
+          result["research_existing_services"]["out"]="\n".join(x for x in result["research_existing_services"].get("out","").splitlines() if "play" in x.lower() or "browser" in x.lower() or "pw" in x.lower())[:1400]
+          result["related_processes"]["out"]="\n".join(x[:220] for x in result["related_processes"].get("out","").splitlines() if any(s in x.lower() for s in ("playwright","chromium","chrome-headless","puppeteer")))[:2500]
+          print("KQ247_PLAYWRIGHT_WHOLE_VPS_AUDIT="+json.dumps(result,ensure_ascii=False))
+          print("KQ247_PLAYWRIGHT_AUDIT_READ_ONLY=YES")
+          PY
