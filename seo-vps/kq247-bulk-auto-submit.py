@@ -94,7 +94,10 @@ def pair_ready(con, host, grp):
     if state == "unavailable":
         delay = RETRY_GET_AFTER_S
     elif state in REINSPECT_ONLY_STATES:
-        delay = RETRY_READONLY_AFTER_S
+        # Groupsor JS form was mistakenly classified as no_eligible_form by the
+        # generic HTML POST detector; that state proves no submission happened.
+        # Reinspect this one publisher promptly after the specific adapter fix.
+        delay = min(RETRY_READONLY_AFTER_S, 12 * 3600) if host == "groupssor.com" and state == "no_eligible_form" else RETRY_READONLY_AFTER_S
     else:
         # This includes attempted_no_retry, posted/pending/unknown, and
         # inspection_started (which cannot prove a POST never occurred).
@@ -202,6 +205,89 @@ def write_result(con,host,grp,url,status,receipt=""):
     os.replace(tmp,REPORT)
     print("KQ247_BULK_SUBMIT="+json.dumps({"host":host,"group":grp,"status":status,"verified_total":report["verified_new_public_links"]},ensure_ascii=False),flush=True)
 
+def attempt_groupssor(page, con, host, url, group_key, group):
+    """Handle one verified opt-in JS form using its real browser interface.
+
+    Groupsor uses a GET-default <form> and JavaScript to POST, rather than an
+    HTML method=post. This narrowly scoped adapter never sends unknown URLs,
+    bypasses challenges, or retries any possibly submitted previous request.
+    Return True only when this publisher has been handled.
+    """
+    if host != "groupssor.com" or urlsplit(url).path.rstrip("/") != "/submit":
+        return False
+    form = page.locator("form#submit-group-form")
+    try:
+        if form.count() != 1:
+            write_result(con,host,group_key,url,"no_eligible_form","missing_groupssor_form")
+            return True
+        body=page.locator("body").inner_text(timeout=6000).lower()
+        if "submit your group" not in body or "free" not in body or "telegram" not in body:
+            write_result(con,host,group_key,url,"no_eligible_form","publisher_copy_changed")
+            return True
+        if page.locator('[data-sitekey],iframe[src*="captcha"],.g-recaptcha,.h-captcha,.cf-turnstile').count():
+            write_result(con,host,group_key,url,"captcha")
+            return True
+        required=("inviteLink","name","category","country","language","description")
+        if any(form.locator('[name="'+n+'"]').count()!=1 for n in required):
+            write_result(con,host,group_key,url,"no_eligible_form","groupssor_required_fields_changed")
+            return True
+        if form.locator('input[name="platform"][value="telegram"]').count()!=1:
+            write_result(con,host,group_key,url,"no_eligible_form","missing_telegram_platform")
+            return True
+        if is_public_listing(page,group["url"]):
+            write_result(con,host,group_key,url,"already_listed_verified",page.url)
+            return True
+        # Only semantic category, country and language matches. Never select a
+        # misleading default merely to satisfy form validation.
+        values={
+            "category":(["Sports","Sport"] if group_key=="football"
+                        else ["News & Media","News","Entertainment","Gaming"]),
+            "country":["Vietnam","Viet Nam","Việt Nam"],
+            "language":["Vietnamese","Tiếng Việt","Vietnam"]
+        }
+        selected={}
+        for field,choices in values.items():
+            sel=form.locator('select[name="'+field+'"]')
+            if sel.count()!=1:
+                write_result(con,host,group_key,url,"required_option_not_available",field+"_not_select")
+                return True
+            opts=sel.evaluate("(e)=>[...e.options].map(o=>({value:o.value,label:o.textContent.trim()}))")
+            chosen=None
+            for want in choices:
+                chosen=next((o for o in opts if o["value"] and
+                    (o["label"].casefold()==want.casefold() or o["value"].casefold()==want.casefold())),None)
+                if chosen:break
+            if chosen is None:
+                write_result(con,host,group_key,url,"required_option_not_available",field)
+                return True
+            selected[field]=chosen["value"]
+        form.locator('input[name="platform"][value="telegram"]').check(force=True)
+        form.locator('[name="inviteLink"]').fill(group["url"])
+        form.locator('[name="name"]').fill(group["title"])
+        form.locator('[name="description"]').fill(group["description"])
+        for field,val in selected.items():
+            form.locator('select[name="'+field+'"]').select_option(value=val)
+        tags=("bong da, lich thi dau, thong ke" if group_key=="football"
+              else "ket qua xo so, thong ke, Viet Nam")
+        if form.locator('[name="tags"]').count()==1:
+            form.locator('[name="tags"]').fill(tags)
+        button=form.locator('button[type="submit"],input[type="submit"]')
+        if button.count()!=1 or not button.first.is_enabled() or not button.first.is_visible():
+            write_result(con,host,group_key,url,"submit_disabled")
+            return True
+        # Persist the no-retry boundary BEFORE browser interaction.
+        write_result(con,host,group_key,url,"attempted_no_retry")
+        button.first.click(timeout=10000)
+        page.wait_for_timeout(1600)
+        success=page.get_by_text("Thank you for submitting your group to Groupsor.",exact=False)
+        if success.count() and success.first.is_visible():
+            write_result(con,host,group_key,url,"submitted_pending_review",page.url)
+        else:
+            write_result(con,host,group_key,url,"submitted_outcome_unknown",page.url)
+    except Exception as exc:
+        write_result(con,host,group_key,url,"error_no_retry",type(exc).__name__+":"+str(exc)[:180])
+    return True
+
 def attempt(page, con, host, url, group_key, group):
     if not pair_ready(con,host,group_key):
         return
@@ -216,6 +302,8 @@ def attempt(page, con, host, url, group_key, group):
             "SELECT 1 FROM hosts WHERE host=? AND url=? AND status='form_candidate'",
             (host,url)).fetchone()) if con.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='hosts'").fetchone() else False
+        if attempt_groupssor(page,con,host,url,group_key,group):
+            return
         status,forminfo=check_eligible(page,url,discovered_form)
         if status!="eligible":
             write_result(con,host,group_key,url,status);return
