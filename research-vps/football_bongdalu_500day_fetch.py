@@ -35,11 +35,19 @@ def fetch_for_day(day):
   if target.scheme!="https" or target.hostname not in VALID_HOSTS:raise ValueError("untrusted redirect")
   raw=response.read(2500001)
  if not raw or len(raw)>2500000:raise ValueError("invalid response size")
- try:d=json.loads(raw)
- except (UnicodeDecodeError,json.JSONDecodeError):raise ValueError("non-JSON Bongdalu response")
- if str(d.get("ErrCode",0)) not in ("0","None"):raise ValueError("unexpected Bongdalu error")
+ body=raw.decode("utf-8-sig","replace").strip()
+ try:d=json.loads(body)
+ except json.JSONDecodeError:
+  # Some Bongdalu mirrors send direct JS A[n]=[...] rows instead of JSON.Data.
+  if re.search(r"A\[\d+\]\s*=\s*\[",body):
+   return uri,raw,body
+  # Keep a bounded, non-sensitive response prefix for fixing bad/moved endpoints.
+  prefix=re.sub(r"[^a-zA-Z0-9_ .<>/=-]","?",body[:95])
+  raise ValueError("non-JSON historical endpoint prefix:"+prefix)
+ if not isinstance(d,dict):raise ValueError("non-object historical response")
+ if str(d.get("ErrCode",0)) not in ("0","None"):raise ValueError("unexpected Bongdalu error:"+str(d.get("ErrCode"))[:30])
  data=d.get("Data")
- if not isinstance(data,str) or len(data)<50:raise ValueError("missing historical fixture data")
+ if not isinstance(data,str) or len(data)<50:raise ValueError("missing historical fixture Data")
  return uri,raw,data
 def parse_ft(data,date):
  out=[];seen=set()
@@ -115,6 +123,7 @@ def test():
  assert len(wanted(dt.date(2026,10,15)))==500
  assert wanted(dt.date(2026,10,15))[0]=="2025-06-03"
  assert MAX_AGE==500
+ assert bool(re.search(r"A\[\d+\]\s*=\s*\[","A[19]=[123];"))
  assert parse_ft('A[1]=[3000123,1,1,0,"Home","Away","2025,9,17,00,00,00",-1,3,2,0];',"2025-10-17")[0]["fixture_id"]=="3000123"
  print("KQ247_R55_BONGDALU_FETCH_SELFTEST=PASS")
 if __name__=="__main__":
