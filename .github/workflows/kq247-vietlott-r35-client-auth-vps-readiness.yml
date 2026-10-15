@@ -1,0 +1,49 @@
+name: KQ247 Vietlott R35 VPS Customer Auth Readiness Readonly
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-client-auth-vps-readiness.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Inspect VPS license/auth and route readiness without secrets or writes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo KQ247_CUSTOMER_AUTH_READONLY_BEGIN
+          docker ps --format '{{.Names}}|{{.Status}}' | grep -Ei 'kq247|postgres|auth' | head -35 || true
+          echo KQ247_LOCAL_AUTH_HEALTH_ENDPOINTS
+          for path in 'http://127.0.0.1:18088/client.html' 'http://127.0.0.1:18088/guest-snapshot.html' 'http://127.0.0.1:18142/client.html';do
+             curl -sS --max-time 8 -o /dev/null -w '%{url_effective} STATUS=%{http_code}\n' "$path" || true
+          done
+          echo KQ247_LOCAL_AUTH_SERVICE_PORT_CANDIDATES
+          for port in 18088 18112 18142 3000 3001 8080 8081 8082 5432;do
+             if timeout 1 bash -c "echo > /dev/tcp/127.0.0.1/$port" 2>/dev/null;then echo "LOCAL_PORT_ACTIVE=$port";fi
+          done
+          echo KQ247_VIETLOTT_CLIENT_AUTH_SOURCE
+          python3 - <<'PY'
+          from pathlib import Path
+          c=Path('/opt/kq247/vietlott/public/client.html')
+          if c.is_file():
+            txt=c.read_text(errors='replace')
+            print('LIVE_CLIENT_EXTERNAL_NEON_AUTH='+str('.neon.tech' in txt))
+            print('LIVE_CLIENT_GUEST_URL_PRESERVED='+str('guest-snapshot.html?client=1' in txt))
+          else: print('LIVE_CLIENT_FILE=NOT_FOUND')
+          PY
+          echo KQ247_CUSTOMER_AUTH_READONLY_END
+          VPS
