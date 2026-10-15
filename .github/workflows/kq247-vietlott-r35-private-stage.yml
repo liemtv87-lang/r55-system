@@ -44,18 +44,21 @@ jobs:
             echo 'KQ247_VIETLOTT_PRIVATE_SOURCE_ACCESS=WAITING_FOR_READONLY_DEPLOY_KEY'
             exit 3
           fi
-          remote_head=$(timeout 25 git ls-remote "$repo" refs/heads/main | awk '{print $1}')
-          if [ "$remote_head" != "$expected" ];then
-            echo "KQ247_VIETLOTT_SOURCE_HEAD_CHANGED=YES"
-            exit 4
-          fi
           echo 'KQ247_VIETLOTT_PRIVATE_SOURCE_ACCESS=OK'
+          # Pin an immutable source commit even if newer documentation was committed.
+          # Never switch to a moving branch tip without source review.
           dest="$base/r35-$expected"
           if [ ! -d "$dest/.git" ];then
             tmp="$base/.r35-fetch-$$"
             trap 'rm -rf "$tmp"' EXIT
             install -d -m 0755 "$base"
-            GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch main --single-branch "$repo" "$tmp" >/dev/null
+            GIT_TERMINAL_PROMPT=0 git clone --depth 40 --branch main --single-branch "$repo" "$tmp" >/dev/null
+            if ! git -C "$tmp" cat-file -e "$expected^{commit}" 2>/dev/null; then
+              echo 'KQ247_VIETLOTT_PINNED_COMMIT_OUTSIDE_CLONE_HISTORY'
+              exit 5
+            fi
+            git -C "$tmp" merge-base --is-ancestor "$expected" HEAD
+            git -C "$tmp" checkout -q --detach "$expected"
             test "$(git -C "$tmp" rev-parse HEAD)" = "$expected"
             mv "$tmp" "$dest"
             trap - EXIT
