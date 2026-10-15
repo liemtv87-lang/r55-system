@@ -135,12 +135,25 @@ def parse_sitemap(data):
  except (ET.ParseError,ValueError):return "invalid",[]
 
 class Outgoing(HTMLParser):
- def __init__(self):
-  super().__init__();self.links=[]
+ def __init__(self,extract_table_hosts=False):
+  super().__init__();self.links=[];self.visible_host_urls=[]
+  self.extract_table_hosts=extract_table_hosts
+  self.in_table_cell=False
  def handle_starttag(self,tag,attrs):
+  if tag=="td":self.in_table_cell=True
   if tag=="a":
    d=dict(attrs)
    if d.get("href") and len(self.links)<10000:self.links.append(d["href"])
+ def handle_endtag(self,tag):
+  if tag=="td":self.in_table_cell=False
+ def handle_data(self,data):
+  # Vietnamese forum indexes may print domains in table cells without href.
+  # These are prospect URLs ONLY, never publication authorization.
+  if not (self.extract_table_hosts and self.in_table_cell):return
+  for m in re.finditer(r"(?<![a-z0-9-])(?:https?://)?(?:www\\.)?([a-z0-9][a-z0-9.-]{2,110}\\.(?:com\\.vn|net\\.vn|org\\.vn|edu\\.vn|vn|com|net|org))(?![a-z0-9.-])",data,re.I):
+   h=m.group(1).lower()
+   if h not in SKIP_HOSTS and len(self.visible_host_urls)<1000:
+    self.visible_host_urls.append("https://"+h+"/")
 
 def priority(url,kind=""):
  h=host(url)
@@ -157,9 +170,9 @@ def inspect_index_host_group(items):
   links=[]
   if raw is not None:
    try:
-    parser=Outgoing()
+    parser=Outgoing(extract_table_hosts=(category=="VN_forum_sources"))
     parser.feed(raw.decode("utf-8","replace"))
-    links=parser.links
+    links=parser.links+parser.visible_host_urls
    except (ValueError,UnicodeError) as ex:
     err=type(ex).__name__
   done.append((base,category,err,links))
@@ -395,6 +408,13 @@ def selftest():
  assert host("https://www.test.com.vn/foo")=="test.com.vn"
  assert len(load_candidates())>=40
  assert len({u for u,_ in SEARCH_PAGES})==len(SEARCH_PAGES)
+ x=Outgoing(extract_table_hosts=True)
+ x.feed('<table><tr><td>vnseo.edu.vn</td><td>https://forum.example.com/rules/</td></tr></table>')
+ assert "https://vnseo.edu.vn/" in x.visible_host_urls
+ assert "https://forum.example.com/" in x.visible_host_urls
+ y=Outgoing(extract_table_hosts=False)
+ y.feed('<table><td>vnseo.edu.vn</td></table>')
+ assert y.visible_host_urls==[]
  assert any('launchdirectories.com/free-web-directories' in url for url,_ in SEARCH_PAGES)
  assert sum(cat=="VN_forum_sources" for _,cat in SEARCH_PAGES)==3
  assert INDEX_PAGE_BUDGET>=MAX_INDEX_PAGES_PER_HOST
