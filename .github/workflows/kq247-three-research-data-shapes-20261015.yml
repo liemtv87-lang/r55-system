@@ -29,7 +29,7 @@ jobs:
                  '/opt/kq247/vietlott/data/predlog-mega645.json',
                  '/opt/kq247/vietlott/data/snapshot-mega645.json',
                  '/opt/kq247/vietlott/public/backtest-60.json',
-                 '/opt/kq247/lottery-daily-staging/history/xsmb-505-actual-through-20261014.json',
+                 '/opt/kq247/lottery-daily-staging/xsmb-505-actual-through-20261014.json',
                  '/opt/kq247/lottery-daily-staging/mtmn-500-full18-archive-backfill.json']
           def shape(v,depth=0):
               if depth>=2:return type(v).__name__
@@ -44,6 +44,11 @@ jobs:
               try:
                   v=json.loads(p.read_text())
                   data[filename]={'bytes':p.stat().st_size,'shape':shape(v)}
+                  if 'xsmb-505' in filename:
+                      data[filename]['top_level_type']=type(v).__name__
+                      data[filename]['keys_or_length']=list(v.keys())[:24] if isinstance(v,dict) else len(v) if isinstance(v,list) else None
+                      lists=[(k,x) for k,x in v.items() if isinstance(x,list)] if isinstance(v,dict) else [('array',v)] if isinstance(v,list) else []
+                      data[filename]['first_records']=[{'key':k,'size':len(x),'item0':shape(x[0]) if x else None,'item0_full_keys':list(x[0].keys()) if x and isinstance(x[0],dict) else None} for k,x in lists[:5]]
               except Exception as e:data[filename]={'error':type(e).__name__}
           for loc in ['/opt/kq247/lottery-daily-staging','/opt/kq247/lottery-daily-staging/data',
                       '/opt/kq247/lottery-daily-staging/public-locked',
