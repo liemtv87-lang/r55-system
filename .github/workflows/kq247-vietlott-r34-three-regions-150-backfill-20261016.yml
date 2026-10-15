@@ -28,7 +28,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
           set -euo pipefail
-          SHA=305e413bc92a282d0704e5112c1de3ce6e898d28
+          SHA=ffcdc634d810d3abe7612abec71f6aae475568f2
           root=/opt/kq247/vietlott
           src="$root/versions/r34-regions150-$SHA"
           stage="$root/backtest-verified/r34-xsmb150-20261015"
@@ -51,7 +51,7 @@ jobs:
           test -s "$stage/input/data/history-power655.json"
           test -s "$stage/output/xsmb-verified-150-draws.json"
           mkdir -p "$stage/regions"
-          for batch in 1 2 3 4 5;do
+          for batch in $(seq 6 30);do
             timeout 200 docker run --rm --cpus=2 --memory=2g --pids-limit=128 --network bridge \
               -e R34_REGION_BATCH=12 -e R34_REGION_PARALLEL=2 \
               -v "$src":/work:ro -v "$stage/input":/archive-input:ro \
