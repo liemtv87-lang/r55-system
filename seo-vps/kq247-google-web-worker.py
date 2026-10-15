@@ -45,35 +45,62 @@ SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
 MAX_SEEDS = 400
 
 def source_seeds():
- """Curated independent Google WEB website inventory. Never grants POST permission."""
- candidates = list(SEEDS)
+ """Rotate the discovered hosts by last REAL audit; do not repeatedly verify the same 400.
+ The discovery inventory does not grant posting permission.
+ """
+ curated=list(SEEDS)
  try:
   config=json.loads(SEEDS_FILE.read_text(encoding="utf-8"))
-  candidates += [entry.get("url","") for entry in config.get("sources",[]) if
-                 isinstance(entry,dict) and entry.get("submission_authorized") is False]
+  curated += [entry.get("url","") for entry in config.get("sources",[]) if
+              isinstance(entry,dict) and entry.get("submission_authorized") is False]
  except (OSError,ValueError,TypeError):
   pass
- # Consume the five-minute VN-first discovery ledger in read-only mode.
- # A discovered host is NOT a confirmed publisher and never authorized for POST.
+ last_checked={}
  try:
-  with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as discovery:
-   rows=discovery.execute("SELECT source_url FROM sites ORDER BY priority ASC,created_at DESC LIMIT 900").fetchall()
-   candidates.extend(row[0] for row in rows)
+  with sqlite3.connect("file:"+str(ROOT/"google-web-seo.sqlite3")+"?mode=ro",uri=True,timeout=2) as audit:
+   last_checked=dict(audit.execute("SELECT host,MAX(run_at) FROM history WHERE host IS NOT NULL GROUP BY host").fetchall())
  except (sqlite3.Error,OSError):
   pass
- # Investigate .vn before unrelated global domains, then preserve feed order.
- candidates=sorted(candidates,key=lambda uri: 0 if (urllib.parse.urlsplit(uri).hostname or "").endswith(".vn") else 1)
- hosts=set()
+ discovered=[]
+ try:
+  with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as discovery:
+   discovered=discovery.execute("SELECT source_url,host,priority FROM sites").fetchall()
+ except (sqlite3.Error,OSError):
+  pass
+ # Vietnam-related publishers first, oldest audits before recently rechecked ones.
+ discovered.sort(key=lambda r:(r[2] if r[2] is not None else 1,
+                                last_checked.get(r[1],"") or "",r[1]))
+ seen=set()
  result=[]
- for url in candidates:
-  p=urllib.parse.urlsplit(url)
+ def append_valid(uri):
+  try:p=urllib.parse.urlsplit(uri)
+  except ValueError:return False
   host=(p.hostname or "").lower().removeprefix("www.")
-  if p.scheme!="https" or not host or host in hosts:continue
-  if host in ("t.me","telegram.me") or host==urllib.parse.urlsplit(BASE).hostname:continue
-  hosts.add(host)
-  result.append(url)
+  if p.scheme!="https" or not host or host in seen:return False
+  if host in ("t.me","telegram.me") or host==urllib.parse.urlsplit(BASE).hostname:return False
+  seen.add(host)
+  result.append(uri)
+  return True
+ for uri in sorted(curated,key=lambda u:0 if (urllib.parse.urlsplit(u).hostname or "").endswith(".vn") else 1):
+  append_valid(uri)
+ # Reserve some scan capacity for non-.vn hosts rather than starving all of them.
+ space=max(0,MAX_SEEDS-len(result))
+ vn_budget=int(space*0.8)
+ vn=[r[0] for r in discovered if (r[1] or "").endswith(".vn")]
+ elsewhere=[r[0] for r in discovered if not (r[1] or "").endswith(".vn")]
+ vn_added=0
+ for uri in vn:
+  if vn_added>=vn_budget:break
+  if append_valid(uri):vn_added+=1
+  if len(result)>=MAX_SEEDS:return result[:MAX_SEEDS]
+ for uri in elsewhere:
+  if len(result)>=MAX_SEEDS:return result[:MAX_SEEDS]
+  append_valid(uri)
+ for uri in vn:
   if len(result)>=MAX_SEEDS:break
- return result
+  append_valid(uri)
+ return result[:MAX_SEEDS]
+
 
 def normalize_target_anchor(origin,href):
  """Confirm the public external HTML link points to an EXACT first-party target."""
@@ -239,9 +266,53 @@ def candidate_pages_to_inspect(limit=240):
            1 if uri in last_checked else 0,
            last_checked.get(uri,""),uri)
   candidates.sort(key=rank)
-  return candidates[:limit]
+  # One host must not monopolize the evidence queue with dozens of near-identical pages.
+  selected=[]
+  per_host={}
+  for uri in candidates:
+   host=(urllib.parse.urlsplit(uri).hostname or "").lower().removeprefix("www.")
+   if per_host.get(host,0)>=2:continue
+   per_host[host]=per_host.get(host,0)+1
+   selected.append(uri)
+   if len(selected)>=limit:break
+  return selected
  except (sqlite3.Error,OSError,ValueError):
   return []
+
+def evaluate_publisher_form(forms, url, page_title="", html_body=""):
+ """Evidence only: a form is never permission to submit.
+ Ignore search, newsletter, login, WordPress comment and ordinary contact forms.
+ """
+ blockers=("wp-comments-post","comment-form","/comment","newsletter","login","register",
+           "wp-login","/search","contact-us","/contact")
+ suitable=[]
+ for form in forms:
+  if form.get("method")!="post":continue
+  action=(form.get("action") or "").lower()
+  if any(word in action for word in blockers):continue
+  names={re.sub(r"[^a-z0-9]","",f.get("name","").lower()) for f in form.get("fields",[])}
+  has_site=bool(names & {"url","siteurl","website","websiteurl","weburl",
+                         "homepage","homepageurl","domain","domainurl",
+                         "sitelink","websitelink"})
+  has_content=bool(names & {"title","name","sitename","websitename",
+                             "description","details","summary","content",
+                             "category","categoryid","tags"})
+  requires_identity=bool(names & {"password","creditcard","cardnumber",
+                                   "billingaddress","paymentmethod"})
+  if has_site and has_content and not requires_identity:
+   suitable.append({"action":form.get("action",""),
+                    "url_field":True,"description_or_title_field":True})
+ # These are only negative safety clues, not proof that the site permits promotion.
+ body=html_body.lower()
+ forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\\s+"
+                          r"(?:online\\s+)?(?:gambling|betting|casino)|"
+                          r"(?:gambling|betting|casino)\\s+(?:is\\s+)?(?:not\\s+allowed|prohibited)",body[:150000]))
+ has_captcha=("g-recaptcha" in body or "h-captcha" in body or "cf-turnstile" in body)
+ status=("blocked_topic_policy" if forbidden else "needs_captcha" if has_captcha else
+         "form_review_required" if suitable else "no_credible_site_submission_form")
+ return {"publisher_form_status":status,"credible_site_submission_forms":len(suitable),
+         "form_evidence":suitable[:2],"explicit_betting_prohibition":forbidden,
+         "captcha_detected":has_captcha,"posting_permission_verified":False}
 
 def inspect_candidate_page(url):
  result={"url":url,"checked_at_utc":utcnow(),"authorized":False,"submission_attempted":False}
@@ -257,9 +328,8 @@ def inspect_candidate_page(url):
  result["permission_status"]="manual_or_explicit_site_policy_verification_required"
  result["candidate_intent_score"]=candidate_page_intent(url)
  result["page_title"]=parser.title.strip()[:180]
- result["form_has_website_field"]=any(
-  any(any(t in (f.get("name","").lower()) for t in ("website","site_url","url","link"))
-      for f in form.get("fields",[])) for form in parser.forms)
+ result.update(evaluate_publisher_form(parser.forms,url,parser.title,page["body"]))
+ result["form_has_website_field"]=bool(result["credible_site_submission_forms"])
  # A backlink may live in an inner contributor page, not on a site's homepage.
  # Require the same exact HTTPS landing URL match as homepage verification.
  targets=[]
@@ -331,6 +401,10 @@ def main():
   assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
+  assert evaluate_publisher_form(f.forms,"https://example.vn/submit-your-website/")["publisher_form_status"]=="form_review_required"
+  comment={"action":"/wp-comments-post.php","method":"post","fields":[{"name":"url"},{"name":"comment"}]}
+  assert evaluate_publisher_form([comment],"https://example.vn/guest-post/")["credible_site_submission_forms"]==0
+  assert evaluate_publisher_form(f.forms,"https://example.vn/submit/",html_body="No gambling allowed")["publisher_form_status"]=="blocked_topic_policy"
   assert candidate_page_intent("https://example.vn/submit-your-website/")==0
   assert candidate_page_intent("https://example.com/submit-your-site-for-review/")==1
   assert candidate_page_intent("https://example.org/news/study-contributes-to-care/")==99
@@ -366,6 +440,10 @@ def main():
          "candidate_pages_inspected_this_run":len(candidate_pages),
          "candidate_pages_with_post_forms_this_run":sum(bool(p.get("post_forms_observed")) for p in candidate_pages),
          "candidate_page_inspections":candidate_pages,
+         "credible_website_submission_forms_this_run":sum(p.get("credible_site_submission_forms",0) for p in candidate_pages),
+         "publisher_review_queue":[{"url":p["url"],"status":p["publisher_form_status"]}
+                                   for p in candidate_pages if p.get("publisher_form_status")=="form_review_required"][:50],
+         "review_queue_note":"Website field + title/description are candidates only; independent editorial rules and permission must be checked before any post.",
          "automatic_submission":{"enabled":False,"reason":"No independently verified opt-in Web editorial form adapter; no blind POSTs or Telegram directory reuse"},
          "google_indexation":{"indexed_pages":None,"organic_clicks":None,"organic_impressions":None,
                               "source":"Google Search Console connection unavailable; no invented rankings"},
