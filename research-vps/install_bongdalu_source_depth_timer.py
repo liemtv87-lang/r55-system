@@ -11,7 +11,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/kq247/research/bin
 Environment=KQ247_RESEARCH_ROOT=/opt/kq247/research/state
-Environment=KQ247_BONG_SOURCE_CANDIDATES=7
+Environment=KQ247_BONG_SOURCE_CANDIDATES=11
 ExecStart=/usr/bin/python3 /opt/kq247/research/bin/bongdalu_source_depth.py
 TimeoutStartSec=480
 CPUQuota=65%
