@@ -1,0 +1,66 @@
+name: KQ247 Vietlott Production 503 Snapshot Root Cause
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-503-rootcause-20261015.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read production and candidate state, job progress, last errors
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -F 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          for port in 18088 18112; do
+            for path in health api/state status; do
+              file="/tmp/kq247-vl-503-${port}-${path//\//_}.json"
+              code=$(curl -sS --max-time 10 -o "$file" -w '%{http_code}' "http://127.0.0.1:$port/$path" || true)
+              echo "DIAGNOSTIC_HTTP_PORT_${port}_${path//\//_}=$code"
+              head -c 650 "$file" 2>/dev/null || true
+              echo
+            done
+          done
+          python3 - <<'PY'
+          import json,pathlib,os,datetime
+          roots=['/opt/kq247/vietlott-r33-primary','/opt/kq247/vietlott-r33-stage','/opt/kq247/vietlott']
+          for name in roots:
+            d=pathlib.Path(name)
+            print('DATA_ROOT',name,'exists',d.exists())
+            for part in ['public/state.json','public/filter-context-mega645.json','public/filter-context-power655.json','public/reduced-pool-mega645.json','public/reduced-pool-power655.json','public/filtered-pool-mega645.json','public/filtered-pool-power655.json','public/index.html','public/client.html']:
+              p=d/part
+              print('FILE_META',str(p),p.stat().st_size if p.is_file() else 'ABSENT',
+                datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc).isoformat() if p.is_file() else '')
+              if part.endswith('state.json') and p.is_file():
+                try:
+                  s=json.loads(p.read_text());dct={'keys':list(s)[:25],'ready':s.get('ready'),
+                  'expected_analysis_date':s.get('expected_analysis_date'),
+                  'last_update_error':str(s.get('last_update_error',''))[:300]}
+                  for key in ('mega645','power655'):
+                    x=s.get('products',{}).get(key,{})
+                    dct[key]={'keys':list(x)[:12],'update_error':str(x.get('update_error',''))[:180],
+                    'snapshot':{z:(x.get('snapshot') or {}).get(z) for z in ('analysis_date','target_date','locked','reduced_total','filtered_total','ruleset_version')}}
+                  print('STATE_META',json.dumps(dct,ensure_ascii=False))
+                except Exception as e:print('STATE_PARSE_ERROR',str(e)[:300])
+          PY
+          echo CONTAINER_HEALTH
+          for name in kq247-vietlott-vps kq247-vietlott-r33-candidate; do
+            docker inspect -f 'NAME={{.Name}} RUNNING={{.State.Running}} OOM={{.State.OOMKilled}} RESTARTS={{.RestartCount}}' "$name"
+            echo "LOG_TAIL=$name"
+            docker logs --tail 35 "$name" 2>&1 | sed -E 's/(token|password|secret|authorization|apikey|api_key)[=: ]+[^ ]+/\1=REDACTED/Ig' | cut -c 1-220 || true
+          done
+          echo KQ247_503_ROOTCAUSE_INSPECTION_READONLY=YES
+          VPS
