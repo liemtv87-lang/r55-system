@@ -74,7 +74,7 @@ jobs:
               -w /work --entrypoint node node:22-bookworm scripts/replay-r34-locked-inputs.mjs
           fi
           test -s "$output/r34-replay-report.json"
-          node -e '
+          docker run --rm --network none --cpus=1 --memory=2g -v "$output":/replay:ro --entrypoint node node:22-bookworm -e '
             const fs=require("fs"),p=require("path");
             const b=process.argv[1],j=JSON.parse(fs.readFileSync(p.join(b,"r34-replay-report.json")));
             for(const [product,cap] of [["mega645",180000],["power655",450000]]){
@@ -85,7 +85,7 @@ jobs:
               const fullSet=new Set(f.keys); if(r.keys.some(k=>!fullSet.has(k)))process.exit(11);
               console.log("KQ247_R34_REPLAY_VERIFIED="+JSON.stringify({product,old:v.old_full,new:v.new_full,reduced:r.keys.length,delta:v.delta}));
             }
-          ' "$output"
+          ' /replay
           install -d -m 0755 "$backup"
           (cd "$output" && sha256sum public/filtered-pool-*.json public/reduced-pool-*.json public/state.json data/snapshot-*.json > "$backup/SHA256SUMS")
           cp "$output/r34-replay-report.json" "$backup/report.json"
