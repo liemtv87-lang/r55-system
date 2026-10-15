@@ -1,0 +1,104 @@
+name: KQ247 Vietlott R34 Isolated Source and SNAP Validation
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-source-stage-and-snapshot.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-stage
+  cancel-in-progress: false
+jobs:
+  r34:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Build separate VPS R34 only, validate full 34-filter snapshot without production mutation
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          expected=319d54228db7186155b981f464fd0d4b06931c7c
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          base=/opt/kq247/vietlott/versions
+          test -s "$key" && test -s "$known"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          dest="$base/r34-$expected"
+          if [ ! -d "$dest/.git" ];then
+            install -d -m 0755 "$base"
+            temp="$base/.r34-download-$$"
+            trap 'rm -rf "$temp"' EXIT
+            GIT_TERMINAL_PROMPT=0 git clone --depth 1 --single-branch --branch r34-remove-rule35-20261015 git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$temp" >/dev/null
+            test "$(git -C "$temp" rev-parse HEAD)" = "$expected"
+            mv "$temp" "$dest"
+            trap - EXIT
+          fi
+          test "$(git -C "$dest" rev-parse HEAD)" = "$expected"
+          echo "KQ247_R34_SOURCE_COMMIT=$expected"
+          docker run --rm --network none --cpus=2 --memory=2g -v "$dest":/work:ro -w /work --entrypoint sh node:22-bookworm -ec '
+            set -eu
+            node --check vietlott-vps-server.mjs
+            node --check scripts/update-data.mjs
+            node --check scripts/backtest-60-shard.mjs
+            node --check scripts/merge-backtest-60.mjs
+            node scripts/r35-contract.test.mjs
+            node scripts/region-completeness.test.mjs
+            node test.mjs
+            node test-daily.mjs
+            node test-export.mjs
+            node test-snapshot.mjs
+            node scripts/reduce-coverage.test.mjs
+            node scripts/verify-fast-pool-filter.mjs
+          '
+          echo KQ247_R34_OFFLINE_TESTS=PASS
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort || true)
+          tag="kq247-vietlott-r34-stage:${expected:0:12}"
+          docker build -q -f "$dest/deploy/Dockerfile.vps" -t "$tag" "$dest" >/dev/null
+          name=kq247-vietlott-r34-stage-20261015
+          if docker ps -a --format '{{.Names}}' | grep -qx "$name";then
+            test "$(docker inspect -f '{{.Config.Image}}' "$name")" = "$tag"
+            test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          else
+            docker run -d --name "$name" --restart=no --cpus=2 --memory=4g -e VIETLOTT_STAGE_READONLY=1 -e TZ=Asia/Ho_Chi_Minh -p 127.0.0.1:18146:8080 "$tag" >/dev/null
+          fi
+          curl -fsS --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:18146/health >/dev/null
+          for page in / /guest-snapshot.html /client.html /api/state;do
+            curl --max-time 8 -sS -o /dev/null -w "KQ247_R34_HTTP_%{http_code}\n" "http://127.0.0.1:18146$page"
+          done
+          echo KQ247_R34_SNAPSHOT_BUILD=BEGIN
+          # The normal same-day source gate fails closed if MB/MT/MN are incomplete.
+          timeout 1000 docker exec -e FAST_SNAPSHOT_REPAIR=1 "$name" node scripts/update-data.mjs
+          echo KQ247_R34_SNAPSHOT_BUILD=FINISHED
+          docker exec "$name" node scripts/vps-release-gate.mjs --stage
+          echo KQ247_R34_RELEASE_GATE=PASS
+          docker exec -i "$name" node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const state=JSON.parse(fs.readFileSync('public/state.json','utf8'));
+          const version='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1';
+          if(state.ruleset_version!==version||state.automation.user_hard_rule_count!==34)throw Error('WRONG_R34_SCHEMA');
+          for(const [p,cap] of [['mega645',180000],['power655',450000]]){
+            const snap=JSON.parse(fs.readFileSync('data/snapshot-'+p+'.json','utf8'));
+            const base=JSON.parse(fs.readFileSync('public/filtered-pool-'+p+'.json','utf8'));
+            const result=JSON.parse(fs.readFileSync('public/reduced-pool-'+p+'.json','utf8'));
+            const subset=new Set(base.keys);
+            if(snap.ruleset_version!==version||!snap.locked||!result.locked||!base.locked)throw Error('BAD_LOCKED_R34_'+p);
+            if(!result.keys.length||result.keys.length>cap||result.keys.some(x=>!subset.has(x)))throw Error('BAD_R34_PORTFOLIO_'+p);
+            console.log('KQ247_R34_SNAPSHOT='+JSON.stringify({product:p,target:snap.target_date,analysis_date:snap.analysis_date,filtered:base.keys.length,reduced:result.keys.length,cap,locked:true}));
+          }
+          JS
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort || true)
+          test "$before" = "$after"
+          echo KQ247_R34_PROD_UNCHANGED=YES
+          echo KQ247_R34_PUBLIC_CUTOVER=NOT_PERFORMED
+          VPS
