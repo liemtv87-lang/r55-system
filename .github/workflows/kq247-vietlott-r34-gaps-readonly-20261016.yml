@@ -49,7 +49,9 @@ jobs:
           print('R34_150_VERIFIED_COVERAGE='+json.dumps({'by_product':byproduct,
             'required_distinct':len(needed),'three_region_distinct_verified':len(needed & regdates),
             'missing_xsmb_distinct':sorted(needed-xsdates),
-            'regional_archive_failures_count':len(regions.get('failures',{}))},ensure_ascii=False))
+            'regional_archive_failures_count':len(regions.get('failures',{})),
+            'regional_missing_first_20':sorted((needed & xsdates)-regdates)[:20],
+            'regional_missing_by_month':{mo:sum(x[:7]==mo for x in ((needed & xsdates)-regdates)) for mo in sorted({x[:7] for x in ((needed & xsdates)-regdates)})}},ensure_ascii=False))
           PY
           after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
           test "$before" = "$after"
