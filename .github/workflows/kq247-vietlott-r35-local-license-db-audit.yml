@@ -1,0 +1,32 @@
+name: KQ247 Vietlott R35 Local License DB Schema Readonly
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-local-license-db-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Check local PostgreSQL auth schema and record presence without reading licenses
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo 'KQ247_LOCAL_LICENSE_DB_AUDIT_BEGIN'
+          docker inspect -f 'KQ247_POSTGRES_HEALTH={{.State.Health.Status}}' kq247-r55-postgres
+          docker exec kq247-r55-postgres sh -lc 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT table_schema||\x27.\x27||table_name FROM information_schema.tables WHERE table_type=\x27BASE TABLE\x27 AND (table_name ILIKE \x27%licen%\x27 OR table_name ILIKE \x27%session%\x27 OR table_name ILIKE \x27%client%\x27 OR table_name ILIKE \x27%device%\x27) ORDER BY 1 LIMIT 50"'
+          echo 'KQ247_LOCAL_LICENSE_DB_AUDIT_END'
+          VPS
