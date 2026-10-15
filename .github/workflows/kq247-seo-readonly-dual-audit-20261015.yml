@@ -1,0 +1,59 @@
+name: KQ247 Dual SEO Readonly Live Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-seo-readonly-dual-audit-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect VPS Google and Telegram SEO without changing services
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'python3 -' <<'PY'
+          import datetime,json,pathlib,subprocess,time
+          def cmd(*a,timeout=12):
+           try:
+            p=subprocess.run(list(a),capture_output=True,text=True,timeout=timeout)
+            return {"rc":p.returncode,"out":p.stdout.strip()[:1300],"err":p.stderr.strip()[:100]}
+           except Exception as e:return {"error":type(e).__name__}
+          def report(filename,allow):
+           p=pathlib.Path(filename)
+           try:
+            v=json.loads(p.read_text())
+            return {"age_minutes":round((time.time()-p.stat().st_mtime)/60,2),
+                    "fields":{k:v.get(k) for k in allow}}
+           except Exception as e:return {"error":type(e).__name__}
+          base='/opt/kq247/deployment/football-original/public/'
+          u=['kq247-google-web-discovery.timer','kq247-google-web-seo.timer','kq247-seo-unified.timer','kq247-google-web-discovery.service','kq247-google-web-seo.service','kq247-seo-unified.service']
+          info={}
+          for unit in u:
+           p=cmd('systemctl','show',unit,'--no-pager','-p','ActiveState','-p','SubState','-p','Result','-p','LastTriggerUSec','-p','NextElapseUSecRealtime','-p','ExecMainStatus','-p','NRestarts')
+           info[unit]=p['out'] if p.get('rc')==0 else p
+          scanner=cmd('pgrep','-af','kq247-backlink-background-discovery-20261014.py')
+          container=cmd('docker','inspect','-f','{{.State.Running}}|{{.RestartCount}}|{{.State.Status}}','seo-kq247-opt-in-directory')
+          reports={
+           'google_discovery':report(base+'google-web-discovery-status.json',['checked_at_utc','discovery_interval_minutes','vietnam_priority_enabled','source_hosts_new_this_run','source_hosts_known_total','source_hosts_examined_this_run','sitemap_url_records_read_this_run','contributor_url_candidates_total','contributor_url_candidates_new_this_run','site_error_samples']),
+           'google_verifier':report(base+'google-web-seo-status.json',['checked_at_utc','configured_unique_source_hosts','five_minute_discovery_ledger_consumed','sources_checked_this_run','sources_http200_this_run','new_web_contribution_candidates_this_run','web_backlinks','automatic_submission']),
+           'telegram_unified':report(base+'seo-unified-status.json',['checked_at_utc','hourly_window_utc','hourly_complete','poster_running','supervisor_active','discovery','submission','verification','hourly_delta']),
+           'telegram_backlinks':report(base+'seo-backlinks-status.json',['updated_at_utc','goals','new_links_last_hour']),
+           'telegram_poster':report('/opt/pwremote/kq247-backlink-background/bulk-posts.json',['updated_at_utc','counts','verified_new_public_links']),
+           'telegram_discovery':report('/opt/pwremote/kq247-backlink-background/latest.json',['updated_at_utc','unique_hosts_discovered','hosts_by_status','url_records_actually_read_total'])
+          }
+          print('KQ247_DUAL_SEO_READONLY='+json.dumps({'utc_now':datetime.datetime.now(datetime.timezone.utc).isoformat(),'units':info,'telegram_scanner':{'rc':scanner.get('rc'),'present':scanner.get('rc')==0},'telegram_submitter':container,'reports':reports},ensure_ascii=False))
+          PY
