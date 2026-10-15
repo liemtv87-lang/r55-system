@@ -25,9 +25,9 @@ class SelfhealSafetyTests(unittest.TestCase):
     def test_disabled_timers_and_unmanaged_containers_are_only_observed(self):
         def fake_cmd(*args, **kwargs):
             if args[:3] == ("docker", "ps", "-a"):
-                return 0, "kq247-vietlott-vps|running\\nkq247-vietlott-r33-candidate|running", ""
+                return 0, "kq247-vietlott-vps|running\nkq247-vietlott-r33-candidate|running", ""
             if args[:2] == ("systemctl", "list-unit-files"):
-                return 0, "kq247-vietlott-update.timer disabled enabled\\nkq247-research-vietlott.timer enabled enabled", ""
+                return 0, "kq247-vietlott-update.timer disabled enabled\nkq247-research-vietlott.timer enabled enabled", ""
             raise AssertionError(args)
         with patch.object(sh, "cmd", side_effect=fake_cmd):
             events=sh.audit_unmanaged_workloads("vietlott")
