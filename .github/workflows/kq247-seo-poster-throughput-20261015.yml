@@ -1,0 +1,80 @@
+name: KQ247 SEO Opt-in Poster Throughput 20261015
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-seo-poster-throughput-20261015.yml]
+permissions:
+  contents: read
+concurrency:
+  group: kq247-seo-opt-in-poster-tuning
+  cancel-in-progress: false
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check poster and scanner syntax
+        run: |
+          python3 -m py_compile seo-vps/kq247-bulk-auto-submit.py scripts/kq247-backlink-background-discovery-20261014.py
+          python3 scripts/kq247-backlink-background-discovery-20261014.py --self-test
+      - name: Install SSH helper and pin known VPS identity
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+      - name: Reconfigure ONLY existing dedicated directory sender, preserve SQLite ledger
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          name=seo-kq247-opt-in-directory
+          base=/opt/pwremote/kq247-backlink-background
+          image=pwremote/playwright:1.56.0
+          test -s "$base/kq247-bulk-auto-submit.py"
+          test -s "$base/sources.sqlite3"
+          python3 -m py_compile "$base/kq247-bulk-auto-submit.py"
+          docker image inspect "$image" >/dev/null
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          running="$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || true)"
+          if test "$running" = true; then
+            current="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$name")"
+            if echo "$current" | grep -Fxq 'KQ247_SUBMIT_MAX=120' &&
+               echo "$current" | grep -Fxq 'KQ247_POST_POLL_S=60' &&
+               echo "$current" | grep -Fxq 'KQ247_POST_SPACING_S=8'; then
+              echo KQ247_POSTER_MAX_THROUGHPUT=ALREADY_CONFIGURED
+              exit 0
+            fi
+          fi
+          # Change only the isolated opt-in directory worker, never football/XS/bots.
+          # All submission states, including uncertain POSTs, live on the host bind mount.
+          docker stop --time 8 "$name" >/dev/null 2>&1 || true
+          docker rm "$name" >/dev/null 2>&1 || true
+          docker run -d --init --name "$name" --restart unless-stopped \
+            --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+            --user 0:0 --pids-limit 120 --cpus 0.75 --memory 1200m \
+            --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
+            --tmpfs /root:rw,nosuid,nodev,size=128m,mode=0700 \
+            --mount "type=bind,src=$base/kq247-bulk-auto-submit.py,dst=/app/post.py,readonly" \
+            --mount "type=bind,src=$base,dst=/state" \
+            -e KQ247_SUBMIT_MAX=120 -e KQ247_POST_POLL_S=60 -e KQ247_POST_SPACING_S=8 \
+            "$image" python3 -u /app/post.py --watch >/dev/null
+          sleep 5
+          docker inspect -f '{{.State.Running}}' "$name" | grep -Fxq true
+          docker logs --tail 10 "$name" 2>&1 | sed -E 's/(token|password|secret|apikey)=([^ ,]+)/\1=REDACTED/g' | tail -10
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          test "$before" = "$after"
+          echo KQ247_SEO_POSTER_POLL_SECONDS=60
+          echo KQ247_SEO_POSTER_ATTEMPT_SPACING_SECONDS=8
+          echo KQ247_SEO_POSTER_MAX_WINDOW_ATTEMPTS=120
+          echo KQ247_PRODUCTION_CONTAINERS_UNCHANGED=PASS
+          systemctl is-active --quiet kq247-seo-unified.timer
+          echo KQ247_UNIFIED_SEO_TIMER_ACTIVE=PASS
+          VPS
