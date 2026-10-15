@@ -41,7 +41,39 @@ KEYWORDS = ("lien-he","lien_he","gui-bai","gui-tin","dang-bai","dang-tin",
 UA = "KQ247GoogleWebSEO/1.0 (+public technical audit; non-invasive)"
 MAX_BYTES = 450_000
 TIMEOUT = 9
-MAX_WORKERS = 8
+MAX_WORKERS = 10
+SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
+MAX_SEEDS = 80
+
+def source_seeds():
+ """Curated independent Google WEB website inventory. Never grants POST permission."""
+ candidates = list(SEEDS)
+ try:
+  config=json.loads(SEEDS_FILE.read_text(encoding="utf-8"))
+  candidates += [entry.get("url","") for entry in config.get("sources",[]) if
+                 isinstance(entry,dict) and entry.get("submission_authorized") is False]
+ except (OSError,ValueError,TypeError):
+  pass
+ hosts=set()
+ result=[]
+ for url in candidates:
+  p=urllib.parse.urlsplit(url)
+  host=(p.hostname or "").lower().removeprefix("www.")
+  if p.scheme!="https" or not host or host in hosts:continue
+  if host in ("t.me","telegram.me") or host==urllib.parse.urlsplit(BASE).hostname:continue
+  hosts.add(host)
+  result.append(url)
+  if len(result)>=MAX_SEEDS:break
+ return result
+
+def normalize_target_anchor(origin,href):
+ """Confirm the public external HTML link points to an EXACT first-party target."""
+ origin_host=(urllib.parse.urlsplit(origin).hostname or "").lower().removeprefix("www.")
+ if origin_host==urllib.parse.urlsplit(BASE).hostname:return None
+ dest=urllib.parse.urlsplit(urllib.parse.urljoin(origin,href))
+ if dest.scheme!="https":return None
+ clean=urllib.parse.urlunsplit((dest.scheme,dest.netloc,dest.path,dest.query,""))
+ return clean if clean in TARGETS.values() else None
 
 def utcnow():
  return dt.datetime.now(dt.timezone.utc).isoformat()
@@ -130,8 +162,9 @@ def inspect_source(url):
  for href in p.links[:5000]:
   absolute=urllib.parse.urljoin(res["final_url"],href)
   parsed=urllib.parse.urlsplit(absolute)
-  if absolute in TARGETS.values() and parsed.hostname!=urllib.parse.urlsplit(BASE).hostname:
-   verified.append(absolute)
+  target=normalize_target_anchor(res["final_url"],href)
+  if target and target not in verified:
+   verified.append(target)
   if (parsed.hostname or "").lower().removeprefix("www.")==(basehost or "").lower().removeprefix("www.") and any(t in parsed.path.lower() for t in KEYWORDS):
    if absolute not in possible: possible.append(absolute)
  out.update({"potential_contributor_pages":possible[:10],
@@ -183,12 +216,17 @@ def main():
   l=Links();l.feed('<html><head><title>OK</title><link rel="canonical" href="https://x"></head><body><h1>Hi</h1><a href="/submit">here</a></body></html>')
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
+  assert normalize_target_anchor("https://example.org/page","https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html")==TARGETS["football"]
+  assert normalize_target_anchor("https://example.org/page","https://t.me/keochuyengia79") is None
+  assert normalize_target_anchor(TARGETS["football"],TARGETS["football"]) is None
+  assert 10<=len(source_seeds())<=MAX_SEEDS
   print("KQ247_GOOGLE_WEB_SELF_TEST=PASS")
   return
  started=time.monotonic()
  with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
   first=list(pool.map(audit_first_party,TARGETS.items()))
-  sources=list(pool.map(inspect_source,SEEDS))
+  seeds=source_seeds()
+  sources=list(pool.map(inspect_source,seeds))
   other=list(pool.map(lambda u:get(u),[BASE+"/robots.txt",BASE+"/sitemap.xml"]))
  result={"campaign":"google_web_independent","checked_at_utc":utcnow(),
          "landing_pages":first,
@@ -196,6 +234,7 @@ def main():
            "robots_http":other[0].get("status"),"sitemap_http":other[1].get("status"),
            "robots_allows_discovery":"Allow: /" in other[0].get("body",""),
            "sitemap_both_landing_pages":all(url in other[1].get("body","") for url in TARGETS.values())},
+         "configured_unique_source_hosts":len(seeds),
          "sources_checked_this_run":len(sources),
          "sources_http200_this_run":sum(s.get("http")==200 for s in sources),
          "new_web_contribution_candidates_this_run":sum(s.get("candidate_count",0) for s in sources),
