@@ -132,16 +132,47 @@ def read_local(port, path, timeout=6):
     except (OSError,ValueError) as exc:
         return 0,{"error":type(exc).__name__}
 
+VIETLOTT_EXPECTED_RUNTIME = "R41_VPS_USER35"
+VIETLOTT_EXPECTED_RULESET = "USER_35_HARD_RULES_ADJACENT_HEAD_PAIRS_2026_10_15_R1"
+
+def verify_vietlott_snapshot(state, analysis_date):
+    """Never treat HTTP 200, stale dates, or R33/R34 snapshots as ready."""
+    if not isinstance(state,dict) or state.get("ready") is not True:
+        return False
+    products=state.get("products") or {}
+    for product in ("mega645","power655"):
+        snap=(products.get(product) or {}).get("snapshot") or {}
+        if snap.get("locked") is not True or snap.get("analysis_date") != analysis_date:
+            return False
+    return True
+
 def repair_vietlott(record, dry_run):
     events=[]
     hcode, health=read_local(18088,"/health")
     scode, state=read_local(18088,"/api/state")
     jcode, job=read_local(18088,"/status")
-    events.append({"name":"vietlott_primary_http","health_http":hcode,"state_http":scode,
-                   "data_ready":health.get("data_ready"),"job_status":job.get("status")})
-    if scode==200 and state.get("ready"): return events
-    # Post-19:00 only; leave the old signed locked pools in place, never fabricate newer data.
     now=now_utc()+dt.timedelta(hours=7)
+    analysis_date=(now if now.hour>=19 else now-dt.timedelta(days=1)).date().isoformat()
+    runtime=str(health.get("runtime") or "")
+    snapshot_ready=verify_vietlott_snapshot(state,analysis_date) if scode==200 else False
+    ruleset_confirmed=True
+    if snapshot_ready:
+        for product in ("mega645","power655"):
+            context_code,context=read_local(18088,"/api/filter-context?product="+product)
+            if context_code!=200 or context.get("ruleset_version")!=VIETLOTT_EXPECTED_RULESET:
+                ruleset_confirmed=False
+                events.append({"name":"vietlott_"+product+"_ruleset","status":"mismatch_or_unavailable",
+                               "http":context_code,"expected":VIETLOTT_EXPECTED_RULESET})
+    events.append({"name":"vietlott_primary_http","health_http":hcode,"state_http":scode,
+                   "runtime":runtime,"data_ready":health.get("data_ready"),
+                   "job_status":job.get("status"),"snapshot_ready":snapshot_ready and ruleset_confirmed})
+    # Never retry an obsolete engine. Retrying R33/R40 just repeats failure, and may overwrite old pools.
+    if hcode!=200 or not runtime.startswith(VIETLOTT_EXPECTED_RUNTIME):
+        events.append({"name":"vietlott_release_gate","status":"requires_verified_version_upgrade",
+                       "expected_runtime":VIETLOTT_EXPECTED_RUNTIME,"observed_runtime":runtime})
+        return events
+    if snapshot_ready and ruleset_confirmed and health.get("status")!="failed": return events
+    # Post-19:00 only; leave the old signed locked pools in place, never fabricate newer data.
     if now.hour<19 or now.hour>=23: return events
     if jcode!=200 or job.get("status") in ("running","queued","in_progress"): return events
     start=job.get("started_at") or ""
@@ -150,7 +181,6 @@ def repair_vietlott(record, dry_run):
             since=(now_utc()-dt.datetime.fromisoformat(start.replace("Z","+00:00"))).total_seconds()
             if since<600: return events
         except (ValueError,TypeError): pass
-    if hcode!=200: return events
     # This call is made INSIDE the container and reads the secret there; no secret is logged.
     script = ('const t=process.env.VIETLOTT_ADMIN_TOKEN||"";'
               'if(!t){console.error("admin_token_not_set");process.exit(2)}'
