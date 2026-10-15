@@ -1,0 +1,69 @@
+name: KQ247 Vietlott R34 Corrected Snapshot Final Stage Gate (Read Only)
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-replay-verified-gate-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Use corrected release gate against preserved SHA-backed R34 replay snapshot
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          expected=ec74ddf63a72d9a2fb5184f4f2dda4cb5c01e17f
+          old=c57520eb416b2507b8d6e1079559272aea211bed
+          output=/opt/kq247/vietlott/versions/r34-replay-$old/output
+          backup=/opt/kq247/vietlott/snapshot-backups/r34-150-replay-$old
+          source=/opt/kq247/vietlott/versions/r34-gate-$expected
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test -s "$output/r34-replay-report.json"
+          test -s "$backup/SHA256SUMS"
+          (cd "$output" && sha256sum --check --status "$backup/SHA256SUMS")
+          echo KQ247_R34_REPLAY_SNAPSHOT_SHA256=PASS
+          if ! test -d "$source/.git";then
+            key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+            known=/opt/kq247/ops/deploy/keys/github_known_hosts
+            export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+            install -d -m 0755 /opt/kq247/vietlott/versions
+            temp=$(mktemp -d /opt/kq247/vietlott/versions/.r34-gate-XXXXXX)
+            trap 'rm -rf "$temp"' EXIT
+            GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$temp/source"
+            if test "$(git -C "$temp/source" rev-parse HEAD)" != "$expected";then
+              GIT_TERMINAL_PROMPT=0 git -C "$temp/source" fetch --quiet --depth=30 origin "$expected"
+              git -C "$temp/source" checkout --quiet --detach "$expected"
+            fi
+            test "$(git -C "$temp/source" rev-parse HEAD)" = "$expected"
+            mv "$temp/source" "$source"
+            trap - EXIT
+          fi
+          test "$(git -C "$source" rev-parse HEAD)" = "$expected"
+          docker run --rm --network none --cpus=2 --memory=3g \
+            -e VIETLOTT_VERIFY_DATE=2026-10-15 \
+            -v "$source":/app:ro -v "$output/public":/app/public:ro -v "$output/data":/app/data:ro \
+            -w /app --entrypoint node node:22-bookworm scripts/vps-release-gate.mjs --stage
+          echo KQ247_R34_REPLAY_CORRECTED_STAGE_RELEASE_GATE=PASS
+          for p in / /client.html /guest-snapshot.html /api/state;do
+            status=$(curl --max-time 15 -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18148$p" || true)
+            echo "KQ247_R34_REPLAY_STAGE_HTTP_$p=$status"
+            test "$status" = 200
+          done
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test "$before" = "$after"
+          echo KQ247_R34_REPLAY_RUNNING_CONTAINERS_UNCHANGED=YES
+          echo KQ247_R34_REPLAY_PUBLIC_CUTOVER=NOT_PERFORMED
+          VPS
