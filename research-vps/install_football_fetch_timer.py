@@ -11,7 +11,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/kq247/research/bin
 Environment=KQ247_RESEARCH_ROOT=/opt/kq247/research/state
-Environment=KQ247_FOOTBALL_DAYS_PER_CYCLE=8
+Environment=KQ247_FOOTBALL_DAYS_PER_CYCLE=16
 ExecStart=/usr/bin/python3 /opt/kq247/research/bin/football_bongdalu_500day_fetch.py
 TimeoutStartSec=300
 CPUQuota=45%
