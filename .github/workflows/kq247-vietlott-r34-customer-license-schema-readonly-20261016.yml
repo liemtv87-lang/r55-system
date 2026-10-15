@@ -1,0 +1,58 @@
+name: KQ247 Vietlott R34 Customer License Schema VPS Audit
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-customer-license-schema-readonly-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Compare live sales license metadata and local PG structure (read only)
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          name=kq247-sales-bot-primary
+          test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
+          echo KQ247_CUSTOMER_METADATA_AUDIT_BEGIN
+          docker exec "$name" node --input-type=module -e '
+            import pg from "pg";
+            const dsn=process.env.NEON_DATABASE_URL||process.env.SALES_DATABASE_URL;
+            if(!dsn){console.log("CUSTOMER_NEON_DSN_PRESENT=NO");process.exit(5)}
+            const pool=new pg.Pool({connectionString:dsn,max:1,connectionTimeoutMillis:8000});
+            try{
+              const r=await pool.query("SELECT table_name,column_name,data_type FROM information_schema.columns WHERE table_schema=$1 AND (table_name ILIKE $2 OR table_name ILIKE $3 OR table_name ILIKE $4 OR table_name ILIKE $5) ORDER BY table_name,ordinal_position LIMIT 120",["public","%licen%","%session%","%device%","sales_%"]);
+              const tables=[...new Set(r.rows.map(x=>x.table_name))];
+              console.log("KQ247_NEON_AUTH_METADATA_TABLE_NAMES="+tables.join(","));
+              console.log("KQ247_NEON_AUTH_COLUMNS="+JSON.stringify(r.rows));
+              if(tables.includes("sales_licenses")){
+                const t=await pool.query("SELECT count(*)::int AS total,count(*) FILTER (WHERE status=$1)::int AS active,count(*) FILTER (WHERE product=$2)::int AS vietlott FROM public.sales_licenses",["active","vietlott"]);
+                console.log("KQ247_NEON_SALES_LICENSE_COUNTS="+JSON.stringify(t.rows[0]));
+              }
+            }finally{await pool.end()}
+          '
+          echo KQ247_LOCAL_PG_AUTH_COLUMN_NAMES_BEGIN
+          docker exec -i kq247-r55-postgres sh -lc 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <<'SQL'
+          SELECT table_name||'.'||column_name FROM information_schema.columns
+          WHERE table_schema='public' AND (table_name ILIKE '%licen%' OR table_name ILIKE '%session%' OR table_name ILIKE '%device%' OR table_name ILIKE 'sales_%')
+          ORDER BY 1 LIMIT 100;
+          SQL
+          echo KQ247_LOCAL_PG_AUTH_COLUMN_NAMES_END
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test "$before" = "$after"
+          echo KQ247_CUSTOMER_METADATA_AUDIT_READONLY=PASS
+          VPS
