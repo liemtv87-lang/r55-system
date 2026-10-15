@@ -134,7 +134,11 @@ class Links(html.parser.HTMLParser):
    self._current_form={"action":a.get("action",""),"method":a.get("method","get").lower(),"fields":[]}
    self.forms.append(self._current_form)
   elif tag in ("input","textarea","select") and self._current_form is not None:
-   self._current_form["fields"].append({"tag":tag,"name":a.get("name",""),"type":a.get("type","text").lower(),"required":"required" in a})
+   style=a.get("style","").lower().replace(" ","")
+   hidden=(a.get("type","text").lower()=="hidden" or "display:none" in style or
+           ("position:absolute" in style and ("-9999px" in style or "-9999em" in style)) or
+           (a.get("aria-hidden","").lower()=="true" and a.get("tabindex")=="-1"))
+   self._current_form["fields"].append({"tag":tag,"name":a.get("name",""),"type":a.get("type","text").lower(),"required":"required" in a,"hidden":hidden})
   elif tag in ("title","h1"): self._capture=tag
   elif tag=="meta":
    key=a.get("name",a.get("property","")).lower()
@@ -244,6 +248,8 @@ def candidate_page_intent(uri):
          "add-url","add-site","add-website","them-website","dang-bai","gui-bai",
          "dang-tin","gui-tin","write-for-us","guest-post-guidelines",
          "guest-post-submission","contributor-guidelines"}
+  if leaf in ("submit-service","submit-listing","submit-a-listing","submit-your-company","submit-your-business","submit-your-product"):return 0
+  if leaf=="suggest.php" and "/directory/" in path:return 1
   if leaf in exact:return 0
   if leaf.startswith(("submit-your-site-","submit-your-website-","submit-guest-post-",
                       "submit-article-","add-your-site-","write-for-us-",
@@ -260,7 +266,7 @@ def remember_publisher_candidates(sources):
  db.execute("CREATE TABLE IF NOT EXISTS publisher_candidate_pages (url TEXT PRIMARY KEY, host TEXT, first_seen TEXT)")
  added=0
  for item in sources:
-  for uri in item.get("potential_contributor_pages",[]):
+  for uri in [item.get("source","")]+item.get("potential_contributor_pages",[]):
    if candidate_page_intent(uri)>=99:continue
    try:
     p=urllib.parse.urlsplit(uri)
@@ -318,10 +324,10 @@ def evaluate_publisher_form(forms, url, page_title="", html_body=""):
   if form.get("method")!="post":continue
   action=(form.get("action") or "").lower()
   if any(word in action for word in blockers):continue
-  names={re.sub(r"[^a-z0-9]","",f.get("name","").lower()) for f in form.get("fields",[])}
+  names={re.sub(r"[^a-z0-9]","",f.get("name","").lower()) for f in form.get("fields",[]) if not f.get("hidden")}
   has_site=bool(names & {"url","siteurl","website","websiteurl","weburl",
                          "homepage","homepageurl","domain","domainurl",
-                         "sitelink","websitelink"})
+                         "sitelink","websitelink","serviceurl","servicewebsite"})
   has_content=bool(names & {"title","name","sitename","websitename",
                              "description","details","summary","content",
                              "category","categoryid","tags"})
@@ -335,7 +341,7 @@ def evaluate_publisher_form(forms, url, page_title="", html_body=""):
  forbidden=bool(re.search(r"(?:no|not|prohibit(?:s|ed)?|forbid(?:den)?)\s+"
                           r"(?:online\s+)?(?:gambling|betting|casino)|"
                           r"(?:gambling|betting|casino)\s+(?:is\s+)?(?:not\s+allowed|prohibited)",body[:150000]))
- has_captcha=("g-recaptcha" in body or "h-captcha" in body or "cf-turnstile" in body)
+ has_captcha=bool(re.search(r'(?:g-recaptcha|h-captcha|cf-turnstile|captcha\\.php|captcha\\.png|captcha\\.jpg|captcha\\.jpeg|captcha\\.gif)',body))
  status=("blocked_topic_policy" if forbidden else "needs_captcha" if has_captcha else
          "form_review_required" if suitable else "no_credible_site_submission_form")
  return {"publisher_form_status":status,"credible_site_submission_forms":len(suitable),
@@ -429,6 +435,13 @@ def main():
   assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
+  honeypot=Links();honeypot.feed('<form method="post"><input name="name"><input name="website" style="position:absolute;left:-9999px" tabindex="-1" aria-hidden="true"></form>')
+  assert evaluate_publisher_form(honeypot.forms,"https://test.vn/submit-site/")["credible_site_submission_forms"]==0
+  service=Links();service.feed('<form method="post"><input name="serviceURL"><input name="description"></form>')
+  assert evaluate_publisher_form(service.forms,"https://veri.bet/submit-service/")["credible_site_submission_forms"]==1
+  assert evaluate_publisher_form(service.forms,"https://example.org/submit-service/",html_body='<img src="includes/captcha.php?84">')["publisher_form_status"]=="needs_captcha"
+  assert candidate_page_intent("https://veri.bet/submit-service")==0
+  assert candidate_page_intent("https://example.com/directory/suggest.php")==1
   assert evaluate_publisher_form(f.forms,"https://example.vn/submit-your-website/")["publisher_form_status"]=="form_review_required"
   comment={"action":"/wp-comments-post.php","method":"post","fields":[{"name":"url"},{"name":"comment"}]}
   assert evaluate_publisher_form([comment],"https://example.vn/guest-post/")["credible_site_submission_forms"]==0
