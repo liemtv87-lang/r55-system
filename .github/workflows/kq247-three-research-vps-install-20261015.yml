@@ -24,6 +24,7 @@ jobs:
           python3 research-vps/common.py
           python3 research-vps/football.py --self-test
           python3 research-vps/football_history_merge.py --self-test
+          python3 research-vps/football_bongdalu_500day_fetch.py --self-test
           python3 research-vps/xs.py --self-test
           python3 research-vps/vietlott.py --self-test
           python3 research-vps/xsmb_import_2000.py --self-test
@@ -43,7 +44,7 @@ jobs:
           ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
           REMOTE='root@64.120.92.172'
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'install -d -m 0755 /opt/kq247/research/bin /opt/kq247/research/inputs; install -d -m 0700 /opt/kq247/research/state'
-          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 research-vps/{common,football,football_history_merge,xs,vietlott,report,xsmb_import_2000,vietlott_import_all}.py "$REMOTE:/opt/kq247/research/bin/"
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 research-vps/{common,football,football_history_merge,football_bongdalu_500day_fetch,xs,vietlott,report,xsmb_import_2000,vietlott_import_all}.py "$REMOTE:/opt/kq247/research/bin/"
           sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 deployment/football-history/learning/grade-2026-10-11.json "$REMOTE:/opt/kq247/research/inputs/football-grades.json"
           sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 deployment/football-history/learning/summary.json "$REMOTE:/opt/kq247/research/inputs/football-summary.json"
           sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$REMOTE" 'bash -se' <<'VPS'
