@@ -198,6 +198,29 @@ def inspect_source(url):
              "html_checked":True})
  return out
 
+def candidate_pages_to_inspect(limit=80):
+ """Inspect discovered contribution pages, not just site homepages."""
+ try:
+  with sqlite3.connect("file:"+str(ROOT/"google-web-discovery.sqlite3")+"?mode=ro",uri=True,timeout=2) as db:
+   rows=db.execute("SELECT url FROM candidate_pages WHERE review_status='unverified' ORDER BY last_seen DESC LIMIT ?",(limit,)).fetchall()
+  return [row[0] for row in rows if urllib.parse.urlsplit(row[0]).scheme=="https"]
+ except (sqlite3.Error,OSError):
+  return []
+
+def inspect_candidate_page(url):
+ result={"url":url,"checked_at_utc":utcnow(),"authorized":False,"submission_attempted":False}
+ page=get(url,check_robots=True)
+ result["http"]=page.get("status")
+ result["error"]=page.get("error")
+ if page.get("status")!=200 or "html" not in page.get("content_type","").lower():return result
+ parser=Links()
+ parser.feed(page["body"])
+ result["forms_observed"]=len(parser.forms)
+ result["post_forms_observed"]=sum(f["method"]=="post" for f in parser.forms)
+ result["form_details"]=parser.forms[:3]
+ result["permission_status"]="manual_or_explicit_site_policy_verification_required"
+ return result
+
 def store_and_report(landing, sources, status):
  ROOT.mkdir(parents=True,exist_ok=True)
  db=sqlite3.connect(ROOT/"google-web-seo.sqlite3")
@@ -241,6 +264,7 @@ def main():
   l=Links();l.feed('<html><head><title>OK</title><link rel="canonical" href="https://x"></head><body><h1>Hi</h1><a href="/submit">here</a></body></html>')
   f=Links();f.feed('<form method="post" action="/submit"><input name="url" required><textarea name="description"></textarea></form>')
   assert len(f.forms)==1 and f.forms[0]["method"]=="post" and len(f.forms[0]["fields"])==2
+  assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
   assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
   assert normalize_target_anchor("https://example.org/page","https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html")==TARGETS["football"]
@@ -254,6 +278,7 @@ def main():
   first=list(pool.map(audit_first_party,TARGETS.items()))
   seeds=source_seeds()
   sources=list(pool.map(inspect_source,seeds))
+  candidate_pages=list(pool.map(inspect_candidate_page,candidate_pages_to_inspect()))
   other=list(pool.map(lambda u:get(u),[BASE+"/robots.txt",BASE+"/sitemap.xml"]))
  result={"campaign":"google_web_independent","checked_at_utc":utcnow(),
          "landing_pages":first,
@@ -270,6 +295,9 @@ def main():
          "source_pages_with_post_forms_this_run":sum(bool(s.get("post_forms_observed_on_source_page")) for s in sources),
          "authorized_submission_sources_this_run":0,
          "sources":sources,
+         "candidate_pages_inspected_this_run":len(candidate_pages),
+         "candidate_pages_with_post_forms_this_run":sum(bool(p.get("post_forms_observed")) for p in candidate_pages),
+         "candidate_page_inspections":candidate_pages,
          "automatic_submission":{"enabled":False,"reason":"No independently verified opt-in Web editorial form adapter; no blind POSTs or Telegram directory reuse"},
          "google_indexation":{"indexed_pages":None,"organic_clicks":None,"organic_impressions":None,
                               "source":"Google Search Console connection unavailable; no invented rankings"},
