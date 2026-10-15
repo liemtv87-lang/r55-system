@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-10-14",
+  "updated_at_utc": "2026-10-15",
   "priority_policy": "Vietnam-owned or Vietnamese-language sites first; Vietnam-audience directory pages next; international generic directories only after no VN-suitable route",
   "fields_explanation": {
     "known_form": "Evidence of a submission route, not proof of eligibility or publication",
@@ -11,15 +11,19 @@
       "website": "https://vi.tgdio.com/groups",
       "audience": "vietnamese_ui",
       "type": "telegram_directory",
-      "submission_method": "requires account login via Add Media",
+      "submission_method": "Already listed publicly; authenticated Add Media access is only needed for profile edits",
       "free_claim": true,
-      "status": "requires_user_authenticated_access",
-      "evidence_url": "https://vi.tgdio.com/groups",
+      "status": "published_verified_no_repeat_submission",
+      "evidence_url": "https://vi.tgdio.com/group/%40xsbm999",
       "targets": [
         "football",
         "lottery"
       ],
-      "published_urls": []
+      "published_urls": [
+        "https://vi.tgdio.com/group/%40keochuyengia79",
+        "https://vi.tgdio.com/group/%40xsbm999"
+      ],
+      "note": "Both public profiles have direct t.me outbound links and were already counted in backlink-campaign.json. Lottery listing still advertises a 5-day trial; campaign requirement is Free 10 days. Do not re-submit duplicates."
     },
     {
       "name": "Telegram Directory — Vietnamese search",
@@ -70,10 +74,10 @@
       "website": "https://telegramgroups.co/submit",
       "audience": "international",
       "type": "telegram_directory",
-      "submission_method": "free public form",
+      "submission_method": "Public free form but gambling/betting/finance listings may require payment; no automatic submission, no category misrepresentation",
       "free_claim": true,
-      "status": "site_temporarily_paused_2026_10_14",
-      "evidence_url": "https://github.com/liemtv87-lang/r55-system/actions/runs/38527407358",
+      "status": "free_submission_with_paid_betting_finance_category_gate",
+      "evidence_url": "https://telegramgroups.co/submit",
       "targets": [
         "football",
         "lottery"
