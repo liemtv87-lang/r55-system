@@ -48,6 +48,8 @@ jobs:
                           'candidate_pages_inspected_this_run','candidate_pages_with_post_forms_this_run',
                           'candidate_pages_audited_lifetime','candidate_pages_with_post_forms_lifetime',
                           'new_verified_web_backlinks_this_run','web_backlinks','automatic_submission')}
+                      report['landing_pages']=v.get('landing_pages',[])
+                      report['site_infrastructure']=v.get('site_infrastructure',{})
                       pages=v.get('candidate_page_inspections',[])
                       report['latest_candidate_http200']=sum(p.get('http')==200 for p in pages)
                       report['latest_candidate_postform_pages']=[p.get('url') for p in pages if p.get('post_forms_observed',0)>0][:12]
@@ -67,6 +69,17 @@ jobs:
                   report['discovery_db']={'candidate_pages':db.execute('SELECT COUNT(*) FROM candidate_pages').fetchone()[0],
                       'index_frontier':db.execute('SELECT COUNT(*) FROM index_frontier').fetchone()[0]}
                   report['top_recent_candidates']=db.execute("SELECT url FROM candidate_pages WHERE lower(url) LIKE '%dang-bai%' OR lower(url) LIKE '%submit%' OR lower(url) LIKE '%contribute%' LIMIT 12").fetchall()
+          import importlib.util
+          mod_path=root/'worker.py'
+          if mod_path.is_file() and discovery.is_file():
+              spec=importlib.util.spec_from_file_location('web_audit_helper',mod_path)
+              module=importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              with sqlite3.connect('file:'+str(discovery)+'?mode=ro',uri=True,timeout=8) as db:
+                  all_urls=db.execute('SELECT url FROM candidate_pages').fetchall()
+              qualified=[row[0] for row in all_urls if module.candidate_page_intent(row[0])<99]
+              report['editorial_intent_url_count']=len(qualified)
+              report['editorial_intent_url_examples']=qualified[:15]
           report['server_utc']=dt.datetime.now(dt.timezone.utc).isoformat()
           print('KQ247_GOOGLE_WEB_READONLY_EVIDENCE='+json.dumps(report,ensure_ascii=False))
           PY
