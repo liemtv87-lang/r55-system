@@ -1,0 +1,112 @@
+name: KQ247 SEO Unified Hourly VPS Installer
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-seo-unified-install-20261015.yml
+      - seo-vps/kq247-seo-unified.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-seo-unified-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify unified source offline
+        run: |
+          python3 -m py_compile seo-vps/kq247-seo-unified.py
+          python3 seo-vps/kq247-seo-unified.py --self-test
+      - name: Install SSH transfer
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install and validate one SEO timer without touching KQ247 production
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          REMOTE="sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172"
+          $REMOTE 'mkdir -p /opt/kq247/seo-unified/hourly'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20             seo-vps/kq247-seo-unified.py root@64.120.92.172:/opt/kq247/seo-unified/unified.py
+          $REMOTE 'bash -se' <<'VPS'
+          set -euo pipefail
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          python3 -m py_compile /opt/kq247/seo-unified/unified.py
+          python3 /opt/kq247/seo-unified/unified.py --self-test
+          cat > /etc/systemd/system/kq247-seo-unified.service <<'SERVICE'
+          [Unit]
+          Description=KQ247 one SEO health/source/opt-in/backlink hourly report orchestrator
+          Wants=network-online.target
+          After=network-online.target
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/bin/python3 /opt/kq247/seo-unified/unified.py
+          WorkingDirectory=/opt/kq247/seo-unified
+          TimeoutStartSec=340
+          NoNewPrivileges=true
+          SERVICE
+          cat > /etc/systemd/system/kq247-seo-unified.timer <<'TIMER'
+          [Unit]
+          Description=Single KQ247 SEO timer with hourly work and five-minute health check
+          [Timer]
+          OnBootSec=90s
+          OnUnitInactiveSec=5min
+          AccuracySec=20s
+          Persistent=true
+          Unit=kq247-seo-unified.service
+          [Install]
+          WantedBy=timers.target
+          TIMER
+          systemctl daemon-reload
+          systemctl enable --now kq247-seo-unified.timer
+          if ! systemctl start kq247-seo-unified.service; then
+            systemctl status --no-pager -l kq247-seo-unified.service || true
+            journalctl -u kq247-seo-unified.service -n 25 --no-pager || true
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json,datetime,pathlib
+          p=pathlib.Path('/opt/kq247/deployment/football-original/public/seo-unified-status.json')
+          d=json.loads(p.read_text())
+          assert d['hourly_complete'] is True,d.get('services')
+          assert d['supervisor_active'] is True,d.get('discovery')
+          assert d['one_vps_timer']=='kq247-seo-unified.timer'
+          assert len(d['target_groups'])==2
+          delta=(datetime.datetime.now(datetime.timezone.utc)-datetime.datetime.fromisoformat(d['checked_at_utc'])).total_seconds()
+          assert 0<=delta<=390,delta
+          print('KQ247_SEO_UNIFIED_INITIAL_PASS',json.dumps({'at':d['checked_at_utc'],'sources':d['discovery']['unique_hosts_discovered'],'submit':d['submission']['counts'],'verified':d['verification'],'poster_running':d['poster_running']},ensure_ascii=False))
+          PY
+          # Only after a full verified unified run, disable duplicated SEO timers.
+          # Their oneshot services are retained, and the unified timer executes them.
+          for t in kq247-seo-groups.timer kq247-seo-indexnow.timer                    kq247-seo-backlinks.timer kq247-organic-10k.timer                    kq247-telegram-playwright.timer kq247-backlink-discovery-watchdog.timer; do
+            if systemctl cat "$t" >/dev/null 2>&1; then
+              systemctl disable --now "$t"
+              echo "KQ247_OLD_SEO_TIMER_MERGED=$t"
+            fi
+          done
+          systemctl is-active --quiet kq247-seo-unified.timer
+          for t in kq247-seo-groups.timer kq247-seo-indexnow.timer                    kq247-seo-backlinks.timer kq247-organic-10k.timer                    kq247-telegram-playwright.timer kq247-backlink-discovery-watchdog.timer; do
+            if systemctl cat "$t" >/dev/null 2>&1; then
+              if systemctl is-active --quiet "$t"; then
+                echo "UNEXPECTED_OLD_TIMER_ACTIVE=$t"; exit 1
+              fi
+            fi
+          done
+          public=/opt/kq247/deployment/football-original/public/seo-unified-status.json
+          test -s "$public"
+          curl -fsS --max-time 10 http://127.0.0.1:18080/seo-unified-status.json | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["hourly_complete"] and len(d["target_groups"])==2;print("KQ247_SEO_PUBLIC_REPORT_LIVE=PASS")'
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
+          test "$before" = "$after"
+          echo KQ247_ALL_PRODUCTION_CONTAINERS_UNCHANGED=YES
+          echo KQ247_ONLY_ONE_VPS_SEO_TIMER_ACTIVE=YES
+          systemctl list-timers --all 'kq247-seo-unified.timer' --no-pager
+          VPS
