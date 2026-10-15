@@ -1,0 +1,53 @@
+{
+  "campaign_id": "kq247-google-web-seo",
+  "version": 1,
+  "description": "Independent Google Web SEO / referral links to first-party KQ247 landing pages, not Telegram directory link collection",
+  "targets": {
+    "football": {
+      "target_url": "https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html",
+      "subject": "football results, schedules and statistics"
+    },
+    "lottery": {
+      "target_url": "https://64-120-92-172.sslip.io/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html",
+      "subject": "lottery results and station-specific statistics"
+    }
+  },
+  "seo_workstreams": [
+    "Google-search-friendly useful content",
+    "technical indexability, robots.txt/sitemap/canonical",
+    "search keywords and titles/meta/headings",
+    "internal linking and mobile performance",
+    "relevant independent editorial backlinks"
+  ],
+  "source_policy": {
+    "include": "Independent Vietnamese-language websites that permit relevant editorial contributions or directory submissions with published first-party landing links",
+    "exclude": [
+      "t.me links counted as Google Web backlinks",
+      "Telegram group/channel directories as Google Web source results",
+      "duplicate or paid link farms",
+      "sites with prohibited submission or spam restrictions"
+    ],
+    "source_qualification": "Site independently confirmed to allow relevant submission; only one truthful submission per eligible site",
+    "backlink_confirmation": "Public third-party HTML page with href pointing to exact first-party landing URL",
+    "index_confirmation": "Google Search Console / verifiable first-party indexing evidence; never infer from successful HTTP or sitemap alone"
+  },
+  "counters": {
+    "web_sources_checked": null,
+    "web_source_candidates": null,
+    "web_submissions_with_receipt": null,
+    "web_submissions_pending": null,
+    "external_web_backlinks_published_confirmed": null,
+    "distinct_referring_domains": null,
+    "google_indexed_pages": null,
+    "google_organic_clicks": null,
+    "google_organic_impressions": null,
+    "last_verified_at_utc": null
+  },
+  "notes": [
+    "Separate from seo-vps/backlink-campaign.json, which targets Telegram t.me group directory submissions",
+    "Null means not independently measured, never reported as success or as zero",
+    "Manifest only: it does not claim a VPS Google crawler is deployed, a new backlink is published, or Google indexed a page",
+    "Reuse single existing VPS SEO scheduling supervisor; do not create parallel crawler/service until tested and explicitly installed",
+    "Keep all KQ247 production football, lottery, Vietlott and Telegram bot containers unchanged"
+  ]
+}
