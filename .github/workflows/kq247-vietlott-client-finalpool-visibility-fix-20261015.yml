@@ -1,0 +1,111 @@
+name: KQ247 Vietlott Customer Locked Pool Visibility Fix
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietlott-client-finalpool-visibility-fix-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  patch-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Install pinned SSH client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Restore guest final-pool export and snapshot sections in current mounted HTML only
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          docker inspect --format '{{range .Mounts}}{{.Source}} => {{.Destination}};{{end}}' kq247-vietlott-vps | grep -Fq '/opt/kq247/vietlott/public => /app/public'
+          python3 - <<'PY'
+          import pathlib,os,json,hashlib,shutil,datetime as dt
+          p=pathlib.Path('/opt/kq247/vietlott/public/index.html')
+          assert p.is_file() and p.stat().st_size>25000,"Unexpected homepage: refuse to patch"
+          s=p.read_text('utf-8')
+          original_sha=hashlib.sha256(s.encode()).hexdigest()
+          start_marker='.client-snapshot-only .result-hero,'
+          end_marker='.client-mode .hero .muted:last-child'
+          replacement="""/* Guest: keep all locked SNAP final numbers, TXT export and draw stats visible.
+          Only admin-side rules and engine settings remain hidden. */
+          .client-snapshot-only aside,.client-mode aside{display:none!important}
+          .client-snapshot-only .grid,.client-mode .grid{grid-template-columns:1fr!important}
+          """
+          changed=False
+          if start_marker in s:
+           assert s.count(start_marker)==1 and s.count(end_marker)==1
+           i=s.index(start_marker);j=s.index(end_marker,i)
+           old=s[i:j]
+           assert '#hardCard' in old and '.analytics-card' in old and 'display:none!important' in old
+           result=s[:i]+replacement+s[j:]
+           changed=True
+          else:
+           result=s
+           assert '.client-snapshot-only aside' in result and '.client-mode .result-hero' not in result
+          style=result.split('</style>',1)[0]
+          for marker in ('id="hardCard"','id="copyHard"','id="filteredCount"','id="searchCard"','id="excludeCard"','id="resultHero"','id="pred"'):
+           assert marker in result,marker
+          assert '.client-snapshot-only .result-hero,' not in style
+          assert '.client-mode .result-hero' not in style
+          assert '.client-snapshot-only aside' in style and '.client-mode aside' in style
+          assert "CLIENT_MODE" in result and "CLIENT_SNAPSHOT_ONLY" in result
+          assert "pool.valid_total" in result and "SNAP" in result
+          if changed:
+           dest=pathlib.Path('/opt/kq247/vietlott/versions/client-layout-backups')
+           dest.mkdir(parents=True,exist_ok=True)
+           stamp=dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+           backup=dest/('index-before-restore-'+stamp+'.html')
+           shutil.copy2(p,backup)
+           tmp=p.with_name(p.name+'.guest-visibility-patch')
+           tmp.write_text(result,'utf-8')
+           os.chmod(tmp,p.stat().st_mode & 0o777)
+           os.replace(tmp,p)
+          final_sha=hashlib.sha256(p.read_bytes()).hexdigest()
+          print('KQ247_VIETLOTT_GUEST_VISIBILITY_PATCH='+json.dumps({
+           'changed':changed,'source_unchanged_except_css':True,'before_sha256':original_sha,
+           'after_sha256':final_sha,'main_pool_visible':True,'txt_export_button_visible':True,
+           'analytics_visible':True,'search_visible':True,'admin_sidebar_hidden':True,
+           'original_link_preserved':True,'original_license_preserved':True,
+           'snapshot_file_untouched':True}))
+          PY
+          code=$(curl -sS --max-time 15 -o /tmp/vietlott-guest-visible.html -w '%{http_code}' 'http://127.0.0.1:18088/?client=1')
+          test "$code" = 200
+          python3 - <<'PY'
+          import pathlib
+          s=pathlib.Path('/tmp/vietlott-guest-visible.html').read_text(encoding='utf-8')
+          assert 'id="hardCard"' in s and 'id="copyHard"' in s
+          css=s.split('</style>',1)[0]
+          assert '.client-snapshot-only .result-hero,' not in css
+          assert '.client-mode .result-hero' not in css
+          assert '.client-snapshot-only aside' in css
+          assert 'id="searchCard"' in s
+          print('KQ247_VIETLOTT_LOCAL_GUEST_HTML_RESTORED=YES')
+          PY
+          curl -fsS --max-time 22 http://127.0.0.1:18088/api/state >/tmp/vietlott-guest-state.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/vietlott-guest-state.json'))
+          x={}
+          for p in ('mega645','power655'):
+           row=d.get('products',{}).get(p,{})
+           sn=row.get('snapshot') or {}
+           x[p]={'locked':sn.get('locked'),'target_date':sn.get('target_date'),
+                 'filtered_total':sn.get('filtered_total'),'reduced_total':sn.get('reduced_total')}
+          print('KQ247_VIETLOTT_LOCKED_SNAPSHOT_STATE='+json.dumps(x))
+          PY
+          test "$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' http://127.0.0.1:18088/client.html)" = 200
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          test "$before" = "$after"
+          echo KQ247_VIETLOTT_PRODUCTION_CONTAINER_IDS_UNCHANGED=YES
+          VPS
