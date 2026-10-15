@@ -48,9 +48,10 @@ jobs:
             const snap=s.products?.[p]?.snapshot||{};
             const f=JSON.parse(fs.readFileSync('public/filtered-pool-'+p+'.json','utf8'));
             const r=JSON.parse(fs.readFileSync('public/reduced-pool-'+p+'.json','utf8'));
+            const sourceKeys=new Set(f.keys);
             result.products[p]={target_date:snap.target_date,analysis_date:snap.analysis_date,locked:snap.locked,
               source_total:f.keys.length,final_total:r.keys.length,final_max:p==='mega645'?180000:450000,
-              strict_subset:r.keys.every(key=>f.keys.includes(key))};
+              strict_subset:r.keys.every(key=>sourceKeys.has(key))};
             if(!snap.locked||r.keys.length===0||r.keys.length>(p==='mega645'?180000:450000))throw Error('INVALID_STAGE_PORTFOLIO_'+p);
           }
           console.log('KQ247_R35_ISOLATED_SNAPSHOT='+JSON.stringify(result));
