@@ -66,13 +66,20 @@ jobs:
           tag="kq247-vietlott-r34-stage:${expected:0:12}"
           docker build -q -f "$dest/deploy/Dockerfile.vps" -t "$tag" "$dest" >/dev/null
           name=kq247-vietlott-r34-stage-20261015
+          trap 'echo KQ247_R34_DIAG; docker ps -a --filter "name=kq247-vietlott-r34-stage-20261015"; docker logs --tail 70 kq247-vietlott-r34-stage-20261015 2>&1 || true' ERR
           if docker ps -a --format '{{.Names}}' | grep -qx "$name";then
             test "$(docker inspect -f '{{.Config.Image}}' "$name")" = "$tag"
             test "$(docker inspect -f '{{.State.Running}}' "$name")" = true
           else
             docker run -d --name "$name" --restart=no --cpus=2 --memory=4g -e VIETLOTT_STAGE_READONLY=1 -e TZ=Asia/Ho_Chi_Minh -p 127.0.0.1:18146:8080 "$tag" >/dev/null
           fi
-          curl -fsS --retry 10 --retry-delay 2 --retry-connrefused http://127.0.0.1:18146/health >/dev/null
+          healthy=0
+          for attempt in $(seq 1 15);do
+            if curl -fsS --max-time 5 http://127.0.0.1:18146/health >/dev/null 2>&1;then healthy=1;break;fi
+            sleep 2
+          done
+          test "$healthy" -eq 1 || { echo KQ247_R34_HEALTH_FAIL; docker logs --tail 70 "$name"; exit 4; }
+          echo KQ247_R34_HEALTH=PASS
           for page in / /guest-snapshot.html /client.html /api/state;do
             curl --max-time 8 -sS -o /dev/null -w "KQ247_R34_HTTP_%{http_code}\n" "http://127.0.0.1:18146$page"
           done
