@@ -59,7 +59,7 @@ jobs:
                           'last_report':data(root/'state'/(x+'.json')),
                           'last_error':data(root/'state'/(x+'.error.json'))}
           status={}
-          for unit in ('kq247-google-web-discovery.timer','kq247-google-web-seo.timer','kq247-seo-unified.timer'):
+          for unit in ('kq247-google-web-discovery.timer','kq247-google-web-seo.timer','kq247-seo-unified.timer','kq247-research-football-fetch.timer','kq247-research-football-form.timer'):
               status[unit]=sh(['systemctl','is-active',unit])
           file_shapes={}
           for p in ['/opt/kq247/lottery-daily-staging/xsmb-505-all27-prizes-20261014.json',
@@ -73,6 +73,9 @@ jobs:
                   'memory':sh(['free','-m']), 'disk':sh(['df','-h','/opt/kq247']),
                   'docker':sh(['docker','ps','--format','{{.Names}}|{{.Status}}']),
                   'seo_timers':status,'research':details,
+                  'football_result_archive_status':data(root/'state'/'football-bongdalu-results'/'status.json'),
+                  'football_form_archive_status':data(root/'state'/'football-historical-form'/'status.json'),
+                  'xs_2000_audit':data(root/'state'/'xsmb-2000-import-audit.json'),
                   'input_files':file_shapes,
                   'fourhour_latest':data(root/'state'/'four_hour_latest.json'),
                   'hourly_latest':data(root/'state'/'hourly.json')}
