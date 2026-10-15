@@ -2,11 +2,12 @@
 """R55 football: settled real AH/OU outcomes + independent grounded xG/odds model search.
 H2H is optional context, NEVER a gate. Raw settlement is not xG.
 """
-import collections,math,os,random,sys
-from common import ROOT,load,save,now,seed,pct,run_job
+import collections,datetime as dt,math,os,random,sys
+from common import ROOT,VN,load,save,now,seed,pct,run_job
 GRADE_FILE=os.environ.get("KQ247_R55_GRADES","/opt/kq247/research/inputs/football-grades.json")
 FEATURE_FILE=os.environ.get("KQ247_R55_PREMATCH","/opt/kq247/research/inputs/verified-prematch.json")
 BOOTSTRAP=int(os.environ.get("KQ247_FOOTBALL_BOOTSTRAP","2000000"))
+BACKTEST_DAYS=500
 def settled_rows(data):
  records=data.get("records",[]) if isinstance(data,dict) else data if isinstance(data,list) else []
  rows=[]
@@ -99,7 +100,18 @@ def model_grid(rows,seed_offset=0):
 def research(previous):
  d=load(GRADE_FILE)
  rows=settled_rows(d) if d else []
- valid=[x for x in rows if x["result"]!="push"]
+ # Exactly 500 calendar days, not 500 random bootstrap observations.
+ asof=dt.datetime.now(VN).date()
+ first=asof-dt.timedelta(days=BACKTEST_DAYS-1)
+ all_dates=[first+dt.timedelta(days=i) for i in range(BACKTEST_DAYS)]
+ grouped=collections.defaultdict(list)
+ for x in rows:
+  try:date=dt.date.fromisoformat(x["day"][:10])
+  except (ValueError,TypeError):continue
+  if first<=date<=asof:grouped[date.isoformat()].append(x)
+ covered=set(grouped)
+ missing=[x.isoformat() for x in all_dates if x.isoformat() not in covered]
+ valid=[x for date,rs in grouped.items() for x in rs if x["result"]!="push"]
  rates={}
  for day in sorted({x["day"] for x in valid}):
   v=[x for x in valid if x["day"]==day]
@@ -115,22 +127,29 @@ def research(previous):
  baseline=pct(total,BOOTSTRAP) if sample else None
  feature_rows=prematch_feature_rows(load(FEATURE_FILE))
  study=model_grid(feature_rows)
- return {"status":"research_active" if rows else "blocked_missing_settlements",
+ return {"status":"research_active" if len(covered)==BACKTEST_DAYS and study.get("status")=="model_research" else "blocked_incomplete_500_day_backtest",
          "source":"verified R55 graded fixtures; prematch xG only when independently sourced",
+         "backtest_window":{"days_required":BACKTEST_DAYS,"first_day":first.isoformat(),
+                             "last_day":asof.isoformat(),"days_with_real_settled_fixtures":len(covered),
+                             "days_missing_count":len(missing),"missing_days_sample":missing[:14],
+                             "full_window_verified":len(covered)==BACKTEST_DAYS},
          "settlement_days":len(rates),"settled_fixtures":len(valid),
          "baseline":rates,"bootstrap_uncertainty_estimate":baseline,
          "bootstrap_repetitions_not_independent_games":BOOTSTRAP if sample else 0,
          "model_search":study,"evaluations":BOOTSTRAP if sample else 0,
          "iteration":int(previous.get("iteration",0))+1,
-         "metrics":{"month_70_percent_verified":False,"promotable":False},
+         "metrics":{"month_70_percent_verified":False,"promotable":False,
+                    "500_calendar_day_input_ready":len(covered)==BACKTEST_DAYS,
+                    "verified_prematch_rows":len(feature_rows)},
          "target":{"win_rate":70,"market_coverage_minimum":80,
                    "xg_verified_when_available":True,"h2h_primary":False},
-         "promotion_blocker":"Needs months of timestamped prekickoff odds/AH and historical xG, accurate quarter-line settlement, and >=70% genuine held-out wins with >=80% coverage. Bootstrap repeats do not count."}
+         "promotion_blocker":f"Needs {len(missing)} additional calendar dates of authentic Bongdalu settled matches plus timestamped prekickoff full features. H2H optional. Monte Carlo repeats are not historical dates."
 def test():
  a=[{"payload":{"day":"2026-10-10","detail":[{"id":"x","type":"AH","result":"win"},{"id":"y","type":"OU","result":"push"}]}}]
  assert len(settled_rows({"records":a}))==2
  assert abs(poisson_cdf(0,1)-math.exp(-1))<1e-8
  assert prematch_feature_rows([{"kickoff":"x","home_gf20":1}])==[]
+ assert BACKTEST_DAYS==500 and len([dt.date(2026,10,15)-dt.timedelta(days=x) for x in range(BACKTEST_DAYS)])==500
  print("KQ247_FOOTBALL_SELFTEST=PASS")
 if __name__=="__main__":
  if "--self-test" in sys.argv:test()
