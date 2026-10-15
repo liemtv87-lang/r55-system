@@ -29,9 +29,13 @@ def apply():
  STAGE.mkdir(parents=True,exist_ok=True)
  source=STAGE/"xsmb-verified-daily.mjs"
  if not source.is_file() or source.stat().st_size<1500:raise RuntimeError("Missing independently verified full27 parser")
- result=STAGE/"update-data.original.mjs"
- run("docker","cp",CONTAINER+":/app/scripts/update-data.mjs",str(result))
- text=result.read_text("utf-8")
+ current=STAGE/"update-data.current.mjs"
+ original=STAGE/"update-data.original.mjs"
+ run("docker","cp",CONTAINER+":/app/scripts/update-data.mjs",str(current))
+ if not original.exists():
+  import shutil
+  shutil.copy2(current,original)
+ text=current.read_text("utf-8")
  import_line="import {fetchValidatedXsmbDay} from './xsmb-verified-daily.mjs';"
  inserted=False
  if import_line not in text:
@@ -63,7 +67,7 @@ def apply():
   if inserted:run("docker","cp",str(patched),CONTAINER+":/app/scripts/update-data.mjs")
   run("docker","exec",CONTAINER,"node","--check","/app/scripts/update-data.mjs")
  except Exception:
-  if inserted:run("docker","cp",str(result),CONTAINER+":/app/scripts/update-data.mjs")
+  if inserted:run("docker","cp",str(current),CONTAINER+":/app/scripts/update-data.mjs")
   raise
  status,body=request("/status")
  if status!=200:raise RuntimeError("Status endpoint not responding after patch")
