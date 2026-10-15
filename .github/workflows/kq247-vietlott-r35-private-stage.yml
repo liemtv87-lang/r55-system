@@ -79,7 +79,7 @@ jobs:
             node scripts/verify-fast-pool-filter.mjs
           '
           echo 'KQ247_VIETLOTT_STAGE_SOURCE_TEST=PASS'
-          before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort || true)
           tag="kq247-vietlott-r35-stage:${expected:0:12}"
           docker build -q -f "$dest/deploy/Dockerfile.vps" -t "$tag" "$dest" >/dev/null
           name=kq247-vietlott-r35-sourcefix-stage
@@ -106,7 +106,7 @@ jobs:
             assert r.status==200,(path,r.status)
           print('KQ247_VIETLOTT_R35_STAGE_HTTP_SMOKE=PASS')
           PY
-          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort)
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | grep -E '^kq247-vietlott-(vps|r33-candidate)\|' | sort || true)
           test "$before" = "$after"
           echo 'KQ247_VIETLOTT_EXISTING_PRODUCTION_CONTAINERS=UNCHANGED'
           echo 'KQ247_VIETLOTT_R35_STAGE_ONLY=YES_NO_PUBLIC_CUTOVER'
