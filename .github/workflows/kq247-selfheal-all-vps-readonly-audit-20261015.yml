@@ -35,6 +35,13 @@ jobs:
             echo "KQ247_SCOPE_READONLY_PROBE_BEGIN=$scope"
             python3 /opt/kq247/ops/selfheal/kq247_selfheal.py --scope "$scope" --dry-run | python3 -c 'import sys,json; s=sys.stdin.read().strip(); k=s.partition("=")[-1]; d=json.loads(k); print(json.dumps({"scope":d.get("scope"),"checked_at_utc":d.get("checked_at_utc"),"event_count":len(d.get("events",[])),"event_statuses":[{"name":v.get("name"),"status":v.get("status")} for v in d.get("events",[]) if v.get("status")],"docker_stop_or_restart":d.get("docker_stop_or_restart"),"production_snapshot_override":d.get("production_snapshot_override")},ensure_ascii=False))'
           done
+          echo KQ247_SELFHEAL_SYSTEMD_TIMER_SCHEDULE
+          systemctl list-timers --all --no-pager --no-legend | grep 'kq247-selfheal-' || true
+          for scope in football xs vietlott bots sales seo-web seo-telegram research ops; do
+            echo "KQ247_SELFHEAL_SYSTEMD=$scope"
+            systemctl show "kq247-selfheal-$scope.timer" -p ActiveState -p SubState -p LastTriggerUSec -p NextElapseUSecRealtime --no-pager
+            systemctl show "kq247-selfheal-$scope.service" -p ActiveState -p Result -p ExecMainStatus -p InactiveExitTimestamp --no-pager
+          done
           python3 - <<'PY'
           import pathlib,json,os
           root=pathlib.Path("/opt/kq247/ops/selfheal")
