@@ -1,0 +1,19 @@
+name: KQ247 Selfheal Static Safety Test
+on:
+  push:
+    branches: [main]
+    paths:
+      - ops/selfheal/kq247_selfheal.py
+      - .github/workflows/kq247-selfheal-syntax-safety-20261015.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile ops/selfheal/kq247_selfheal.py
+          python3 ops/selfheal/kq247_selfheal.py --help
+          ! grep -E 'docker[[:space:]]+restart|docker[[:space:]]+stop|docker[[:space:]]+rm' ops/selfheal/kq247_selfheal.py
