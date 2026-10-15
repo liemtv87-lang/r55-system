@@ -227,9 +227,13 @@ def inspect_source(url):
  possible=[]
  verified=[]
  for href in p.links[:5000]:
-  absolute=urllib.parse.urljoin(res["final_url"],href)
-  parsed=urllib.parse.urlsplit(absolute)
-  target=normalize_target_anchor(res["final_url"],href)
+  try:
+   absolute=urllib.parse.urljoin(res["final_url"],href)
+   parsed=urllib.parse.urlsplit(absolute)
+   target=normalize_target_anchor(res["final_url"],href)
+  except (ValueError,UnicodeError,TypeError):
+   # Bad markup on one host must never crash the batch.
+   continue
   if target and target not in verified:
    verified.append(target)
   if (parsed.hostname or "").lower().removeprefix("www.")==(basehost or "").lower().removeprefix("www.") and any(t in parsed.path.lower() for t in KEYWORDS):
@@ -504,6 +508,7 @@ def main():
   assert vietnam_audience_host("xosodaiphat.com")
   assert vietnam_audience_host("www.vncapitals.com")
   assert not vietnam_audience_host("global-directory.com")
+  assert normalize_target_anchor("https://example.vn/","https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html")==TARGETS["football"]
   honeypot=Links();honeypot.feed('<form method="post"><input name="name"><input name="website" style="position:absolute;left:-9999px" tabindex="-1" aria-hidden="true"></form>')
   assert evaluate_publisher_form(honeypot.forms,"https://test.vn/submit-site/")["credible_site_submission_forms"]==0
   service=Links();service.feed('<form method="post"><input name="serviceURL"><input name="description"></form>')
