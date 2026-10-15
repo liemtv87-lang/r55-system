@@ -1,0 +1,49 @@
+name: KQ247 Vietlott 64 Portfolio Real Throughput
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-research-vietlott-64-cycle-measure-20261015.yml
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Measure actual existing bounded VPS Vietlott research service
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          systemctl is-active --quiet kq247-research-vietlott.timer
+          systemctl show kq247-research-vietlott.service -p Environment,CPUQuotaPerSecUSec,MemoryMax,TimeoutStartUSec --no-pager
+          systemctl start kq247-research-vietlott.service
+          python3 - <<'PY'
+          import pathlib,json
+          p=pathlib.Path('/opt/kq247/research/state/vietlott.json')
+          d=json.loads(p.read_text())
+          res={key:d.get(key) for key in (
+            'finished_at_utc','elapsed_seconds','status',
+            'source_draws','portfolio_sizes','new_draw_portfolios_this_cycle',
+            'new_tickets_evaluated_this_cycle','new_numbers_compared_this_cycle',
+            'remaining_full_history_draws','entire_history_backtest_completed',
+            'errors','checkpoint_records_per_write')}
+          if not res['new_draw_portfolios_this_cycle'] or res['new_draw_portfolios_this_cycle']<30:
+            raise SystemExit('FULL_CYCLE_NOT_CONFIRMED')
+          print('KQ247_VIETLOTT_REAL_64_CYCLE='+json.dumps(res,ensure_ascii=False))
+          PY
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          test "$before" = "$after"
+          echo KQ247_PRODUCTION_CONTAINER_IDS_UNCHANGED=YES
+          VPS
