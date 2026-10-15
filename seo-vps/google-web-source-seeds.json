@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "purpose": "Google Web SEO site prospect READ ONLY: no listing rights inferred; external publication needs a specific opt-in permission check",
+  "updated_date": "2026-10-15",
+  "sources": [
+    {
+      "url": "https://bongda.com.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://bongda24h.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thethao247.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://bongdaplus.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://bongdaso.com/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thethaovanhoa.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thethao.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://bongda365.com/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://yeuthethao.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thethaovietnam.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thethao.sggp.org.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thethao.tuoitre.vn/",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thanhnien.vn/the-thao.htm",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://vtcnews.vn/the-thao",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://dantri.com.vn/the-thao.htm",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://vietnamnet.vn/the-thao",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://soha.vn/the-thao.htm",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://vov.vn/the-thao",
+      "category": "football_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.bbc.com/vietnamese/topics/cjgn7xk8k9yt",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://xoso.com.vn/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://ketqua.net/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://xosodaiphat.com/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://xoso.me/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://minhngoc.net.vn/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://xosothantai.com/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://xosohomnay.com.vn/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://xosobamien.vn/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.xoso.net/",
+      "category": "lottery_editorial",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://voz.vn/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.webtretho.com/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://tinhte.vn/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.otofun.net/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.reddit.com/r/VietNam/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.5giay.vn/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://muaban.net/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://rongbay.com/",
+      "category": "community",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://vnexpress.net/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://tuoitre.vn/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://thanhnien.vn/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://dantri.com.vn/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://vietnamnet.vn/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.vietnam.vn/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://laodong.vn/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://baomoi.com/",
+      "category": "news",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://medium.com/",
+      "category": "publishing_platform",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://wordpress.com/",
+      "category": "publishing_platform",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://dev.to/",
+      "category": "publishing_platform",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://hashnode.com/",
+      "category": "publishing_platform",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://develif.com/",
+      "category": "general_directory_requires_owner_email",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.yellowpages.com.vn/",
+      "category": "business_directory_requires_business_contact",
+      "submission_authorized": false
+    },
+    {
+      "url": "https://www.localsvn.com/for-suppliers",
+      "category": "business_directory_requires_auth",
+      "submission_authorized": false
+    }
+  ]
+}
