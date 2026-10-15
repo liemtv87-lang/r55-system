@@ -74,7 +74,10 @@ jobs:
           TIMER
           systemctl daemon-reload
           systemctl enable --now kq247-google-web-seo.timer
-          systemctl start kq247-google-web-seo.service
+          if ! systemctl start kq247-google-web-seo.service; then
+            journalctl -u kq247-google-web-seo.service -n 45 --no-pager -o cat | tail -45
+            exit 1
+          fi
           systemctl is-active --quiet kq247-google-web-seo.timer
           systemctl is-active --quiet kq247-seo-unified.timer
           python3 - <<'PY'
