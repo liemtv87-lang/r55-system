@@ -1,0 +1,84 @@
+name: KQ247 Vietlott R34 Historical XSMB 150 Verified Batch
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r34-xsmb-150-backfill-batch-20261016.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-r34-xsmb150-verified-archive-batch
+  cancel-in-progress: false
+jobs:
+  batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Extend independently confirmed historical XSMB source in isolated VPS archive
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          source_sha=e5df4dc3d62df665281cdd0d4df9e17b528e606f
+          root=/opt/kq247/vietlott
+          source="$root/versions/r34-xsmb150-backfill-$source_sha"
+          stage="$root/backtest-verified/r34-xsmb150-20261015"
+          input="$stage/input"
+          output="$stage/output"
+          key=/opt/kq247/ops/deploy/keys/vietlott_ro_ed25519
+          known=/opt/kq247/ops/deploy/keys/github_known_hosts
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known -o ConnectTimeout=15"
+          before=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          if ! test -d "$source/.git";then
+            install -d -m 0755 "$root/versions"
+            temp=$(mktemp -d "$root/versions/.xsmb150-clone-XXXXXX")
+            trap 'rm -rf "$temp"' EXIT
+            GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$temp/source"
+            git -C "$temp/source" checkout --quiet --detach "$source_sha"
+            test "$(git -C "$temp/source" rev-parse HEAD)" = "$source_sha"
+            mv "$temp/source" "$source"
+            rmdir "$temp"
+            trap - EXIT
+          fi
+          test "$(git -C "$source" rev-parse HEAD)" = "$source_sha"
+          mkdir -p "$input/data" "$output"
+          old=kq247-vietlott-r34-stage-20261015
+          test "$(docker inspect -f '{{.State.Running}}' "$old")" = true
+          if ! test -s "$input/data/history-mega645.json";then
+            for file in history-mega645 history-power655 xsmb200;do
+              docker cp "$old:/app/data/$file.json" "$input/data/$file.json"
+            done
+          fi
+          test -s "$input/data/history-mega645.json"
+          test -s "$input/data/history-power655.json"
+          test -s "$input/data/xsmb200.json"
+          docker run --rm --cpus=2 --memory=2g --pids-limit=128 --network bridge \
+            -e R34_BACKTEST_ASOF_DATE=2026-10-15 -e R34_BATCH_MAX=12 \
+            -e R34_BATCH_CONCURRENCY=2 \
+            -v "$source":/work:ro -v "$input":/archive-input:ro -v "$output":/archive-output:rw \
+            -w /work --entrypoint node node:22-bookworm scripts/r34-xsmb150-verified-backfill.mjs
+          python3 - "$output/xsmb-verified-150-draws.json" <<'PY'
+          import json,sys
+          p=json.load(open(sys.argv[1]))
+          assert p['scope']=='R34_INDEPENDENT_XSMB_150_DRAWS'
+          assert p['batch_selected']<=30
+          assert all(x['confirmations']>=2 and len(x['full'])==27 and len(set(x['sources']))>=2 for x in p['verified_rows'])
+          print('R34_XSMB150_BACKFILL_VERIFIED',json.dumps({
+            'verified_distinct':p['dates_verified_in_scope'],'required':p['required_distinct_days'],
+            'mega':p['by_product']['mega645'],'power':p['by_product']['power655']
+          },ensure_ascii=False))
+          PY
+          after=$(docker ps --format '{{.Names}}|{{.ID}}' | sort)
+          test "$before" = "$after"
+          echo R34_XSMB150_BACKFILL_ISOLATED=YES
+          echo R34_XSMB150_PRODUCTION_UNCHANGED=YES
+          VPS
