@@ -51,7 +51,12 @@ SEARCH_PAGES=[
  # Additional independently sourced, current web-directory indexes.
  # Their linked sites are discovery prospects only, never permission to submit.
  ("https://launchdirectories.com/free-web-directories","global_web_directory_sources"),
- ("https://saalinko.com/directory-submission-sites-list/","global_web_directory_sources")
+ ("https://saalinko.com/directory-submission-sites-list/","global_web_directory_sources"),
+ # Vietnamese forum directories: sources to inspect for actual topical submission rules,
+ # never blanket authorization for SEO posts or account creation.
+ ("https://vinalink.edu.vn/thu-vien-kien-thuc/dien-dan-di-backlink.html","VN_forum_sources"),
+ ("https://scapbot.com/vi/kien-thuc/danh-sach-dien-dan-di-backlink-uy-tin-tang-trust-tang-traffic-mien-phi/","VN_forum_sources"),
+ ("https://mona.media/dien-dan-di-backlink/","VN_forum_sources")
 ]
 # Only real contribution page slugs, not a substring in arbitrary news articles.
 # This is only a candidate signal, NOT publication permission.
@@ -391,6 +396,7 @@ def selftest():
  assert len(load_candidates())>=40
  assert len({u for u,_ in SEARCH_PAGES})==len(SEARCH_PAGES)
  assert any('launchdirectories.com/free-web-directories' in url for url,_ in SEARCH_PAGES)
+ assert sum(cat=="VN_forum_sources" for _,cat in SEARCH_PAGES)==3
  assert INDEX_PAGE_BUDGET>=MAX_INDEX_PAGES_PER_HOST
  assert MAX_INDEX_WORKERS>=1
  assert editorial_submission_candidate("https://xoso.vn/submit-your-website/") is True
