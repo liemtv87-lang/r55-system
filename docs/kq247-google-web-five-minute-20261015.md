@@ -1,0 +1,25 @@
+# KQ247 Google WEB SEO — 5-minute high-volume discovery handoff
+Date: 2026-10-15 Asia/Ho_Chi_Minh
+
+## User request
+Keep Google WEB backlinks and Google-search optimization separate from Telegram-directory backlinks. Prioritize Vietnamese public websites. Discover NEW sources every 5 minutes, audit thousands/hundreds of thousands of URL records in bounded rotating batches, and ultimately register only with eligible publication providers that clearly permit one relevant listing.
+
+## Implemented and PROVEN on live VPS
+- New source scanner `seo-vps/kq247-google-web-discovery.py`, GitHub commit `7fd6104a3b4d282b661b77e58c753d0fe83c3d2c`.
+- Separate installer `.github/workflows/kq247-google-web-five-minute-discovery-20261015.yml`, commit `165eda222f21c9c3d3cf92721f08ec1e7cfcea9c`.
+- GitHub Actions SUCCESS: https://github.com/liemtv87-lang/r55-system/actions/runs/38664761368, job 116194015812; on VPS service `kq247-google-web-discovery.service` and timer `kq247-google-web-discovery.timer` with `OnCalendar=*:0/5`. Verified next scheduled firing 01:20:00 UTC after initial pass.
+- First real discovery report at 01:16:58Z: **165,044 sitemap URL records read**, **424 distinct source domains discovered**, **130 domains examined**, **243 potential contributor-page URLs flagged**, **115 sites with error samples**. All are real observed or inferred candidates; NONE is an approved/submitted/published backlink. Google WEB submissions newly sent **0**, new published Google WEB backlinks **0**.
+- Live JSON checked via VPS Caddy HTTP: `https://64-120-92-172.sslip.io/google-web-discovery-status.json`, test `KQ247_FIVE_MINUTE_PUBLIC_REPORT=PASS`.
+- Vietnam-first enabled, per-domain bounds (up to 10 sitemap requests and 12,000 sitemap URL records per host per scanning window), 14 max workers, 130 hosts per five-minute iteration, durable SQLite rotating host cursors. No Google Search scraping.
+- `KQ247_PRODUCTION_CONTAINERS_UNCHANGED=PASS` and `KQ247_OTHER_SEO_TIMERS_UNCHANGED=PASS`. Hourly Google WEB link verification and separate Telegram SEO are preserved.
+
+## Extensions written AFTER above successful baseline
+- `seo-vps/kq247-google-web-worker.py` commit `eb68aaacc7b62c104cac3e7b35c0adb00d0383f6` reads discovery SQLite to enlarge hourly first-party WEB external-link verification from fixed 49 hosts up to 180 sites, prioritizing .vn. Its deployment GitHub Actions `38664953624` was still in progress when this paragraph was created: VERIFY RESULT BEFORE CLAIMING DEPLOYED.
+- `seo-vps/kq247-google-web-discovery.py` commit `0ca6f9f3b59e3c9ade52590579b34296b1c2415c` extends the seed source indexes from 5 to 9 and follows bounded internal category/page links via persistent `index_frontier` to discover genuinely new domains across successive five-minute scans. Its Actions `38665055461` was still in progress when this paragraph was created: VERIFY RESULT BEFORE CLAIMING DEPLOYED.
+- ChatGPT existing hourly report task `6aceb3787970819199af7d7bd3055aa4` updated to read the real 5-minute Google discovery JSON and independent hourly WEB verification. It does not create extra VPS scan schedules.
+
+## Crucial caveat
+Automatic Google WEB third-party POST is intentionally **not activated** until specific free/opt-in editorial forms and content eligibility are verified. 243 URLs are *only keyword-matched potential contribution pages*, not 243 sites allowing posting. Do not invent publication receipts, backlink counts, GSC index/click/rank, or claim guaranteed 100,000 links every five minutes.
+
+## Next exact step
+Check GitHub Actions `38664953624` and `38665055461`, read job logs and current `/google-web-discovery-status.json` to confirm the newly connected ledger and rotating index frontier installed. Investigate candidate pages' actual public submission rights; build deduplicated adapter ONLY for explicitly permitted sources, with no login/captcha evasion. Never touch KQ247 football/lottery/Vietlott/sales/bot production containers, original links/UI or Telegram SEO scanner.
