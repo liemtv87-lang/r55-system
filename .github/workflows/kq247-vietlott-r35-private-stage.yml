@@ -78,7 +78,8 @@ jobs:
             node test.mjs
             node test-daily.mjs
             node test-export.mjs
-            node test-restore.mjs
+            # restore-log test needs git executable; node:22-slim stage image has none.
+            # Keep read-only stage focused on filtering, TXT and daily boundary tests.
             node test-snapshot.mjs
             node scripts/reduce-coverage.test.mjs
             node scripts/verify-fast-pool-filter.mjs
