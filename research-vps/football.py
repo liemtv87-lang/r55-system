@@ -143,7 +143,7 @@ def research(previous):
                     "verified_prematch_rows":len(feature_rows)},
          "target":{"win_rate":70,"market_coverage_minimum":80,
                    "xg_verified_when_available":True,"h2h_primary":False},
-         "promotion_blocker":f"Needs {len(missing)} additional calendar dates of authentic Bongdalu settled matches plus timestamped prekickoff full features. H2H optional. Monte Carlo repeats are not historical dates."
+         "promotion_blocker":f"Needs {len(missing)} additional calendar dates of authentic Bongdalu settled matches plus timestamped prekickoff full features. H2H optional. Monte Carlo repeats are not historical dates."}
 def test():
  a=[{"payload":{"day":"2026-10-10","detail":[{"id":"x","type":"AH","result":"win"},{"id":"y","type":"OU","result":"push"}]}}]
  assert len(settled_rows({"records":a}))==2
