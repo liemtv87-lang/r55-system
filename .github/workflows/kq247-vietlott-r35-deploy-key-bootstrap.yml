@@ -1,0 +1,47 @@
+name: KQ247 Vietlott R35 VPS Readonly Deploy Key Bootstrap
+on:
+  push:
+    paths:
+      - .github/workflows/kq247-vietlott-r35-deploy-key-bootstrap.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass openssh-client
+      - name: Create isolated VPS-only read-only GitHub deploy identity
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 0700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          root=/opt/kq247/ops/deploy/keys
+          install -d -m 0700 "$root"
+          key="$root/vietlott_ro_ed25519"
+          if [ ! -s "$key" ];then
+            if [ -e "$key.pub" ];then echo 'INCONSISTENT_DEPLOY_KEY_FILES';exit 2;fi
+            umask 077
+            ssh-keygen -q -t ed25519 -N '' -C 'kq247-vietlott-readonly-vps-20261015' -f "$key"
+            echo 'KQ247_VIETLOTT_NEW_KEY_CREATED=YES'
+          else
+            test -s "$key.pub"
+            echo 'KQ247_VIETLOTT_EXISTING_KEY_REUSED=YES'
+          fi
+          chmod 600 "$key"
+          chmod 644 "$key.pub"
+          echo 'KQ247_VIETLOTT_DEPLOY_KEY_PUBLIC_BEGIN'
+          cat "$key.pub"
+          echo 'KQ247_VIETLOTT_DEPLOY_KEY_PUBLIC_END'
+          ssh-keygen -lf "$key.pub" -E sha256
+          echo 'KQ247_VIETLOTT_RUNNING_CONTAINERS_UNCHANGED=YES'
+          VPS
