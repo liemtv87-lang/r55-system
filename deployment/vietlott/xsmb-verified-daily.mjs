@@ -1,13 +1,13 @@
 // Source-verified, full-27 XSMB results only. Never infer winning digits.
 const specifications=[
   [/(?:^|\s)(?:G\.?\s*ĐB|ĐB|Giải\s*(?:ĐB|Đặc\s*Biệt))(?=\s|\d)/i,1,5],
-  [/(?:^|\s)(?:G\.?\s*1|Nhất|Giải\s*nhất)(?=\s|\d)/i,1,5],
-  [/(?:^|\s)(?:G\.?\s*2|Nhì|Giải\s*nhì)(?=\s|\d)/i,2,5],
-  [/(?:^|\s)(?:G\.?\s*3|Ba|Giải\s*ba)(?=\s|\d)/i,6,5],
-  [/(?:^|\s)(?:G\.?\s*4|Tư|Giải\s*tư)(?=\s|\d)/i,4,4],
-  [/(?:^|\s)(?:G\.?\s*5|Năm|Giải\s*năm)(?=\s|\d)/i,6,4],
-  [/(?:^|\s)(?:G\.?\s*6|Sáu|Giải\s*sáu)(?=\s|\d)/i,3,3],
-  [/(?:^|\s)(?:G\.?\s*7|Bảy|Giải\s*bảy)(?=\s|\d)/i,4,2]
+  [/(?:^|\s)(?:G\.?\s*1|Giải\s*nhất)(?=\s|\d)/i,1,5],
+  [/(?:^|\s)(?:G\.?\s*2|Giải\s*nhì)(?=\s|\d)/i,2,5],
+  [/(?:^|\s)(?:G\.?\s*3|Giải\s*ba)(?=\s|\d)/i,6,5],
+  [/(?:^|\s)(?:G\.?\s*4|Giải\s*tư)(?=\s|\d)/i,4,4],
+  [/(?:^|\s)(?:G\.?\s*5|Giải\s*năm)(?=\s|\d)/i,6,4],
+  [/(?:^|\s)(?:G\.?\s*6|Giải\s*sáu)(?=\s|\d)/i,3,3],
+  [/(?:^|\s)(?:G\.?\s*7|Giải\s*bảy)(?=\s|\d)/i,4,2]
 ];
 function plain(html){
  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ')
