@@ -47,6 +47,7 @@ jobs:
             tmpgit=$(mktemp -d "$base/versions/.r34-src-XXXXXX")
             trap 'rm -rf "$tmpgit"' EXIT
             GIT_TERMINAL_PROMPT=0 git clone --quiet --single-branch --branch main git@github.com:liemtv87-lang/vietlott-auto-hoc.git "$tmpgit/source"
+            git -C "$tmpgit/source" checkout --quiet --detach "$sha"
             test "$(git -C "$tmpgit/source" rev-parse HEAD)" = "$sha"
             mv "$tmpgit/source" "$src"
             rmdir "$tmpgit"
@@ -74,7 +75,17 @@ jobs:
             -v "$temp/output":/replay-output:rw -w /work \
             --entrypoint node node:22-bookworm scripts/replay-r34-locked-stage.mjs
           for p in mega645 power655;do
-             node -e 'const fs=require("fs");const dir=process.argv[1],p=process.argv[2];const full=JSON.parse(fs.readFileSync(dir+"/public/filtered-pool-"+p+".json")),mini=JSON.parse(fs.readFileSync(dir+"/public/reduced-pool-"+p+".json"));if(full.keys.length!==full.valid_total||mini.keys.length!==mini.valid_total||mini.keys.length>(p==="mega645"?180000:450000))process.exit(3); console.log("KQ247_R34_REPLAY_LOCKED_VERIFIED "+p+" FULL="+full.keys.length+" EXTRA="+mini.keys.length);' "$temp/output" "$p"
+            python3 - "$temp/output" "$p" <<'PY'
+          import sys,json,pathlib
+          directory=pathlib.Path(sys.argv[1]);product=sys.argv[2]
+          full=json.loads((directory/'public'/f'filtered-pool-{product}.json').read_text())
+          reduced=json.loads((directory/'public'/f'reduced-pool-{product}.json').read_text())
+          cap=180000 if product=='mega645' else 450000
+          assert full['locked'] and reduced['locked']
+          assert len(full['keys'])==full['valid_total']
+          assert len(reduced['keys'])==reduced['valid_total']<=cap
+          print('KQ247_R34_REPLAY_LOCKED_VERIFIED',product,'FULL='+str(full['valid_total']),'EXTRA='+str(reduced['valid_total']))
+          PY
           done
           (cd "$temp/output" && find . -type f -print0 | sort -z | xargs -0 sha256sum > "$temp/OUTPUT_SHA256SUMS")
           mv "$temp" "$dest"
