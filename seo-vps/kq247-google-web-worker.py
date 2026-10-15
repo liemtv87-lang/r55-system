@@ -37,6 +37,7 @@ SEEDS = [
  "https://www.reddit.com/r/VietNam/"
 ]
 KEYWORDS = ("lien-he","lien_he","gui-bai","gui-tin","dang-bai","dang-tin",
+            "dang-website","them-website","them-link","them-trang-web","add-site",
             "cong-tac-vien","contact","contribute","submit","publish","editorial")
 UA = "KQ247GoogleWebSEO/1.0 (+public technical audit; non-invasive)"
 MAX_BYTES = 450_000
@@ -253,6 +254,11 @@ def candidate_page_intent(uri):
          "gui-website","them-trang-web","dang-ky-cong-tac-vien",
          "cong-tac-vien","tro-thanh-cong-tac-vien"}
   if leaf in ("submit-service","submit-listing","submit-a-listing","submit-your-company","submit-your-business","submit-your-product"):return 0
+  # Recognize explicit submit query endpoints only on publisher directory pages.
+  query=urllib.parse.parse_qs(p.query.lower())
+  if (("wpbdp_view" in query and "submit_listing" in query["wpbdp_view"])
+      or ("action" in query and any(v in ("addlink","submitlink","addsite") for v in query["action"]))):
+   if "directory" in path or "danh-ba" in path:return 1
   if leaf=="suggest.php" and "/directory/" in path:return 1
   if leaf in exact:return 0
   if leaf.startswith(("submit-your-site-","submit-your-website-","submit-guest-post-",
@@ -299,8 +305,8 @@ def candidate_pages_to_inspect(limit=240):
   candidates=[uri for uri in candidates if candidate_page_intent(uri)<99]
   def rank(uri):
    host=(urllib.parse.urlsplit(uri).hostname or "").lower()
-   return (candidate_page_intent(uri),
-           0 if host.endswith(".vn") else 1,
+   vn_first=(0 if host.endswith((".vn",".com.vn",".net.vn",".org.vn")) else 1)
+   return (vn_first,candidate_page_intent(uri),
            1 if uri in last_checked else 0,
            last_checked.get(uri,""),uri)
   candidates.sort(key=rank)
@@ -462,6 +468,8 @@ def main():
   assert candidate_page_intent("https://www.sitepromotiondirectory.com/submit.php")==0
   assert candidate_page_intent("https://www.freeprwebdirectory.com/submit.php")==0
   assert candidate_page_intent("https://directory.example.com/news/post.php")==99
+  assert candidate_page_intent("https://publisher.vn/directory/?wpbdp_view=submit_listing")==1
+  assert candidate_page_intent("https://publisher.vn/news/?action=addlink")==99
   email_form=Links();email_form.feed('<form method="post"><input name="url"><input name="title"><input type="email" name="owner_email" required></form>')
   assert evaluate_publisher_form(email_form.forms,"https://directory.example/submit-site")["publisher_form_status"]=="owner_email_required"
   terms_form=Links();terms_form.feed('<form method="post"><input name="url"><input name="description"><input type="checkbox" name="accept_terms" required></form>')
