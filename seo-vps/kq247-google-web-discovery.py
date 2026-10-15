@@ -150,7 +150,7 @@ class Outgoing(HTMLParser):
   # Vietnamese forum indexes may print domains in table cells without href.
   # These are prospect URLs ONLY, never publication authorization.
   if not (self.extract_table_hosts and self.in_table_cell):return
-  for m in re.finditer(r"(?<![a-z0-9-])(?:https?://)?(?:www\\.)?([a-z0-9][a-z0-9.-]{2,110}\\.(?:com\\.vn|net\\.vn|org\\.vn|edu\\.vn|vn|com|net|org))(?![a-z0-9.-])",data,re.I):
+  for m in re.finditer(r"(?<![a-z0-9-])(?:https?://)?(?:www\.)?([a-z0-9][a-z0-9.-]{2,110}\.(?:com\.vn|net\.vn|org\.vn|edu\.vn|vn|com|net|org))(?![a-z0-9.-])",data,re.I):
    h=m.group(1).lower()
    if h not in SKIP_HOSTS and len(self.visible_host_urls)<1000:
     self.visible_host_urls.append("https://"+h+"/")
