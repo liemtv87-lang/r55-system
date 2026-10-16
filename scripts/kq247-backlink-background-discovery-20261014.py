@@ -61,6 +61,7 @@ SEED = [
 "https://telegramchannels.io/submit-channel",
 "https://telegramhub.org/submit",
 "https://groupverse.co.in/submit-your-group.html",
+"https://zenolink.netlify.app/",
 "https://telegram-group.org/SubmitGroup.php",
 "https://groupssor.com/submit/",
 "https://tg-hub.com/submit-telegram-channel-and-group-links/",
@@ -282,15 +283,39 @@ def state_get(con, key, default="0"):
 def state_set(con, key, value):
     con.execute("INSERT INTO state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
 
+def submission_path_priority(url):
+    """Give explicit opt-in URLs priority over generic homepage/directory routes.
+
+    A directory *index* isn't a submission form. These scores are only for
+    choosing what to READ next, not for granting posting permission.
+    """
+    path = urlsplit(url).path.lower()
+    if re.search(r"submit|publish|add[-_/]?(?:group|channel|link|listing)|suggest|dang[-_/]?(?:tin|bai)|them[-_/]?nhom", path, re.I):
+        return 2
+    if PATH_RE.search(path):
+        return 1
+    return 0
+
 def add_url(con, raw, force=False):
     v = host_url(raw)
     if not v: return
     host, url = v
     if not force and not (PATH_RE.search(urlsplit(url).path) or DOMAIN_RE.search(host)):
         return
-    con.execute("INSERT OR IGNORE INTO hosts(host,url) VALUES(?,?)", (host,url))
-    if PATH_RE.search(urlsplit(url).path):
-        con.execute("UPDATE hosts SET url=? WHERE host=? AND status='pending' AND url LIKE '%/'", (url,host))
+    existing = con.execute("SELECT url,status FROM hosts WHERE host=?", (host,)).fetchone()
+    if not existing:
+        con.execute("INSERT INTO hosts(host,url) VALUES(?,?)", (host,url))
+        return
+    old_url, status = existing
+    # Formerly INSERT OR IGNORE pinned a dead homepage forever: discovery of
+    # /submit after a no_form scan could never reach the public opt-in form.
+    # Reconsider only READ-ONLY classifications. A verified form, excluded
+    # publisher, moderation gate or submitted listing is never reset here.
+    if (status in ("pending", "no_form", "unavailable")
+        and submission_path_priority(url) > submission_path_priority(old_url)):
+        con.execute(
+            "UPDATE hosts SET url=?,status='pending',reason='better_opt_in_path',checked='' WHERE host=?",
+            (url,host))
 
 def source_files():
     """Consume every available real inventory, each with its own durable byte cursor."""
@@ -379,6 +404,21 @@ def selftest():
     assert x.forms == 1 and any("telegram_link" in field for field in x.fields)
     assert len(dict.fromkeys(SEED)) >= 35
     assert any("telegrmgrouplink.com" in u for u in SEED)
+    assert any("zenolink.netlify.app" in u for u in SEED)
+    assert submission_path_priority("https://listing.example/") == 0
+    assert submission_path_priority("https://listing.example/directory/") == 1
+    assert submission_path_priority("https://listing.example/directory/submit") == 2
+    test = sqlite3.connect(":memory:")
+    test.execute("CREATE TABLE hosts(host TEXT PRIMARY KEY,url TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',reason TEXT DEFAULT '',checked TEXT DEFAULT '')")
+    add_url(test, "https://directory.example/", force=True)
+    test.execute("UPDATE hosts SET status='no_form' WHERE host='directory.example'")
+    add_url(test, "https://directory.example/directory/", force=True)
+    add_url(test, "https://directory.example/submit-group", force=True)
+    assert test.execute("SELECT url,status FROM hosts").fetchone() == ("https://directory.example/submit-group", "pending")
+    test.execute("UPDATE hosts SET status='form_candidate' WHERE host='directory.example'")
+    add_url(test, "https://directory.example/publish", force=True)
+    assert test.execute("SELECT url,status FROM hosts").fetchone() == ("https://directory.example/submit-group", "form_candidate")
+    test.close()
     print("SELFTEST_OK")
 
 def main():
