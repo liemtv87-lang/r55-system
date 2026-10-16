@@ -47,7 +47,8 @@ MAX_BYTES = 450_000
 TIMEOUT = 9
 MAX_WORKERS = 24
 SEEDS_FILE = Path(__file__).resolve().parent/"google-web-source-seeds.json"
-MAX_SEEDS = 400
+# Preserve the 600-host production audit throughput; still a bounded source scan.
+MAX_SEEDS = min(600, max(100, int(os.environ.get('KQ247_GOOGLE_SOURCE_BUDGET', '600'))))
 VN_NON_DOT_VN_HOSTS={"vietnamnavigation.com","xosodaiphat.com","ketqua.net","vncapitals.com"}
 
 def vietnam_audience_host(h):
