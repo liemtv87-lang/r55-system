@@ -87,7 +87,11 @@ def run():
                 report["recovery_actions"].append({"unit":service,"result":"queued" if result[0]==0 else "failed"})
         discovery,_=load("google-web-discovery-status.json")
         bridge,_=load("seo-source-bridge-status.json")
-        telegram,_=load("seo-backlink-worker-status.json")
+        telegram,telegram_age=load("seo-backlink-worker-status.json")
+        unified,unified_age=load("seo-unified-status.json")
+        poster=(unified.get("poster_running") if unified_age is not None and unified_age<1200 else None)
+        if poster is None and telegram_age is not None and telegram_age<3600:
+            poster=telegram.get("poster_running")
         google,_=load("google-web-seo-status.json")
         page,_=load("google-seo-auto-status.json")
         report["measured"]={
@@ -95,7 +99,7 @@ def run():
             "sitemap_records_last_cycle": discovery.get("sitemap_url_records_read_this_run"),
             "unique_candidate_urls_bridged": bridge.get("unique_urls_exported_total"),
             "telegram_sources": (telegram.get("scanner") or {}).get("unique_hosts_discovered"),
-            "telegram_poster_running": telegram.get("poster_running"),
+            "telegram_poster_running": poster,
             "telegram_submission_states": (telegram.get("submissions") or {}).get("counts"),
             "new_verified_telegram_backlinks": (telegram.get("submissions") or {}).get("verified_new_public_links"),
             "google_web_auto_submission": (google.get("automatic_submission") or {}).get("enabled",False),
