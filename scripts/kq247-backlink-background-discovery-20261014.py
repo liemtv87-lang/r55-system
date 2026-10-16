@@ -51,7 +51,7 @@ PUBLIC_DIRECTORY_FEEDS = [
     "https://vi.tgdio.com/groups",
     "https://tg-hub.com/submit-telegram-channel-and-group-links/",
 ]
-FEED_REFRESH_SECONDS = 3600
+FEED_REFRESH_SECONDS = 900
 SEED = [
 "https://groupsgyani.org/submit-telegram-group-and-channel-links",
 "https://telegramgroup.arkservices.in/submit",
@@ -249,9 +249,12 @@ def refresh_public_feeds(con):
             links_seen += 1
             absolute = urljoin(final, href)
             entry = host_url(absolute)
-            if not entry or entry[0] == source[0]:
+            if not entry:
                 continue
-            add_url(con, absolute)
+            same_host = entry[0] == source[0]
+            if same_host and not PATH_RE.search(urlsplit(absolute).path):
+                continue
+            add_url(con, absolute, force=same_host)
         after = con.execute("SELECT COUNT(*) FROM hosts").fetchone()[0]
         new_hosts = after - before
         per_feed[feed] = new_hosts
