@@ -20,6 +20,7 @@ STAGES = {
     "google_discovery": ("kq247-google-web-discovery", "google-web-discovery-status.json", 30),
     "source_bridge": ("kq247-seo-source-bridge", "seo-source-bridge-status.json", 30),
     "telegram_supervisor": ("kq247-seo-unified", "seo-unified-status.json", 170),
+    "telegram_feed_refresh": ("kq247-telegram-feed-refresh", "seo-telegram-feed-status.json", 35),
     "google_web_audit": ("kq247-google-web-seo", "google-web-seo-status.json", 170),
     "landing_auto_upgrade": ("kq247-google-seo-auto", "google-seo-auto-status.json", 45),
     "integrity_guard": ("kq247-seo-integrity-guard", "google-seo-guard-status.json", 20),
@@ -92,6 +93,7 @@ def run():
         poster=(unified.get("poster_running") if unified_age is not None and unified_age<1200 else None)
         if poster is None and telegram_age is not None and telegram_age<3600:
             poster=telegram.get("poster_running")
+        feed,_=load("seo-telegram-feed-status.json")
         google,_=load("google-web-seo-status.json")
         page,_=load("google-seo-auto-status.json")
         report["measured"]={
@@ -100,6 +102,8 @@ def run():
             "unique_candidate_urls_bridged": bridge.get("unique_urls_exported_total"),
             "telegram_sources": ((telegram.get("scanner") or {}).get("unique_hosts_discovered") or (unified.get("discovery") or {}).get("unique_hosts_discovered")),
             "telegram_poster_running": poster,
+            "telegram_feed_known_hosts": feed.get("known_hosts"),
+            "telegram_feed_urls_examined_total": feed.get("public_feed_links_examined_total"),
             "telegram_submission_states": ((telegram.get("submissions") or {}).get("counts") or (unified.get("submission") or {}).get("counts")),
             "new_verified_telegram_backlinks": ((unified.get("verification") or {}).get("new_links_last_hour") if unified_age is not None and unified_age<1200 else None),
             "google_web_auto_submission": (google.get("automatic_submission") or {}).get("enabled",False),
