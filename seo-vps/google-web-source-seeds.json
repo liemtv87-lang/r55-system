@@ -1,13 +1,19 @@
 {
   "version": 1,
   "purpose": "Google Web SEO site prospect READ ONLY: no listing rights inferred; external publication needs a specific opt-in permission check",
-  "updated_date": "2026-10-15",
+  "updated_date": "2026-10-16",
   "sources": [
     {
       "url": "https://vncapitals.com/vn",
       "category": "VN_website_directory_topic_gated_proposal",
       "submission_authorized": false,
       "editorial_evidence": "Public 2026 VN Capitals listing catalogue displays category-scoped '+ Đề xuất web'; form cost, terms, eligible categories, and whether owner identity is required remain unverified. Read-only triage first; no posting."
+    },
+    {
+      "url": "https://addfreewebdirectory.com/submit.php?c=449",
+      "category": "VN_directory_explicit_free_regular_review_6_to_9_months",
+      "submission_authorized": false,
+      "editorial_evidence": "Official Vietnam category links to /submit.php?c=449 with Free Regular Link, review advertised 6–9 months; deep-link and topic eligibility not independently confirmed. Read-only; no auto-post."
     },
     {
       "url": "https://sportbettingdirectory.com/submit-your-site/",
