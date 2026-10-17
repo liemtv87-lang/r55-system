@@ -86,7 +86,8 @@ jobs:
           assert p.is_file(),p
           d=json.loads(p.read_text())
           assert d['campaign']=='google_web_independent',d
-          assert len(d['landing_pages'])==2,d
+          assert len(d['landing_pages'])==4,d
+          assert d['site_infrastructure']['sitemap_all_landing_pages'],d['site_infrastructure']
           assert d['sources_checked_this_run']>=40,d
           assert d['configured_unique_source_hosts']>=40,d
           assert d['google_indexation']['indexed_pages'] is None

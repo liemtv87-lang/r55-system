@@ -37,3 +37,10 @@ Commit sequence:
 2. Apply the five source changes safely to VPS. A Python process already running will not hot-load a changed file automatically; use a safe isolated SEO-only deployment rather than restart production workload containers.
 3. Run syntax checks plus database-preservation checks, then check live `seo-unified-status.json`, `seo-backlinks-status.json`, `seo-full-pipeline-status.json` and real listing URL hrefs.
 4. Count submitted, pending, rejected, newly independently verified and unique referring domains for ALL THREE targets. Google Web still requires separately proven eligible editorial forms. No benchmark of 100 new backlinks/hour has been attained.
+
+## 2026-10-18: SEO landing expansion (Google indexing requested)
+- Requested indexing for `https://64-120-92-172.sslip.io/cong-dong-telegram-kq247.html` confirmed by user screenshot. Submission is not proof of indexing.
+- Google WEB worker source extended to audit four first-party landing pages: football, lottery, channel and community. Community page must link to ALL three Telegram targets.
+- Google WEB campaign manifest version 2 adds `channel` and `community`; former Telegram directory targets remain unchanged.
+- Installer assertion updated for four audited pages and sitemap presence. Preserve running non-SEO services and avoid duplicate SEO supervisors.
+- Deployment and real backlinks must be checked separately; source commits do not by themselves prove publication, VPS sync, or Google indexing.

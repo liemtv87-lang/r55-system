@@ -1,6 +1,6 @@
 {
   "campaign_id": "kq247-google-web-seo",
-  "version": 1,
+  "version": 2,
   "description": "Independent Google Web SEO / referral links to first-party KQ247 landing pages, not Telegram directory link collection",
   "targets": {
     "football": {
@@ -10,6 +10,14 @@
     "lottery": {
       "target_url": "https://64-120-92-172.sslip.io/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html",
       "subject": "lottery results and station-specific statistics"
+    },
+    "channel": {
+      "target_url": "https://64-120-92-172.sslip.io/kenh-tool-du-doan-kq247.html",
+      "subject": "Telegram channel for KQ247 prediction tools and updates"
+    },
+    "community": {
+      "target_url": "https://64-120-92-172.sslip.io/cong-dong-telegram-kq247.html",
+      "subject": "KQ247 Telegram communities for football, lottery and automated prediction tools"
     }
   },
   "seo_workstreams": [
@@ -48,6 +56,8 @@
     "Null means not independently measured, never reported as success or as zero",
     "Manifest only: it does not claim a VPS Google crawler is deployed, a new backlink is published, or Google indexed a page",
     "Reuse single existing VPS SEO scheduling supervisor; do not create parallel crawler/service until tested and explicitly installed",
-    "Keep all KQ247 production football, lottery, Vietlott and Telegram bot containers unchanged"
+    "Keep all KQ247 production football, lottery, Vietlott and Telegram bot containers unchanged",
+    "Google Search Console indexing requested 2026-10-18 (user-provided confirmation screenshot); indexed status not yet confirmed.",
+    "Keep original direct Telegram directory targets for all three t.me accounts; these four URLs are first-party Google Web SEO landing targets."
   ]
 }

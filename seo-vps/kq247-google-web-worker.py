@@ -22,9 +22,11 @@ PUBLIC = Path(os.environ.get("KQ247_PUBLIC_ROOT", "/opt/kq247/deployment/footbal
 BASE = "https://64-120-92-172.sslip.io"
 TARGETS = {
  "football": BASE + "/nhom-bong-da-telegram-mien-phi.html",
- "lottery": BASE + "/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html"
+ "lottery": BASE + "/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html",
+ "channel": BASE + "/kenh-tool-du-doan-kq247.html",
+ "community": BASE + "/cong-dong-telegram-kq247.html"
 }
-GROUPS = {"football":"https://t.me/keochuyengia79","lottery":"https://t.me/xsbm999"}
+GROUPS = {"football":"https://t.me/keochuyengia79","lottery":"https://t.me/xsbm999","channel":"https://t.me/tooldudoan999"}
 # Real candidate publishers, never assume they accept automated content.
 SEEDS = [
  "https://bongda.com.vn/", "https://bongda24h.vn/",
@@ -205,8 +207,10 @@ def audit_first_party(item):
               "meta_description":bool(parser.meta.get("description")),
               "robots_meta":parser.meta.get("robots"),
               "canonical_correct":url in parser.canon,
-              "links_to_telegram_group":any(
-                  urllib.parse.urljoin(url,x).rstrip("/")==GROUPS[kind] for x in parser.links),
+              "links_to_telegram_group":(
+                  all(any(urllib.parse.urljoin(url,x).rstrip("/")==group for x in parser.links)
+                      for group in GROUPS.values()) if kind=="community"
+                  else any(urllib.parse.urljoin(url,x).rstrip("/")==GROUPS[kind] for x in parser.links)),
               "jsonld_blocks":parser.jsonld,
               "html_language_vi":bool(re.search(r'<html\s+[^>]*lang=["\x27]vi',page["body"][:300],re.I)),
               "noindex": "noindex" in parser.meta.get("robots","").lower(),
@@ -505,7 +509,7 @@ def main():
   assert len(f.forms)==1 and f.forms[0]["method"]=="post" and len(f.forms[0]["fields"])==2
   assert candidate_pages_to_inspect(1)==[] if not (ROOT/"google-web-discovery.sqlite3").exists() else True
   assert l.title=="OK" and l.h1==["Hi"] and l.links==["/submit"] and l.canon==["https://x"]
-  assert len(TARGETS)==2 and all("/nhom-" in x for x in TARGETS.values())
+  assert len(TARGETS)==4 and set(TARGETS)=={"football","lottery","channel","community"}
   assert vietnam_audience_host("xosodaiphat.com")
   assert vietnam_audience_host("www.vncapitals.com")
   assert not vietnam_audience_host("global-directory.com")
@@ -570,7 +574,8 @@ def main():
          "site_infrastructure":{
            "robots_http":other[0].get("status"),"sitemap_http":other[1].get("status"),
            "robots_allows_discovery":"Allow: /" in other[0].get("body",""),
-           "sitemap_both_landing_pages":all(url in other[1].get("body","") for url in TARGETS.values())},
+           "sitemap_both_landing_pages":all(TARGETS[k] in other[1].get("body","") for k in ("football","lottery")),
+           "sitemap_all_landing_pages":all(url in other[1].get("body","") for url in TARGETS.values())},
          "configured_unique_source_hosts":len(seeds),
          "five_minute_discovery_ledger_consumed":(ROOT/"google-web-discovery.sqlite3").is_file(),
          "sources_checked_this_run":len(sources),
