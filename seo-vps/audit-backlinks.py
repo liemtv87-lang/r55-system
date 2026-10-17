@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Hourly evidence-based backlink report. Zero claims without public proof."""
-import json,re,datetime
+import json,re,datetime,socket,ipaddress
 from pathlib import Path
 from urllib.parse import urlsplit
-from urllib.request import Request,urlopen
+from urllib.request import Request,build_opener,HTTPRedirectHandler
 from html.parser import HTMLParser
 
 ROOT=Path('/opt/kq247/seo-groups')
@@ -18,13 +18,27 @@ class Links(HTMLParser):
             if a.get('href'):self.hrefs.append(a['href'])
 def domain(url):
     return urlsplit(url).hostname or ''
+def public_https(url):
+    try:
+        p=urlsplit(url)
+        if p.scheme!='https' or not p.hostname or p.username or p.password or p.port not in (None,443):
+            return False
+        addresses=socket.getaddrinfo(p.hostname,p.port or 443,type=socket.SOCK_STREAM)
+        return bool(addresses) and all(ipaddress.ip_address(row[4][0]).is_global for row in addresses)
+    except (OSError,ValueError):
+        return False
+
+class SamePublicHostRedirect(HTTPRedirectHandler):
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        if domain(req.full_url)!=domain(newurl) or not public_https(newurl):
+            raise ValueError('unsafe_redirect')
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
 def verify(url,target):
     try:
-        u=urlsplit(url)
-        if u.scheme!='https' or not u.hostname or u.port not in (None,443):
-            return 'invalid_url'
+        if not public_https(url):return 'invalid_or_nonpublic_url'
         req=Request(url,headers={'User-Agent':'KQ247-SEO-LinkVerifier/1.0'})
-        with urlopen(req,timeout=8) as r:
+        with build_opener(SamePublicHostRedirect()).open(req,timeout=8) as r:
             if r.status!=200:return 'http_'+str(r.status)
             if domain(r.geturl())!=domain(url):return 'redirected_off_domain'
             html=r.read(220000).decode('utf8','replace')
@@ -70,10 +84,17 @@ def main():
              'new_links_last_hour':0}
     poster_receipts=discover_verified_poster_receipts(cfg)
     claimed=list(cfg.get('published_listings',[]))+poster_receipts
-    # Same listing can appear in the campaign and poster output; verify once.
+    # A campaign-listed URL may also be returned by the publisher poster.
     seen=set()
-    claimed=[e for e in claimed if not ((e.get('group'),e.get('listing_url'),e.get('target_url','')) in seen or
-             seen.add((e.get('group'),e.get('listing_url'),e.get('target_url',''))))]
+    unique_claims=[]
+    for entry in claimed:
+        if not isinstance(entry,dict):continue
+        key=(entry.get('group'),entry.get('listing_url'),
+             entry.get('target_url') or cfg.get('goals',{}).get(entry.get('group'),{}).get('group'))
+        if key not in seen:
+            seen.add(key)
+            unique_claims.append(entry)
+    claimed=unique_claims
     results['eligible_poster_receipts_for_independent_verification']=len(poster_receipts)
     statefile=ROOT/'reports/backlink-verifications.json'
     cached=json.loads(statefile.read_text()) if statefile.exists() else {}
