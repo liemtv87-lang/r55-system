@@ -39,13 +39,42 @@ def write(path,payload):
     p=path.with_suffix('.tmp')
     p.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+'\n')
     p.replace(path)
+def discover_verified_poster_receipts(cfg):
+    """Merge independently checkable posted listing URLs, never pending clicks."""
+    path=Path('/opt/pwremote/kq247-backlink-background/bulk-posts.json')
+    try:
+        attempts=json.loads(path.read_text(encoding='utf8')).get('attempts',[])
+    except (OSError,ValueError,AttributeError):
+        return []
+    result=[]
+    for row in attempts:
+        if not isinstance(row,dict) or row.get('status') not in ('published_verified','already_listed_verified'):
+            continue
+        group=row.get('group')
+        receipt=row.get('receipt','')
+        host=row.get('host','')
+        if group not in cfg.get('goals',{}) or not isinstance(receipt,str) or not isinstance(host,str):
+            continue
+        dest=urlsplit(receipt)
+        if dest.scheme!='https' or not dest.hostname or dest.hostname.lower().removeprefix('www.')!=host.lower().removeprefix('www.'):
+            continue
+        result.append({'group':group,'listing_url':receipt,
+                       'target_url':cfg['goals'][group]['group'],'receipt_source':'vps_opt_in_poster'})
+    return result
+
 def main():
     cfg=json.loads(CAMPAIGN.read_text(encoding='utf8'))
     now=datetime.datetime.now(datetime.timezone.utc)
     results={'checked_at_utc':now.isoformat(),'goals':{},'prospects':len(cfg.get('directories',[])),
              'count_policy':'Verified published external listing URL only, unique domain separately; no pending submissions counted',
              'new_links_last_hour':0}
-    claimed=cfg.get('published_listings',[])
+    poster_receipts=discover_verified_poster_receipts(cfg)
+    claimed=list(cfg.get('published_listings',[]))+poster_receipts
+    # Same listing can appear in the campaign and poster output; verify once.
+    seen=set()
+    claimed=[e for e in claimed if not ((e.get('group'),e.get('listing_url'),e.get('target_url','')) in seen or
+             seen.add((e.get('group'),e.get('listing_url'),e.get('target_url',''))))]
+    results['eligible_poster_receipts_for_independent_verification']=len(poster_receipts)
     statefile=ROOT/'reports/backlink-verifications.json'
     cached=json.loads(statefile.read_text()) if statefile.exists() else {}
     verified_new=0
@@ -62,11 +91,24 @@ def main():
         except Exception:age=1e12
         if age>=18*3600 and checks<100:
             answer=verify(url,dest);checks+=1
-            cached[fingerprint]={'status':answer,'checked_at_utc':now.isoformat(),'listing_url':url,'group':group}
+            record={'status':answer,'checked_at_utc':now.isoformat(),'listing_url':url,'group':group}
+            if previous.get('first_verified_at_utc'):
+                record['first_verified_at_utc']=previous['first_verified_at_utc']
+            elif answer=='verified' and previous.get('status')!='verified':
+                record['first_verified_at_utc']=now.isoformat()
+            cached[fingerprint]=record
             if answer=='verified' and previous.get('status')!='verified':verified_new+=1
     write(statefile,cached)
     results['checked_this_hour']=checks
     results['newly_verified_since_previous_report']=verified_new
+    new_last_hour=0
+    for entry in cached.values():
+        if entry.get('status')!='verified':continue
+        try:
+            observed=datetime.datetime.fromisoformat(entry.get('first_verified_at_utc',''))
+            if 0 <= (now-observed).total_seconds() < 3600:new_last_hour+=1
+        except (TypeError,ValueError):pass
+    results['new_links_last_hour']=new_last_hour
     for group,spec in cfg['goals'].items():
         links=[]
         for e in claimed:
