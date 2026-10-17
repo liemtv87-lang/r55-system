@@ -582,7 +582,7 @@
     <script>
       const API =
           'https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/',
-        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football',
+        PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1',
         PRODUCT = 'football',
         BUY = 'https://t.me/muatool_du_doan_bot?start=from_football_client';
       let current = 5000,
@@ -1016,7 +1016,7 @@
           a.length +
           '</b></div><div class="stat">Snapshot: <b>' +
           esc(META.model || '-') +
-          '</b></div><div class="stat">Tự học: <b class="learnon">BẬT</b></div>';
+          '</b></div><div class="stat">Tự học: <b class="learnon">' + (META.learning_ready ? 'ĐỦ MẪU' : 'CHỜ DỮ LIỆU') + '</b></div>';
         $('list').innerHTML =
           a
             .map(x => {
@@ -1034,9 +1034,9 @@
                 ' - ' +
                 esc(x.away || '') +
                 '</h3><div><span class="badge ' +
-                (x.trusted_pick ? 'good' : '') +
+                ((x.ah_release === true || x.ou_release === true) ? 'good' : '') +
                 '">' +
-                (x.trusted_pick ? '✅ Kèo đủ dữ liệu' : '⚠️ Dữ liệu mỏng') +
+                ((x.ah_release === true || x.ou_release === true) ? '✅ Có kèo đạt chuẩn' : '⛔ Bỏ kèo') +
                 '</span> <span class="badge">' +
                 esc(bookText(x)) +
                 '</span></div><div class="picks"><div class="pick"><b>KÈO SÁNG NHẤT • ' +
@@ -1065,7 +1065,7 @@
         // before 13h it marks them provisional, then switches to the locked snapshot.
         const r = await fetch(
           PICKS_API +
-            '?mode=' + encodeURIComponent(mode) +
+            '&mode=' + encodeURIComponent(mode) +
             '&limit=' + encodeURIComponent(n) +
             '&from_ts=0',
           { cache: 'no-store', signal: AbortSignal.timeout(15000) }
