@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KQ247 two-group SEO 5-minute orchestration and evidence-based reporting.
+"""KQ247 three-target SEO 5-minute orchestration and evidence-based reporting.
 
 Repairs only known SEO units; never touches Docker, snapshots, credentials,
 other app services, or third-party websites. Submission remains controlled by
@@ -15,7 +15,7 @@ import time
 
 ROOT = Path("/opt/kq247/seo-pipeline")
 PUBLIC = Path("/opt/kq247/deployment/football-original/public")
-GROUPS = {"football": "https://t.me/keochuyengia79", "lottery": "https://t.me/xsbm999"}
+GROUPS = {"football": "https://t.me/keochuyengia79", "lottery": "https://t.me/xsbm999", "channel": "https://t.me/tooldudoan999"}
 STAGES = {
     "google_discovery": ("kq247-google-web-discovery", "google-web-discovery-status.json", 30),
     "source_bridge": ("kq247-seo-source-bridge", "seo-source-bridge-status.json", 30),
@@ -61,7 +61,7 @@ def run():
         now=dt.datetime.now(dt.timezone.utc)
         try: ledger=json.loads((ROOT/"recovery-ledger.json").read_text())
         except (ValueError,OSError): ledger={}
-        report={"checked_at_utc":now.isoformat(),"scope":"two_telegram_groups",
+        report={"checked_at_utc":now.isoformat(),"scope":"three_telegram_targets","telegram_targets":list(GROUPS.values()),
                 "stages":{},"recovery_actions":[],"issues":[],
                 "actual_backlinks_not_inferred_from_scan":True}
         remaining=1  # One heavyweight recovery per 5-minute tick.
@@ -106,6 +106,7 @@ def run():
             "telegram_feed_urls_examined_total": feed.get("public_feed_links_examined_total"),
             "telegram_submission_states": ((telegram.get("submissions") or {}).get("counts") or (unified.get("submission") or {}).get("counts")),
             "new_verified_telegram_backlinks": ((unified.get("verification") or {}).get("new_links_last_hour") if unified_age is not None and unified_age<1200 else None),
+            "verified_channel_backlinks": ((unified.get("verification") or {}).get("channel_verified_published") if unified_age is not None and unified_age<1200 else None),
             "google_web_auto_submission": (google.get("automatic_submission") or {}).get("enabled",False),
             "google_web_verified_submission_sources": google.get("authorized_submission_sources_this_run"),
             "new_verified_google_web_backlinks": len(google.get("new_verified_web_backlinks_this_run") or []),
