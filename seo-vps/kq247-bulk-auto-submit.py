@@ -28,8 +28,13 @@ GROUPS={
  "lottery":{"url":"https://t.me/xsbm999",
             "title":"KQ247 - Cộng đồng kết quả xổ số Việt Nam",
             "description":"Nhóm chia sẻ thông tin kết quả xổ số XSMB, XSMT, XSMN và thống kê tham khảo.",
-            "categories":["Lottery","News","Entertainment","Games"]}}
+            "categories":["Lottery","News","Entertainment","Games"]},
+ "channel":{"url":"https://t.me/tooldudoan999",
+            "title":"KQ247 - Kênh công cụ dự đoán",
+            "description":"Kênh Telegram giới thiệu công cụ thống kê và dự đoán bóng đá, xổ số để tham khảo.",
+            "categories":["News","Technology","Entertainment","Tools"]}}
 # Prior submission must not be repeated even if a live listing is not yet indexed.
+LEGACY_TARGET_KEYS=frozenset(("football","lottery"))
 ALREADY_SENT_HOSTS={"tgfind.net","toptglinks.com","telejoiner.com","groupmandi.com","tgmania.com","tgfinder.net","telegram-group.com","telegramhub.org","tgden.com"}
 # Separate workflows already own submission state for this domain.
 EXTERNAL_WORKFLOW_HOSTS={"buyinoffer.com","tgden.com","vi.tgdio.com"}
@@ -51,7 +56,7 @@ RETRY_GET_AFTER_S = max(3600,int(os.environ.get("KQ247_RETRY_GET_AFTER_S","3600"
 RETRY_READONLY_AFTER_S = max(86400,int(os.environ.get("KQ247_RETRY_READONLY_AFTER_S","86400")))
 REINSPECT_ONLY_STATES = frozenset({
     "no_eligible_form", "free_not_verified", "captcha",
-    "submit_disabled", "required_option_not_available"
+    "submit_disabled", "required_option_not_available", "channel_not_supported"
 })
 # The crawler can add new form candidates dynamically. Each one must still pass
 # the on-page free/public/no-login/no-captcha/same-origin POST eligibility checks.
@@ -94,6 +99,9 @@ def prepare_db():
     return con
 
 def pair_ready(con, host, grp):
+    # Old attempt lists belong only to the legacy groups.
+    if grp in LEGACY_TARGET_KEYS and (host in ALREADY_SENT_HOSTS or host in EXTERNAL_WORKFLOW_HOSTS):
+        return False
     row=con.execute("SELECT state,at_utc FROM submissions WHERE host=? AND grp=?", (host,grp)).fetchone()
     if not row: return True
     state, timestamp=row
@@ -127,9 +135,7 @@ def read_queue(con):
         rows=[]
     rows=list(rows)+list(DIRECT_OPT_IN_ROUTES.items())
     return list(dict.fromkeys(
-        (h,u) for h,u in rows if h not in ALREADY_SENT_HOSTS
-            and h not in EXTERNAL_WORKFLOW_HOSTS
-            and h not in WEB_ONLY_HOSTS
+        (h,u) for h,u in rows if h not in WEB_ONLY_HOSTS
             and h not in TOPIC_POLICY_RESTRICTED_HOSTS
             and urlsplit(u).scheme == "https" and urlsplit(u).hostname in (h, "www." + h)
             and (verified_submission_path(h,urlsplit(u).path) or
@@ -170,7 +176,7 @@ def choose_option(sel, field, group):
                 return True
     return False if PAT_CATEGORY.search(k) else not field["required"]
 
-def check_eligible(page, url, discovered_form=False):
+def check_eligible(page, url, discovered_form=False, group_key=None):
     p=urlsplit(page.url)
     original=urlsplit(url)
     if p.scheme!="https" or p.hostname != original.hostname: return "redirected",None
@@ -181,6 +187,8 @@ def check_eligible(page, url, discovered_form=False):
     if not any(w in text for w in ALLOWED_WORDS) and original.hostname != "en.search-t.me":return "free_not_verified",None
     if "telegram" not in text and "group" not in text and "channel" not in text:
         return "not_telegram_directory",None
+    if group_key == "channel" and "channel" not in text:
+        return "channel_not_supported",None
     if page.locator('[data-sitekey],iframe[src*="captcha"],.g-recaptcha,.h-captcha,.cf-turnstile').count():
         return "captcha",None
     forms=inspect_fields(page)
@@ -212,6 +220,9 @@ def write_result(con,host,grp,url,status,receipt=""):
                   con.execute("SELECT host,grp,url,state,at_utc,receipt FROM submissions ORDER BY at_utc DESC LIMIT 500")],
       "counts":dict(con.execute("SELECT state, COUNT(*) FROM submissions GROUP BY state")),
       "verified_new_public_links":con.execute("SELECT count(*) FROM submissions WHERE state='published_verified'").fetchone()[0],
+      "per_target":{target:{"attempt_records":con.execute("SELECT count(*) FROM submissions WHERE grp=?",(target,)).fetchone()[0],
+          "published_verified":con.execute("SELECT count(*) FROM submissions WHERE grp=? AND state='published_verified'",(target,)).fetchone()[0]}
+          for target in GROUPS},
       "notice":"A submit click or pending moderation is not a verified backlink."}
     tmp=REPORT.with_suffix(".tmp")
     tmp.write_text(json.dumps(report,ensure_ascii=False,indent=2))
@@ -236,6 +247,9 @@ def attempt_groupssor(page, con, host, url, group_key, group):
         body=page.locator("body").inner_text(timeout=6000).lower()
         if "submit your group" not in body or "free" not in body or "telegram" not in body:
             write_result(con,host,group_key,url,"no_eligible_form","publisher_copy_changed")
+            return True
+        if group_key == "channel" and "channel" not in body:
+            write_result(con,host,group_key,url,"channel_not_supported")
             return True
         if page.locator('[data-sitekey],iframe[src*="captcha"],.g-recaptcha,.h-captcha,.cf-turnstile').count():
             write_result(con,host,group_key,url,"captcha")
@@ -322,7 +336,7 @@ def attempt(page, con, host, url, group_key, group):
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='hosts'").fetchone() else False
         if attempt_groupssor(page,con,host,url,group_key,group):
             return
-        status,forminfo=check_eligible(page,url,discovered_form)
+        status,forminfo=check_eligible(page,url,discovered_form,group_key)
         if status!="eligible":
             write_result(con,host,group_key,url,status);return
         # Avoid duplicate submissions when the target already has a live public listing.
@@ -352,8 +366,13 @@ def attempt(page, con, host, url, group_key, group):
                            for want in group["categories"]):
                         chosen=option
                         break
-                if chosen is None and any(x["value"].lower()=="channel" for x in alternatives):
-                    chosen=next((x for x in alternatives if x["value"].lower()=="group"),None)
+                # Never register a channel under a group-only selector.
+                if chosen is None:
+                    wanted_type = "channel" if group_key=="channel" else "group"
+                    chosen=next((x for x in alternatives if x["value"].lower()==wanted_type),None)
+                    if chosen is None and any(x["value"].lower() in ("group","channel") for x in alternatives):
+                        write_result(con,host,group_key,url,"required_option_not_available",name)
+                        return
                 if chosen is None:
                     if any(x["required"] for x in alternatives):
                         write_result(con,host,group_key,url,"requires_manual_radio_review",name);return
