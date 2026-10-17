@@ -5,12 +5,16 @@
     "football": {
       "group": "https://t.me/keochuyengia79",
       "vps_landing": "https://64-120-92-172.sslip.io/nhom-bong-da-telegram-mien-phi.html",
-      "verified_links": 100000
+      "verified_links": 1000
     },
     "lottery": {
       "group": "https://t.me/xsbm999",
       "vps_landing": "https://64-120-92-172.sslip.io/nhom-xo-so-mb-mn-mt-telegram-mien-phi.html",
-      "verified_links": 100000
+      "verified_links": 1000
+    },
+    "channel": {
+      "group": "https://t.me/tooldudoan999",
+      "verified_links": 1000
     }
   },
   "definitions": {
@@ -27,7 +31,8 @@
       "notes": "possible_account_or_moderation",
       "groups": [
         "football",
-        "lottery"
+        "lottery",
+        "channel"
       ],
       "status": "prospect",
       "evidence_url": null,
@@ -40,7 +45,8 @@
       "notes": "editor_review",
       "groups": [
         "football",
-        "lottery"
+        "lottery",
+        "channel"
       ],
       "status": "prospect",
       "evidence_url": null,
@@ -144,7 +150,8 @@
       "notes": "no_account_claim_review",
       "groups": [
         "football",
-        "lottery"
+        "lottery",
+        "channel"
       ],
       "status": "prospect",
       "evidence_url": null,
@@ -209,7 +216,8 @@
       "notes": "owner_submission",
       "groups": [
         "football",
-        "lottery"
+        "lottery",
+        "channel"
       ],
       "status": "prospect",
       "evidence_url": null,
@@ -356,7 +364,8 @@
       "notes": "Free submission form; reviewed; verify content eligibility",
       "groups": [
         "football",
-        "lottery"
+        "lottery",
+        "channel"
       ],
       "status": "prospect",
       "evidence_url": null,
@@ -369,7 +378,8 @@
       "notes": "FAQ says no account for submissions; check actual form",
       "groups": [
         "football",
-        "lottery"
+        "lottery",
+        "channel"
       ],
       "status": "prospect",
       "evidence_url": null,
@@ -558,5 +568,6 @@
       "receipt": "https://github.com/liemtv87-lang/r55-system/actions/runs/38549392143",
       "public_listing_url": null
     }
-  ]
+  ],
+  "scope_note": "Third Telegram target tooldudoan999: only channel-compatible, free opt-in directory forms; old attempts for the other two groups must not be replayed."
 }
