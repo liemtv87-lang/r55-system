@@ -26,7 +26,7 @@ SERVICES=(
  "kq247-organic-10k.service",
  "kq247-telegram-playwright.service",
 )
-GROUPS=("football","lottery")
+GROUPS=("football","lottery","channel")
 
 def utcnow():
  return dt.datetime.now(dt.timezone.utc)
@@ -75,7 +75,7 @@ def collect(now,services,discovery_pids,discovery_recovery):
  playwright=json_file(PUBLIC/"seo-hourly-playwright-status.json")
  return {
   "checked_at_utc":now.isoformat(),"date_vn":(now+dt.timedelta(hours=7)).date().isoformat(),
-  "target_groups":["https://t.me/keochuyengia79","https://t.me/xsbm999"],
+  "target_groups":["https://t.me/keochuyengia79","https://t.me/xsbm999","https://t.me/tooldudoan999"],
   "discovery":{"running":bool(discovery_pids),"processes":len(discovery_pids),
     "age_minutes":age_minutes(base/"latest.json"),
     "inventory_lines_read_total":scan.get("inventory_lines_read_total",0),
@@ -88,6 +88,7 @@ def collect(now,services,discovery_pids,discovery_recovery):
   "verification":{"report_age_minutes":age_minutes(PUBLIC/"seo-backlinks-status.json"),
     "football_verified_published":evidence.get("goals",{}).get("football",{}).get("verified_published",0),
     "lottery_verified_published":evidence.get("goals",{}).get("lottery",{}).get("verified_published",0),
+    "channel_verified_published":evidence.get("goals",{}).get("channel",{}).get("verified_published",0),
     "new_links_last_hour":evidence.get("new_links_last_hour",0),
     "playwright_new_verified_this_hour":playwright.get("verified_new_this_hour",0)},
   "services":services,
@@ -110,6 +111,7 @@ def accumulate_real_hourly_growth(hour, payload):
   "attempt_records":sum(int(v or 0) for v in payload["submission"]["counts"].values()),
   "football_verified":int(payload["verification"]["football_verified_published"] or 0),
   "lottery_verified":int(payload["verification"]["lottery_verified_published"] or 0),
+  "channel_verified":int(payload["verification"]["channel_verified_published"] or 0),
  }
  if not prior.get("high_water"):
   growth={k:0 for k in current}
@@ -130,9 +132,9 @@ def accumulate_real_hourly_growth(hour, payload):
   "hour_utc":hour,
   "new_source_hosts_observed":total["hosts"],
   "new_submission_records_observed":total["attempt_records"],
-  "new_verified_public_backlinks":total["football_verified"]+total["lottery_verified"],
+  "new_verified_public_backlinks":total["football_verified"]+total["lottery_verified"]+total["channel_verified"],
   "verified_public_backlinks_by_group":{"football":total["football_verified"],
-                                       "lottery":total["lottery_verified"]},
+                                       "lottery":total["lottery_verified"],"channel":total["channel_verified"]},
   "baseline_created_now":initialized,
   "counting_policy":"Only positive increases over previously observed high-water counts; not claimed scan volume, pending moderation or click counts."
  }
@@ -140,7 +142,7 @@ def accumulate_real_hourly_growth(hour, payload):
 def main():
  if "--self-test" in sys.argv:
   assert len(SERVICES)==5 and len(set(SERVICES))==5
-  assert GROUPS==("football","lottery")
+  assert GROUPS==("football","lottery","channel")
   assert "kq247-football" not in " ".join(SERVICES)
   assert "hosts" in {"hosts":0}
   print("SEO_UNIFIED_OFFLINE_SELFTEST=PASS")
