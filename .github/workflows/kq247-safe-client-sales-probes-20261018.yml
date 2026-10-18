@@ -92,16 +92,46 @@ jobs:
           a=re.search(r'const API=["\x27]([^"\x27]+)',h)
           print('VIETLOTT_CLIENT_API_ORIGIN',a.group(1) if a else 'not_found')
           PY
+          echo 'VIETLOTT_PUBLIC_API_PARITY_AND_AUTH_LATEST_LINK:'
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,hashlib
+          from urllib.parse import urlsplit
+          local='http://127.0.0.1:18153'
+          public='https://vietlott.64-120-92-172.sslip.io'
+          for path in ['/client.html','/guest-snapshot.html','/api/state']:
+              buff=[]
+              for base in [local,public]:
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'}),timeout=12) as r: body=r.read()
+                      buff.append(body)
+                      print('PARITY',path,'source',('local' if base==local else 'public'),'bytes',len(body),'sha256prefix',hashlib.sha256(body).hexdigest()[:12])
+                  except Exception as e:
+                      print('PARITY_FAIL',path,base,type(e).__name__)
+              if len(buff)==2:print('MATCH',path,buff[0]==buff[1])
+          for product in ['vietlott','football','lottery']:
+              url='https://64-120-92-172.sslip.io/api/customer-auth/?action=latest-link&product='+product
+              try:
+                  with urllib.request.urlopen(url,timeout=12) as r:
+                      data=json.load(r)
+                      print('AUTH_RESPONSE',product,'http',r.status,'ok',data.get('ok'),'reason',data.get('reason'))
+                      v=data.get('latest_url') or ''
+                      u=urlsplit(v) if v else None
+                      print('AUTH_LATEST_URL',product, (u.scheme+'://'+u.netloc+u.path) if u else 'missing')
+              except urllib.error.HTTPError as e:
+                  print('AUTH_HTTP_FAILURE',product,e.code)
+              except Exception as e:
+                  print('AUTH_FAILURE',product,type(e).__name__)
+          PY
           echo 'READ_ONLY_PROBES_DONE'
           VPS
             echo '```'
-          } > diagnostics/KQ247_SAFE_CLIENT_SALES_V2_20261018.md
+          } > diagnostics/KQ247_SAFE_CLIENT_SALES_V3_20261018.md
       - name: Publish sanitized health receipt
         run: |
           set -euo pipefail
           git config user.name "kq247-vps-audit"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp diagnostics/KQ247_SAFE_CLIENT_SALES_V2_20261018.md docs/KQ247_SAFE_CLIENT_SALES_V2_20261018.md
-          git add docs/KQ247_SAFE_CLIENT_SALES_V2_20261018.md
+          cp diagnostics/KQ247_SAFE_CLIENT_SALES_V3_20261018.md docs/KQ247_SAFE_CLIENT_SALES_V3_20261018.md
+          git add docs/KQ247_SAFE_CLIENT_SALES_V3_20261018.md
           git commit -m "Record safe sales and frontend status checks on VPS" || exit 0
           git push
