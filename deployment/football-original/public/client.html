@@ -581,7 +581,7 @@
     </div>
     <script>
       const API =
-          'https://br-divine-resonance-az0qxt8z-kq247auth.compute.c-3.ap-southeast-1.aws.neon.tech/',
+          'https://64-120-92-172.sslip.io/api/customer-auth/',
         PICKS_API = 'https://64-120-92-172.sslip.io/api/main-football?data=1',
         PRODUCT = 'football',
         BUY = 'https://t.me/muatool_du_doan_bot?start=from_football_client';
@@ -1187,8 +1187,9 @@
             cache: 'no-store',
           });
           const j = await r.json();
-          if (!r.ok || !j.ok || !j.latest_url) return true;
-          const latest = new URL(String(j.latest_url), location.href);
+          const actualLink = j.latest_url || j.url || j.link;
+          if (!r.ok || !j.ok || !actualLink) return true;
+          const latest = new URL(String(actualLink), location.href);
           const currentUrl = new URL(location.href);
           currentUrl.hash = '';
           latest.hash = '';
