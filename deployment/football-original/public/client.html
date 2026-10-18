@@ -1116,23 +1116,9 @@
         return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       }
       async function ensureLatestLink() {
-        importLinkMigration();
-        try {
-          const r = await fetch(API + '?action=latest-link&product=' + PRODUCT, {
-            cache: 'no-store',
-          });
-          const j = await r.json();
-          const actualLink = j.latest_url || j.url || j.link;
-          if (!r.ok || !j.ok || !actualLink) return true;
-          const latest = new URL(String(actualLink), location.href);
-          const currentUrl = new URL(location.href);
-          currentUrl.hash = '';
-          latest.hash = '';
-          if (latest.href !== currentUrl.href) {
-            location.replace(latest.href + '#kq247=' + exportLinkMigration());
-            return false;
-          }
-        } catch {}
+        // User requirement: existing customer link is permanent. No automatic
+        // redirects, hostname swaps, migration hashes or background link probes.
+        importLinkMigration(); // Accept old migrated links without changing this URL.
         return true;
       }
       // Filter already-started fixtures locally; do not refetch the snapshot each minute.
