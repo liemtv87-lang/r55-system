@@ -1,0 +1,96 @@
+name: KQ247 Vietlott R34 fresh isolated release VPS 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-r34-fresh-isolated-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-new-isolated-stage
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Build direct R34 from private source on VPS, calculate new verified locked snapshots in isolated stage
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          source=/tmp/kq247-vietlott-r34-private-source-5582b1007e6ce5e4e6394ca60b8f45e905c28d2b
+          base=/opt/kq247/vietlott/versions/r34-direct-20261018-5582b100
+          image=kq247-vietlott-r34-direct:5582b100
+          container=kq247-vietlott-r34-direct-20261018
+          prior=/opt/kq247/vietlott/versions/r34-replay-c57520eb416b2507b8d6e1079559272aea211bed/output
+          echo KQ247_R34_STAGE_SOURCE_PRECHECK
+          test -s "$source/.kq247-private-source-sha"
+          test "$(cat "$source/.kq247-private-source-sha")" = '5582b1007e6ce5e4e6394ca60b8f45e905c28d2b'
+          echo '2a76701182e440381e6ae8839ca9fd134a4e00b6524c880c13ade4a75e75e778  '"$source"'/scripts/update-data.mjs' | sha256sum -c --status
+          test -s "$source/Dockerfile" && test -s "$source/scripts/engine.mjs"
+          test -s "$prior/public/state.json"
+          test -s "$prior/data/history-mega645.json" && test -s "$prior/data/history-power655.json"
+          live_id="$(docker inspect kq247-vietlott-vps --format '{{.Id}}')"
+          echo "VPS_AVAILABLE_MEMORY_MB=$(awk '/MemAvailable:/{printf "%d", $2/1024}' /proc/meminfo)"
+          df -h /opt/kq247/vietlott | tail -1
+          if ! docker image inspect "$image" >/dev/null 2>&1;then
+            docker build -q -t "$image" "$source"
+          fi
+          if ! test -s "$base/public/state.json";then
+            mkdir -p "$base/public" "$base/data"
+            cp -a "$prior/public/." "$base/public/"
+            cp -a "$prior/data/." "$base/data/"
+          fi
+          if ! docker inspect "$container" >/dev/null 2>&1;then
+            docker run -d --name "$container" --restart no --cpus 3 --memory 7g \
+              -e PORT=8080 -e NODE_OPTIONS=--max-old-space-size=6144 \
+              -e VIETLOTT_STAGE_READONLY=1 -e VIETLOTT_R34_STAGE_PREVIOUS_DAY_CATCHUP=1 \
+              -v "$base/data:/app/data" -v "$base/public:/app/public" \
+              -p 127.0.0.1:18152:8080 "$image"
+          fi
+          test "$(docker inspect "$container" --format '{{.State.Running}}')" = true
+          docker exec "$container" node --check scripts/update-data.mjs
+          docker exec "$container" node --check scripts/vps-release-gate.mjs
+          curl -fsS --max-time 12 http://127.0.0.1:18152/health >/dev/null
+          echo KQ247_R34_NEW_ISOLATED_STAGE_RUNNING=YES
+          echo KQ247_R34_FRESH_RECALC_BEGIN
+          set +e
+          timeout 780 docker exec -e FAST_SNAPSHOT_REPAIR=1 "$container" node scripts/update-data.mjs >"$base/daily-refresh.log" 2>&1
+          code=$?
+          set -e
+          grep -E 'R34|R33|LOCKED|Chưa|chưa|Lỗi|Error|Không đủ|thiếu|Xong|source|full|Snapshot|snapshot|VPS' "$base/daily-refresh.log" | tail -35 | cut -c 1-210 || true
+          echo "KQ247_R34_CALC_EXIT=$code"
+          echo KQ247_R34_SNAPSHOT_RESULT
+          python3 - <<'PY'
+          import json,urllib.request
+          url='http://127.0.0.1:18152/api/state'
+          with urllib.request.urlopen(url,timeout=15) as f:s=json.load(f)
+          a=s.get('snapshot',{}).get('products',{})
+          b=s.get('products',{})
+          for key in ['mega645','power655']:
+              p=a.get(key) or b.get(key,{}).get('snapshot',{})
+              print('KQ247_R34_'+key.upper()+'='+json.dumps({x:p.get(x) for x in ('analysis_date','target_date','locked','ruleset_version','filtered_total','reduced_total')},ensure_ascii=False))
+          print('KQ247_R34_STAGE_READY='+str(s.get('ready'))+' OK='+str(s.get('ok'))+' ERROR='+str(s.get('last_update_error'))[:150])
+          assert s.get('ok') and s.get('ready')
+          assert s.get('ruleset_version')=='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1'
+          for key in ['mega645','power655']:
+              p=a.get(key) or b.get(key,{}).get('snapshot',{})
+              assert p.get('analysis_date')=='2026-10-17', (key,p.get('analysis_date'))
+              assert p.get('locked') is True
+              assert p.get('ruleset_version')==s.get('ruleset_version')
+          print('KQ247_R34_NEW_SNAPSHOTS_VERIFIED=YES')
+          PY
+          test "$code" -eq 0
+          test "$live_id" = "$(docker inspect kq247-vietlott-vps --format '{{.Id}}')"
+          echo KQ247_R33_LIVE_CONTAINER_UNCHANGED=YES
+          VPS
