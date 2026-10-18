@@ -152,7 +152,10 @@ services:
       - /opt/kq247/.bot-secrets/xs.env
     environment:
       DRY_RUN: "0"
-      KQ247_LOTTERY_CUTOVER: "enabled"
+      # TEMPORARY 2026-10-19: existing @liemthongbaonhom_bot only
+      # publishes to football; XS will receive a different bot after setup.
+      # Keep XS forecasts and historical snapshots intact.
+      KQ247_LOTTERY_CUTOVER: "disabled"
       KQ247_LOCKED_INDEX_PATH: /app/locked/station-locked-index.json
       NODE_ENV: production
     ports:
