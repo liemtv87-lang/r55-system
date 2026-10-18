@@ -11,8 +11,14 @@ const ACTIVE=process.env.KQ247_SALES_BOT_ACTIVE==='1';
 const TOKEN=process.env.TELEGRAM_SALES_BOT_TOKEN||'';
 // VPS-only canonical customer/sales PostgreSQL. No external Neon fallback.
 const DB=process.env.SALES_DATABASE_URL||process.env.DATABASE_URL||'';
-if(DB && !/^postgres(?:ql)?:\/\/[^@]+@(?:football-db|kq247-r55-postgres|localhost|127\.0\.0\.1)(?::\d+)?\//i.test(DB))
-  throw Error('KQ247_SALES_DATABASE_MUST_BE_VPS_LOCAL');
+if(DB){
+  // The credentials and hostname must be checked separately; never print the DSN.
+  let target;
+  try { target=new URL(DB); } catch { throw Error('KQ247_SALES_DATABASE_INVALID_DSN'); }
+  const hosts=new Set(['football-db','kq247-r55-postgres','localhost','127.0.0.1']);
+  if(!['postgres:','postgresql:'].includes(target.protocol)||!hosts.has(target.hostname.toLowerCase())||!target.pathname||target.pathname==='/')
+    throw Error('KQ247_SALES_DATABASE_MUST_BE_VPS_LOCAL');
+}
 
 const pool=DB?new Pool({connectionString:DB,max:3,connectionTimeoutMillis:7000,idleTimeoutMillis:15000}):null;
 let lastPoll=null,lastError=null,updateOffset=0;
