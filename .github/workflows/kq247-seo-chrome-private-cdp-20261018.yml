@@ -1,0 +1,45 @@
+name: KQ247 SEO Chrome Private CDP Setup
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-seo-chrome-private-cdp-20261018.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-seo-chrome-auth-one-time
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax safety check
+        run: python3 -m py_compile seo-vps/kq247-chrome-cdp-cutover.py
+      - name: Secure SSH transport
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Reconfigure only the dedicated SEO Chrome, preserve mounted profile
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            seo-vps/kq247-chrome-cdp-cutover.py \
+            root@64.120.92.172:/root/kq247-chrome-cdp-cutover-20261018.py
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          base="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -v -E ' (kq247-seo-google-login|kq247-seo-google-login-rollback-20261018)$' | sort)"
+          python3 -m py_compile /root/kq247-chrome-cdp-cutover-20261018.py
+          python3 /root/kq247-chrome-cdp-cutover-20261018.py
+          after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep -v -E ' (kq247-seo-google-login|kq247-seo-google-login-rollback-20261018)$' | sort)"
+          test "$base" = "$after"
+          echo 'NON_BROWSER_PRODUCTION_CONTAINERS_UNCHANGED=YES'
+          VPS
