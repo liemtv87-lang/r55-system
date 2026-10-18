@@ -38,5 +38,7 @@ jobs:
           done
           echo 'SEO_BACKGROUND_STATUS:'
           docker ps --format '{{.Names}} {{.Status}}' | grep -Ei 'seo-kq247-opt-in-directory|seo|backlink' | head -20 || true
+          echo 'BROWSER_TOOL_AVAILABILITY:'
+          docker exec kq247-seo-google-login sh -lc 'for x in xdotool wmctrl curl python3 node; do command -v "$x" || true; done; echo DISPLAY_AVAILABLE=${DISPLAY:+yes}' || true
           echo 'GROUPSGYANI_NO_SUBMISSION_SENT_BY_THIS_PROBE'
           VPS
