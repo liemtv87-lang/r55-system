@@ -55,8 +55,13 @@ python3 /opt/kq247/deployment/football-history/import_history.py
 # Fail before replacing the live public server if the new Caddy routes are invalid.
 docker compose run --rm --no-deps football-staging caddy validate --config /etc/caddy/Caddyfile >/tmp/r55-caddy-validate.log 2>&1 || { cat /tmp/r55-caddy-validate.log >&2; exit 1; }
 echo 'R55_CADDY_CONFIG=PASS'
-docker compose up --build -d </dev/null
-docker compose up -d --force-recreate football-staging </dev/null
+# Bring up only the canonical API/proxy stack. Avoid 'compose up' with no
+# service selector: an independently-owned running Telegram group bot already
+# occupies kq247-r55-group-bot and must not be replaced or duplicated.
+# Legacy football-cache is intentionally never started again.
+docker compose up --build -d football-native football-original lottery-original football-staging </dev/null
+docker compose exec -T football-staging caddy reload --config /etc/caddy/Caddyfile </dev/null
+echo R55_CANONICAL_API_PROXY_START=PASS
 
 # PayOS is served by the independently owned sales container. Put only that
 # container on the existing internal compose network; do not start a second
@@ -79,11 +84,13 @@ if docker inspect kq247-sales-bot-primary >/dev/null 2>&1; then
   echo KQ247_PAYOS_HTTPS_ROUTING=PASS
 fi
 
+# Retired Neon-polling cache deliberately returns 410. Never fail a
+# deployment by probing or restarting that obsolete upstream.
 for i in $(seq 1 15); do
-  if curl --fail --silent --max-time 5 http://127.0.0.1:18080/_kq247/cache-health >/tmp/r55-cache-health.json; then break; fi
+  if curl --fail --silent --max-time 5 'http://127.0.0.1:18080/api/main-football?data=1&mode=all&limit=20' -o /tmp/r55-canonical-health.json; then break; fi
   sleep 2
 done
-python3 -c 'import json;d=json.load(open("/tmp/r55-cache-health.json"));assert d["ok"] and d["cachedPredictions"]>=100;print("CACHE_PREDICTIONS="+str(d["cachedPredictions"]))'
+python3 -c 'import json;d=json.load(open("/tmp/r55-canonical-health.json"));assert d.get("ok") and d.get("locked") and d.get("found") and d.get("snapshot_id") and d.get("source")=="bongdalu_verified_only";print("R55_SINGLE_LOCKED_VPS_SOURCE=PASS "+d["snapshot_id"])'
 curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main-football?limit=20' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("ok") and len(d.get("predictions",[]))==20;print("VPS_R55_20=PASS")'
 curl --fail --silent --show-error --max-time 15 'http://127.0.0.1:18080/api/main-football?limit=30' | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d.get("ok") and len(d.get("predictions",[]))==30;print("VPS_R55_30=PASS")'
 docker compose exec -T football-native node worker.mjs probe
