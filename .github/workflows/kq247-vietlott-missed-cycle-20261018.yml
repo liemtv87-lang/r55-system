@@ -1,0 +1,49 @@
+name: KQ247 Vietlott missed-new-draw diagnosis 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-missed-cycle-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read live Vietlott history, snapshot and nightly timer safely
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo "VN_CLOCK=$(TZ=Asia/Ho_Chi_Minh date +%FT%T%z)"
+          echo 'VIETLOTT_CONTAINERS:'
+          docker ps -a --format '{{.Names}} | {{.Status}} | {{.Image}}' | grep -i vietlott | head -30 || true
+          echo 'VIETLOTT_TIMERS:'
+          systemctl list-timers --all --no-pager | grep -i vietlott | head -40 || true
+          echo 'VIETLOTT_UNITS:'
+          systemctl list-units --all --no-pager | grep -i vietlott | head -50 || true
+          echo 'VIETLOTT_HOST_RECENT_FILES:'
+          find /opt/kq247/vietlott -maxdepth 4 -type f \( -iname '*snap*.json' -o -name '*daily*.json' -o -name 'current*.json' -o -name 'health*.json' \) -printf '%TY-%Tm-%Td %TH:%TM | %s | %p\n' 2>/dev/null | sort -r | head -50 || true
+          echo 'VIETLOTT_HEALTH_LOCAL:'
+          curl -sS -m 8 http://127.0.0.1:18088/health | head -c 1800 || true
+          echo
+          echo 'VIETLOTT_HTTP_HEAD:'
+          for url in / /guest-snapshot.html /client.html /api/status /health; do
+            echo "$url HTTP $(curl -sS -o /dev/null -m 8 -w '%{http_code}' http://127.0.0.1:18088$url || true)"
+          done
+          echo 'VIETLOTT_LOG_LAST_DAY:'
+          docker logs --since 26h kq247-vietlott-vps 2>&1 | grep -iE 'snapshot|scheduled|nightly|update.data|draw|source|error|failed|retry' | tail -75 | cut -c 1-220 || true
+          echo 'VIETLOTT_PUBLIC_DATA_LIST:'
+          ls -lht /opt/kq247/vietlott/public | head -35 || true
+          echo 'NO_SNAPSHOTS_MODIFIED=YES'
+          VPS
