@@ -24,60 +24,27 @@ function pickList(items,url){
  return {matching,selected,items:selected.slice(0,toInt(url.searchParams.get('limit'),30))};
 }
 async function locked(){
- const q=await db.query("SELECT day::text AS date,payload,locked_at FROM football_snapshots ORDER BY day DESC LIMIT 1");
+ const q=await db.query("SELECT day::text AS date,payload,locked_at FROM football_snapshots WHERE source='bongdalu-r55' AND locked_at IS NOT NULL ORDER BY day DESC LIMIT 1");
  return q.rows[0]||null;
 }
-async function legacy(){
- const r=await fetch('http://football-cache:3000/api/main-football?limit=5000&from_ts=0',{
-  headers:{accept:'application/json'},signal:AbortSignal.timeout(6500)});
- if(!r.ok)throw Error('verified_legacy_cache_http_'+r.status);
- const d=await r.json();
- if(!d?.ok||!Array.isArray(d.predictions))throw Error('verified_legacy_cache_invalid');
- return d;
-}
 export async function readMainFootball(url){
- // "preview=1" is intentionally distinct from the frozen 13:00 forecast;
- // clients must opt in explicitly and it is never mislabeled as locked.
- if(url.searchParams.get('preview')==='1'){
-  const day=getVNDay();
-  const q=await db.query("SELECT payload,updated_at FROM football_compact_stats WHERE scope=$1 LIMIT 1",["r55_native_preview_"+day]);
-  const preview=q.rows[0]?.payload;
-  if(!preview?.preview||!Array.isArray(preview.matches)||preview.matches.length<1)
-   throw Error('native_preview_not_ready');
-  const list=preview.matches.map(makePick);
-  const {matching,selected,items}=pickList(list,url);
-  return {ok:true,locked:false,preview:true,source:'Bongdalu',date:day,
-   model:'R55 VPS risk-adjusted live preview',source_detail:'native_live_preview_unlocked',
-   snapshot_total:list.length,marketPool:preview.scanProgress?.marketPool||0,
-   coverage:preview.scanProgress?.coverage||null,updated_at:q.rows[0].updated_at,
-   hidden_started:list.length-matching.length,total:selected.length,predictions:items,
-   oneMarketPerMatch:true,legacyFallback:false,stale:Date.now()-Date.parse(q.rows[0].updated_at)>4*3600000};
- }
+ // Do not advertise a provisional preview or switch to legacy/Neon caches.
+ if(url.searchParams.get('preview')==='1')throw Error('public_preview_disabled');
  const n=await locked();
- const currentDay=getVNDay();
- const sourceIsNative=n?.date===currentDay;
- if(sourceIsNative){
-  const raw=Array.isArray(n.payload?.matches)?n.payload.matches:[];
-  const list=raw.map(makePick);
-  const {matching,selected,items}=pickList(list,url);
-  return {ok:true,locked:true,source:'Bongdalu',date:n.date,model:'R55 VPS native',
-   provider:'Bongdalu',source_detail:'native_locked_snapshot',snapshot_total:list.length,
-   marketPool:Number(n.payload?.scanProgress?.marketPool||0),
-   coverage:Number(n.payload?.scanProgress?.marketPool)>0?+(100*list.length/Number(n.payload.scanProgress.marketPool)).toFixed(1):null,
-   hidden_started:list.length-matching.length,total:selected.length,predictions:items,
-   updated_at:n.locked_at,oneMarketPerMatch:true,stale:false};
- }
- // Preserve today's immutable predictions until the next 13:00 local-native
- // snapshot. Never pretend a legacy cache is native or backtest-certified.
- const d=await legacy(),items=d.predictions.map(p=>({
-   ...p,priority:p.top?200:0,trusted_pick:false,ah_release:false,ou_release:false,
-   model_state:'legacy_immutable_unverified',source_detail:'legacy_locked_bongdalu_mirror',
- }));
- const {matching,selected,items:predictions}=pickList(items,url);
- return {...d,source:'Bongdalu',source_detail:'legacy_locked_snapshot_fallback',
-  trusted_pick:false,legacyFallback:true,
-  snapshot_total:items.length,hidden_started:items.length-matching.length,
-  total:selected.length,predictions,stale:d.date!==currentDay,oneMarketPerMatch:true};
+ if(!n)return {ok:true,found:false,locked:false,provisional:false,source:'bongdalu_verified_only',
+  snapshot_id:null,date:null,predictions:[],snapshot_total:0,total:0,legacyFallback:false};
+ const raw=Array.isArray(n.payload?.matches)?n.payload.matches:[];
+ const list=raw.map(makePick);
+ const {matching,selected,items}=pickList(list,url);
+ return {ok:true,found:true,locked:true,provisional:false,source:'bongdalu_verified_only',
+  snapshot_id:'bongdalu-r55:'+n.date+':'+new Date(n.locked_at).toISOString(),
+  date:n.date,model:'R55 VPS locked Bongdalu',provider:'Bongdalu',
+  source_detail:'native_locked_snapshot',snapshot_total:list.length,
+  marketPool:Number(n.payload?.scanProgress?.marketPool||0),
+  coverage:Number(n.payload?.scanProgress?.marketPool)>0
+   ?+(100*list.length/Number(n.payload.scanProgress.marketPool)).toFixed(1):null,
+  hidden_started:list.length-matching.length,total:selected.length,predictions:items,
+  updated_at:n.locked_at,oneMarketPerMatch:true,legacyFallback:false,stale:false};
 }
 export async function publicHandler(req,res){
  let url;try{url=new URL(req.url,'http://localhost')}catch{return false}
