@@ -9,7 +9,11 @@ const PRODUCTS={football:'⚽ Bóng đá',lottery:'🎯 Xổ số',vietlott:'�
 const TAG={football:'BD',lottery:'XS',vietlott:'VL'};
 const ACTIVE=process.env.KQ247_SALES_BOT_ACTIVE==='1';
 const TOKEN=process.env.TELEGRAM_SALES_BOT_TOKEN||'';
-const DB=process.env.NEON_DATABASE_URL||'';
+// VPS-only canonical customer/sales PostgreSQL. No external Neon fallback.
+const DB=process.env.SALES_DATABASE_URL||process.env.DATABASE_URL||'';
+if(DB && !/^postgres(?:ql)?:\/\/[^@]+@(?:football-db|kq247-r55-postgres|localhost|127\.0\.0\.1)(?::\d+)?\//i.test(DB))
+  throw Error('KQ247_SALES_DATABASE_MUST_BE_VPS_LOCAL');
+
 const pool=DB?new Pool({connectionString:DB,max:3,connectionTimeoutMillis:7000,idleTimeoutMillis:15000}):null;
 let lastPoll=null,lastError=null,updateOffset=0;
 const sleep=t=>new Promise(r=>setTimeout(r,t));
