@@ -1,0 +1,92 @@
+name: KQ247 VPS client and sales read only health probes 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-safe-client-sales-probes-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Probe containers and frontend only without credentials or writes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          mkdir -p diagnostics
+          {
+            echo '# VPS health and frontend integration probe'
+            echo '```text'
+            sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set +e
+          echo "CHECKED_UTC=$(date -u +%FT%TZ)"
+          echo 'WEB_HOST_ROUTE_MAP:'
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('/opt/kq247/deployment/football-staging/Caddyfile')
+          host='unknown'
+          for line in p.read_text().splitlines():
+              s=line.strip()
+              if re.match(r'^[\w.-]+\.sslip\.io\s*\{',s):host=s.split('{')[0].strip()
+              if s.startswith('reverse_proxy') and 'kq247-' in s:print(host, '=>',s[:120])
+          PY
+          echo 'FRONTEND_AUDIT:'
+          python3 - <<'PY'
+          import urllib.request,re
+          for port in [18088,18153]:
+              for path in ['/','/client.html','/guest-snapshot.html']:
+                  try:
+                      with urllib.request.urlopen('http://127.0.0.1:%d%s'%(port,path),timeout=8) as r: h=r.read(600000).decode('utf-8','replace')
+                      p={x:len(re.findall(re.escape(x),h,re.I)) for x in ['R33','R34','/api/state','snapshot','34 điều kiện','đăng nhập']}
+                      print('PAGE',port,path,'len',len(h),'markers',p)
+                  except Exception as e:print('PAGE_ERROR',port,path,type(e).__name__)
+          PY
+          echo 'SALES_BOT_AND_AUTH_READONLY_WEB_CHECK:'
+          python3 - <<'PY'
+          import json,subprocess,urllib.request
+          for name,port in [('kq247-sales-bot-primary',3032),('kq247-customer-auth-fixed-20261018',3039),('kq247-sales-vps',3010)]:
+              cp=subprocess.run(['docker','inspect',name],capture_output=True,text=True)
+              if cp.returncode: print(name,'container_not_found');continue
+              d=json.loads(cp.stdout)[0]
+              net=list(d.get('NetworkSettings',{}).get('Networks',{}).values())
+              addr=next((n.get('IPAddress') for n in net if n.get('IPAddress')),None)
+              print('CONTAINER',name,'running',d['State']['Running'],'network_count',len(net))
+              if addr:
+                  for path in ['/health','/']:
+                      try:
+                          with urllib.request.urlopen('http://%s:%d%s'%(addr,port,path),timeout=5) as r:
+                              print('PROBE',name,path,'HTTP',r.status)
+                      except Exception as e:
+                          print('PROBE',name,path,'error_type',type(e).__name__)
+          PY
+          echo 'BOT_LAST_250_LOG_ERROR_CATEGORY_COUNTS:'
+          for name in kq247-sales-bot-primary kq247-customer-auth-fixed-20261018 kq247-lottery-bot kq247-r55-group-bot;do
+            echo "$name"
+            docker logs --tail 250 "$name" 2>&1 | python3 -c 'import sys;x=sys.stdin.read().lower();print({k:x.count(k) for k in ["error","failed","409 conflict","timeout","database","payment","rate limit"]})'
+          done
+          echo 'R34_READONLY_SOURCE_FILES:'
+          docker exec kq247-vietlott-r34-production-20261018 sh -c 'grep -R -l "VIETLOTT_STAGE_READONLY" /app --include="*.js" --include="*.mjs" 2>/dev/null | head -10' || true
+          echo 'READ_ONLY_PROBES_DONE'
+          VPS
+            echo '```'
+          } > diagnostics/KQ247_SAFE_CLIENT_SALES_20261018.md
+      - name: Publish sanitized health receipt
+        run: |
+          set -euo pipefail
+          git config user.name "kq247-vps-audit"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp diagnostics/KQ247_SAFE_CLIENT_SALES_20261018.md docs/KQ247_SAFE_CLIENT_SALES_20261018.md
+          git add docs/KQ247_SAFE_CLIENT_SALES_20261018.md
+          git commit -m "Record safe sales and frontend status checks on VPS" || exit 0
+          git push
