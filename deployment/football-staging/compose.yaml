@@ -19,23 +19,6 @@ services:
       retries: 10
     security_opt:
       - no-new-privileges:true
-  football-cache:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: kq247/r55-public-cache:local
-    container_name: kq247-football-cache
-    restart: unless-stopped
-    read_only: true
-    volumes:
-      - football-cache-data:/cache
-    tmpfs:
-      - /tmp:size=16m
-    mem_limit: 256m
-    pids_limit: 100
-    cpus: "0.50"
-    security_opt:
-      - no-new-privileges:true
   football-native:
     build:
       context: ../football-native
@@ -218,7 +201,6 @@ services:
     container_name: kq247-football-staging
     restart: unless-stopped
     depends_on:
-      - football-cache
       - football-original
       - lottery-original
     ports:
@@ -238,6 +220,7 @@ services:
 volumes:
   football-native-data:
   football-db-data:
+  # Historical football-cache-data volume is retained until archive parity is verified.
   football-cache-data:
   football-caddy-data:
   football-caddy-config:
