@@ -57,25 +57,6 @@ async function validClientUrl(product){
 const copyButton=(text,value)=>({text,copy_text:{text:String(value).slice(0,256)}});
 const planLabel=days=>Number(days)===10?'Dùng thử Free 10 ngày':Number(days)===30?'1 tháng':Number(days)===180?'6 tháng':Number(days)>=700&&Number(days)<=740?'2 năm':Number(days)>=350&&Number(days)<=370?'1 năm':String(days)+' ngày';
 const isPaidTerm=days=>[30,180,365,730,360,720].includes(Number(days));
-const PAYOS_BRIDGE_URL='https://tool-sales-bot.onrender.com';
-let bridgeWarmUntil=0;
-async function createRemotePayosCheckout(telegramUserId,product,days){
- const ticket=crypto.randomBytes(32).toString('hex');
- const hash=crypto.createHash('sha256').update(ticket).digest('hex');
- await pool.query('INSERT INTO public.sales_checkout_intents(ticket_hash,telegram_user_id,product,duration_days) VALUES($1,$2,$3,$4)',
-  [hash,String(telegramUserId),product,Number(days)]);
- const body=JSON.stringify({ticket,telegramUserId:String(telegramUserId),product,days:Number(days)});
- const r=await fetch(PAYOS_BRIDGE_URL+'/sales/checkout',{
-   method:'POST',headers:{'content-type':'application/json'},
-   body,signal:AbortSignal.timeout(115000)});
- if(!r.ok)throw Error('sales_bridge_unavailable_'+r.status);
- const order=await r.json();
- if(!order?.checkoutUrl||!Number.isSafeInteger(Number(order.amount)))throw Error('sales_bridge_invalid_response');
- if(new URL(order.checkoutUrl).protocol!=='https:')throw Error('sales_bridge_invalid_url');
- bridgeWarmUntil=Date.now()+75*60*1000;
- return order;
-}
-
 async function showHome(chat){
  const r=await pool.query("SELECT product,duration_days,price_vnd FROM sales_plans WHERE enabled=true AND product=ANY($1::text[]) ORDER BY product,duration_days",[Object.keys(PRODUCTS)]);
  const lines=['🏠 <b>KQ247 · CHỌN SẢN PHẨM VÀ THỜI HẠN</b>','Mở bản khách hoặc lấy lại mã bằng các nút dưới đây.'];
@@ -150,7 +131,7 @@ async function purchasePlan(chat,userId,product,days,priceInquiry=false){
  }
  if(priceInquiry)return send(chat,'Gói '+escapeHtml(title)+' — '+money(p.price_vnd)+'. Thanh toán trực tuyến chỉ mở sau khi PayOS được kết nối và xác minh.',keyboard([[{text:'⬅️ XEM GÓI',callback_data:'plans:'+product}]]));
  const status=payosStatus();
- if(!status.ready && !TOKEN){
+ if(!status.ready){
    return send(chat,'🛒 <b>ĐĂNG KÝ MUA TOOL '+escapeHtml(PRODUCTS[product])+'</b>\nGói: <b>'+escapeHtml(title)+'</b>\nGiá: <b>'+money(p.price_vnd)+'</b>\n\n⚠️ Thanh toán tự động PayOS chưa được kết nối. Có thể liên hệ quản trị để xác minh thanh toán. Bot không tự cấp mã trước khi xác nhận thanh toán.',keyboard([
     [{text:'💬 LIÊN HỆ MUA GÓI',url:'https://t.me/thantai7979abcd'}],
     [{text:'🔐 MÃ CỦA TÔI',callback_data:'mycodes'}],
@@ -158,7 +139,7 @@ async function purchasePlan(chat,userId,product,days,priceInquiry=false){
    ]));
   }
  try{
-  const order=status.ready?await createPayosCheckout(pool,userId,product,days):await createRemotePayosCheckout(userId,product,days);
+  const order=await createPayosCheckout(pool,userId,product,days);
   return send(chat,'💳 <b>THANH TOÁN PAYOS</b>\nSản phẩm: '+escapeHtml(PRODUCTS[product])+'\nGói: <b>'+escapeHtml(title)+'</b>\nSố tiền: <b>'+money(order.amount)+'</b>\nĐơn: <code>'+escapeHtml(order.orderCode)+'</code>\n\nBấm thanh toán để chuyển tới payOS. Bot chỉ tự cấp mã sau khi nhận và xác minh giao dịch thành công.',keyboard([
     [{text:'💳 THANH TOÁN AN TOÀN QUA PAYOS',url:order.checkoutUrl}],
     [{text:'📋 SAO CHÉP LINK THANH TOÁN',copy_text:{text:order.checkoutUrl.slice(0,256)}}],
@@ -289,7 +270,7 @@ async function payosHttp(req,res){
    }
    const payload=JSON.parse(raw);
    await processPayosWebhook(pool,payload,async ({telegramUserId,product,code})=>{
-    if(!ACTIVE)return; // Render standby records payment; VPS delivers receipts from Neon
+    if(!ACTIVE)return; // Only active VPS bot sends paid receipts.
     const url=await validClientUrl(product).catch(()=>null);
     const buttons=[[copyButton('📋 SAO CHÉP MÃ',code)]];
     if(url)buttons.push([copyButton('🔗 SAO CHÉP LINK',url)],[{text:'🌐 MỞ BẢN KHÁCH',url}]);
@@ -357,13 +338,8 @@ async function deliverPaidReceipts(){
  }catch(e){if(db)await db.query('ROLLBACK').catch(()=>{});console.error('SALES_RECEIPT_DELIVERY_RETRY',String(e.message).slice(0,80))}
  finally{db?.release();receiptWorkerBusy=false}
 }
-async function keepPendingPaymentPageAwake(){
- if(!ACTIVE||Date.now()>=bridgeWarmUntil)return;
- try{await fetch(PAYOS_BRIDGE_URL+'/healthz',{signal:AbortSignal.timeout(30000)})}catch{}
-}
 if(ACTIVE){
  setTimeout(()=>deliverPaidReceipts().catch(()=>{}),8000).unref();
  setInterval(()=>deliverPaidReceipts().catch(()=>{}),45000).unref();
- setInterval(()=>keepPendingPaymentPageAwake().catch(()=>{}),240000).unref();
 }
 
