@@ -48,5 +48,11 @@ jobs:
           docker exec kq247-seo-google-login sh -lc 'if test "${CHROMIUM_REMOTE_DEBUGGING:-0}" = 1; then echo yes; else echo no; fi' || true
           echo 'CHROME_PROFILE_MOUNT_TYPE:'
           docker inspect kq247-seo-google-login --format '{{range .Mounts}}{{if eq .Destination "/config"}}{{.Type}}{{end}}{{end}}' || true
+          echo 'BROWSER_CONFIG_PORTS:'
+          docker inspect kq247-seo-google-login --format '{{json .HostConfig.PortBindings}}' || true
+          echo 'BROWSER_NETWORK_MODE:'
+          docker inspect kq247-seo-google-login --format '{{.HostConfig.NetworkMode}}' || true
+          echo 'BROWSER_RESTART_POLICY:'
+          docker inspect kq247-seo-google-login --format '{{.HostConfig.RestartPolicy.Name}}' || true
           echo 'GROUPSGYANI_NO_SUBMISSION_SENT_BY_THIS_PROBE'
           VPS
