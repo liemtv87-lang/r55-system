@@ -364,72 +364,7 @@
     <meta property="og:url" content="https://kq247-football-live.onrender.com/client.html" />
     <script type="application/ld+json" data-kq247-seo="1">{"@context":"https://schema.org","@type":"WebPage","name":"Tool phân tích bóng đá KQ247 • Bản khách","description":"Bản khách Tool bóng đá KQ247 dành cho người dùng có mã kích hoạt, hỗ trợ xem lịch trận và dữ liệu phân tích trên web mobile.","url":"https://kq247-football-live.onrender.com/client.html","inLanguage":"vi-VN"}</script>
 
-<script data-kq247-growth-analytics="1">
-(() => {
-  const KQ247_PH_KEY = "phc_rCvftnSz7DhowFBdng3GgBq9HnqrcbgAgk7VsvtY3CqJ";
-  const KQ247_PH_URL = 'https://us.i.posthog.com/i/v0/e/';
-  const KQ247_SURFACE = "football-client";
-  function kq247DistinctId() {
-    try {
-      let id = localStorage.getItem('kq247_growth_id');
-      if (!id) {
-        id = (crypto.randomUUID ? crypto.randomUUID() : ('kq247-' + Date.now() + '-' + Math.random().toString(36).slice(2)));
-        localStorage.setItem('kq247_growth_id', id);
-      }
-      return id;
-    } catch {
-      return 'kq247-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-    }
-  }
-  const KQ247_DISTINCT_ID = kq247DistinctId();
-  function kq247Capture(event, extra = {}) {
-    const payload = {
-      api_key: KQ247_PH_KEY,
-      event,
-      distinct_id: KQ247_DISTINCT_ID,
-      properties: {
-        ...extra,
-        kq247_surface: KQ247_SURFACE,
-        '$current_url': location.href,
-        '$host': location.host,
-        '$pathname': location.pathname,
-        '$referrer': document.referrer || ''
-      }
-    };
-    try {
-      fetch(KQ247_PH_URL, {
-        method: 'POST',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify(payload),
-        keepalive: true,
-        mode: 'cors'
-      }).catch(() => {});
-    } catch {}
-  }
-  window.kq247GrowthCapture = kq247Capture;
-  kq247Capture('$pageview');
-  document.addEventListener('click', event => {
-    const a = event.target && event.target.closest ? event.target.closest('a[href]') : null;
-    if (!a) return;
-    const href = String(a.href || '');
-    if (href.includes('t.me/muatool_du_doan_bot')) {
-      kq247Capture('sales bot clicked', {
-        sales_bot: 'muatool_du_doan_bot',
-        link_text: String(a.textContent || '').trim().slice(0, 120)
-      });
-      return;
-    }
-    let telegram_group = '';
-    if (href.includes('t.me/keochuyengia79')) telegram_group = 'keochuyengia79';
-    if (href.includes('t.me/xsbm999')) telegram_group = 'xsbm999';
-    if (!telegram_group) return;
-    kq247Capture('telegram cta clicked', {
-      telegram_group,
-      link_text: String(a.textContent || '').trim().slice(0, 120)
-    });
-  }, true);
-})();
-</script>
+
 </head>
   <body>
     <div class="warn">
