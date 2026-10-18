@@ -1,0 +1,46 @@
+name: KQ247 Vietlott post-fix snapshot verification 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-postfix-readonly-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read Vietlott run result and new snapshot freshness
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo 'STATUS:'
+          curl -fsS --max-time 8 http://127.0.0.1:18088/status | head -c 3300 || true
+          echo
+          echo 'HEALTH:'
+          curl -fsS --max-time 8 http://127.0.0.1:18088/health | head -c 1200 || true
+          echo
+          echo 'LATEST_SNAPSHOTS:'
+          docker exec kq247-vietlott-vps node --input-type=module -e '
+            import fs from "node:fs";
+            function read(f){try{return JSON.parse(fs.readFileSync(f,"utf8"))}catch{return {}}}
+            let x=read("data/xsmb200.json");
+            console.log(JSON.stringify({xsmb_latest:Array.isArray(x)?x.slice(0,3).map(r=>({date:r.date,full:r.full?.length,sources:r.sources?.length})):null}));
+            for(let p of ["mega645","power655"]){let s=read("data/snapshot-"+p+".json");
+              console.log(JSON.stringify({product:p,analysis:s.analysis_date,target:s.target_date,locked:s.locked,version:s.ruleset_version}));}
+            let q=read("public/state.json");console.log(JSON.stringify({generated_at:q.generated_at,status:q.ok,ready:q.ready,error:q.last_update_error}));
+          '
+          echo 'LAST_18_MIN_LOG:'
+          docker logs --since 18m kq247-vietlott-vps 2>&1 | grep -Ei 'XSMB|3.region|snapshot|error|retry|done|xong|verified|locked' | tail -35 | cut -c 1-170 || true
+          echo 'READ_ONLY_DONE=YES'
+          VPS
