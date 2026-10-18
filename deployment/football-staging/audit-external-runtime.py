@@ -47,6 +47,8 @@ def main():
         info = json.loads(docker("inspect", name))[0]
         if not info.get("State", {}).get("Running"):
             continue
+        if name == "kq247-football-cache":
+            violations.append({"service": name, "check": "retired_neon_cache_still_running"})
         values = info.get("Config", {}).get("Env", []) or []
         env = dict(v.split("=", 1) for v in values if "=" in v)
         for key, value in env.items():
