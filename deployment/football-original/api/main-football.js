@@ -1,6 +1,9 @@
 import {db} from "hatchable";
 import {settle} from "lib/r55Settlement.js";
-import {vnWindowDay} from "lib/apiFootball.js";
+// Match day changes at 13:00 VN without importing the old API-Sports collector.
+const vnWindowDay=()=>new Intl.DateTimeFormat("en-CA",{
+ timeZone:"Asia/Ho_Chi_Minh",year:"numeric",month:"2-digit",day:"2-digit"
+}).format(new Date(Date.now()-13*3600000));
 import {getCompactR55} from "lib/compactR55.js";
 import {releaseDecision,freshRanking} from "lib/r55ReleaseGate.js";
 export const access="public";
