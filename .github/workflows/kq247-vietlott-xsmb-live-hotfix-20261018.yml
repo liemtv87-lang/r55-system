@@ -1,0 +1,48 @@
+name: KQ247 Vietlott verified XSMB live hotfix 20261018
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-vietlott-xsmb-live-hotfix-20261018.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-production-daily-hotfix
+  cancel-in-progress: false
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate updater patch and independent source verifier
+        run: |
+          python3 -m py_compile deployment/vietlott/apply-verified-full27-daily-hotfix.py
+          node deployment/vietlott/xsmb-verified-daily.mjs
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Patch only live XSMB fetch fallback after exact guard checks
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          remote=root@64.120.92.172
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes "$remote" 'mkdir -p /opt/kq247/vietlott-r33-primary/versions/xsmb-full27-daily-hotfix'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes deployment/vietlott/xsmb-verified-daily.mjs "$remote":/opt/kq247/vietlott-r33-primary/versions/xsmb-full27-daily-hotfix/xsmb-verified-daily.mjs
+          sshpass -e scp -q -o StrictHostKeyChecking=yes deployment/vietlott/apply-verified-full27-daily-hotfix.py "$remote":/root/kq247-xsmb-daily-fix-20261018.py
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes "$remote" 'bash -s' <<'VPS'
+          set -euo pipefail
+          other_before="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          python3 -m py_compile /root/kq247-xsmb-daily-fix-20261018.py
+          python3 /root/kq247-xsmb-daily-fix-20261018.py
+          other_after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | sort)"
+          test "$other_before" = "$other_after"
+          echo 'VIETLOTT_NO_CONTAINER_RESTART_OR_REPLACEMENT=YES'
+          curl -fsS --max-time 10 http://127.0.0.1:18088/health | head -c 2000
+          VPS
