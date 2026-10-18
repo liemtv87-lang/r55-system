@@ -1091,13 +1091,14 @@
         }
         const all = Array.isArray(source.predictions) ? source.predictions : [];
         const filtered = mode === 'featured' ? all.filter(x => x.top === true) : all;
-        return {
+        const selected = filtered.slice(0, Math.min(5000, Math.max(1, Number(n) || 5000)));
+        const normalized = cleanSnapshot({
           ...source,
-          predictions: filtered.slice(0, Math.min(5000, Math.max(1, Number(n) || 5000))),
+          predictions: selected,
           total: filtered.length,
           found: source.found === true,
-          data: source,
-        };
+        });
+        return { ...normalized, data: normalized };
       }
       async function copyMode(n, mode, label) {
         try {
