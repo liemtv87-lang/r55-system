@@ -13,6 +13,8 @@ def check_live():
  if not any(p+"=>/app/public" in mounts for p in (str(ROOT/"public"),"/opt/kq247/vietlott/public")):raise RuntimeError("Container mounted production path mismatch")
  status=run("docker","inspect","--format","{{.State.Status}}",CONTAINER).stdout.strip()
  if status!="running":raise RuntimeError("Production container not running")
+ endpoint,body=request("/status")
+ if endpoint!=200:raise RuntimeError("Production /status API is missing; refuse modifying live updater")
  return mounts
 def request(path,method="GET",token=None):
  endpoint="http://127.0.0.1:18088"+path
