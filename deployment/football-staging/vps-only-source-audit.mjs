@@ -21,6 +21,11 @@ function verify(name,condition){
  console.log((ok?'PASS':'BLOCK')+':'+name);
  if(!ok)failures++;
 }
+const compose=await read('deployment/football-staging/compose.yaml');
+verify('legacy_neon_cache_not_in_compose',!/\n  football-cache:\s*\n/.test(compose) &&
+ !/\n\s*- football-cache\s*\n/.test(compose));
+const archivedCache=await read('deployment/football-staging/cache.mjs');
+verify('legacy_neon_cache_offline',!/https?:\/\/|setInterval|\bfetch\(/.test(archivedCache));
 const caddy=find('football-staging/Caddyfile');
 const routes=[...caddy.matchAll(/handle\s+\/api\/main-football\s*\{([^{}]*)\}/g)];
 verify('one_canonical_public_api_route',routes.length===1 &&
