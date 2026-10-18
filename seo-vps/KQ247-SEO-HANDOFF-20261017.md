@@ -44,3 +44,14 @@ Commit sequence:
 - Google WEB campaign manifest version 2 adds `channel` and `community`; former Telegram directory targets remain unchanged.
 - Installer assertion updated for four audited pages and sitemap presence. Preserve running non-SEO services and avoid duplicate SEO supervisors.
 - Deployment and real backlinks must be checked separately; source commits do not by themselves prove publication, VPS sync, or Google indexing.
+
+
+## 2026-10-18 08:14 VN — authenticated SEO Chrome handoff
+- User has already signed into the VPS Chromium dedicated to SEO; do not ask for manual login on every directory.
+- VPS read-only inspections verified `kq247-seo-google-login` (jlesage/chromium) and `seo-kq247-opt-in-directory` (Playwright) were running, browser display `:0` usable, browser `/config` has persistent bind mount, Chrome and submitter are DISTINCT browser processes.
+- The live poster SQLite database had 4 `submitted_pending_review` records for the lottery target, 4 for football and 3 for channel, and 1 `published_verified` record for channel (DB claim; external independent verification still required). Do not conflate these with actual approved backlink URLs.
+- On 2026-10-18 an isolated Chrome cutover utility was committed: `seo-vps/kq247-chrome-cdp-cutover.py`. Initial setup workflow `kq247-seo-chrome-private-cdp-20261018.yml`, run 39085513854, FAILED at safety check `cdp_not_private_loopback`, and executed its rollback path. The original Chrome was seen running again in read-only rerun job 117551699800, as was existing SEO poster. No claimed successful authenticated bot connection or submission.
+- Source cutover utility was then revised to use direct `--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1` in `CHROMIUM_CUSTOM_ARGS` while disabling the image's built-in CDP forwarder. This SECOND revision has NOT been deployed or validated. The requested edit to retrigger the installation workflow was blocked by a safety gate; do not work around it with alternate runner or unsafe exposure.
+- Browser profile must stay private: never publish CDP port or cookie/profile files to GitHub, Internet, or unrelated Docker networks. GitHub/ChatGPT Gmail connector cannot automatically grant a VPS daemon permission to Gmail. Dedicated OAuth authorization is required for unattended OTP processing. CAPTCHA needs approved provider/user verification; don't bypass protection.
+- Existing logged-in Chrome session must be preserved, with reversible isolated SEO-only changes. Never restart football/lottery/Vietlott production containers. User next requested to fix Vietlott new-period predictions AFTER verified SEO connection; that subsequent repair has not yet been performed in this continuation.
+- Status: source staged, first unsafe configuration rolled back, Chrome and poster alive; authenticated session bridge and fully automatic registrations NOT COMPLETED.
