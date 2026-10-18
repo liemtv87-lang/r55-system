@@ -1,0 +1,62 @@
+name: KQ247 Vietlott R34 exact release blockers 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-r34-exact-blockers-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify R34 data readiness, customer auth and unchanged live predictions
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo "VN_TIME=$(TZ=Asia/Ho_Chi_Minh date +%FT%H:%M:%S%z)"
+          echo 'STAGE_AND_LIVE:'
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' | grep -E 'vietlott|postgres|sales-bot' | cut -c 1-150 || true
+          echo 'R34_STAGE_READINESS:'
+          python3 - <<'PY'
+          import json,urllib.request
+          for port in (18088,18142,18146,18147,18148):
+              for path in ('/health','/api/state'):
+                  try:
+                      with urllib.request.urlopen(f'http://127.0.0.1:{port}{path}', timeout=6) as r: d=json.load(r)
+                      st=d.get('state',d)
+                      products=st.get('products') or st.get('snapshot',{}).get('products') or {}
+                      s={}
+                      for p in ('mega645','power655'):
+                          row=products.get(p,{})
+                          x=row.get('snapshot',row)
+                          s[p]={'analysis':x.get('analysis_date'),'target':x.get('target_date'),'locked':x.get('locked'),'rules':x.get('ruleset_version')}
+                      print(json.dumps({'port':port,'path':path,'ok':d.get('ok'), 'ready':d.get('ready',d.get('data_ready')), 'version':d.get('version',d.get('runtime_version')), 'ruleset':st.get('ruleset_version'),'snapshots':s},ensure_ascii=False))
+                  except Exception as e: print(json.dumps({'port':port,'path':path,'issue':type(e).__name__},ensure_ascii=False))
+          PY
+          echo 'R34_SOURCE_GATES:'
+          for c in kq247-vietlott-r34-stage-20261015 kq247-vietlott-vps; do
+            if docker inspect "$c" >/dev/null 2>&1;then
+              docker exec "$c" sh -c 'for p in /app/data/snapshot-mega645.json /app/data/snapshot-power655.json;do [ -s "$p" ] || continue; node -e "let s=require(process.argv[1]);console.log(JSON.stringify({analysis:s.analysis_date,target:s.target_date,locked:s.locked,rules:s.ruleset_version}))" "$p";done' || true
+              docker exec "$c" sh -c 'if grep -qs neon.tech /app/public/client.html;then echo CLIENT_AUTH_NEON_DEPENDENCY=YES;else echo CLIENT_AUTH_NEON_DEPENDENCY=NO_OR_DIFFERENT_PATH;fi' || true
+            fi
+          done
+          echo 'LOCAL_LICENSE_TABLE_COUNTS_ONLY:'
+          if docker inspect kq247-r55-postgres >/dev/null 2>&1;then
+             docker exec kq247-r55-postgres sh -lc 'psql -X -q -A -t -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT table_name FROM information_schema.tables WHERE table_schema='"'"'public'"'"' AND table_name IN ('"'"'sales_licenses'"'"','"'"'sales_trial_devices'"'"','"'"'sales_link_history'"'"','"'"'sales_config'"'"') ORDER BY table_name"' 2>&1 | head -12 || true
+          fi
+          echo 'TIMER:'
+          systemctl is-active kq247-vietlott-verified-nightly.timer || true
+          echo 'R34_READONLY_NO_DATA_MUTATION=YES'
+          VPS
