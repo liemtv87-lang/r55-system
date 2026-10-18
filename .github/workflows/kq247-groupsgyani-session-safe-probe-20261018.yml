@@ -54,5 +54,24 @@ jobs:
           docker inspect kq247-seo-google-login --format '{{.HostConfig.NetworkMode}}' || true
           echo 'BROWSER_RESTART_POLICY:'
           docker inspect kq247-seo-google-login --format '{{.HostConfig.RestartPolicy.Name}}' || true
+          echo 'SESSION_CONTROL_SAFE_PREFLIGHT:'
+          docker inspect kq247-seo-google-login --format 'image={{.Config.Image}} network={{.HostConfig.NetworkMode}} restart={{.HostConfig.RestartPolicy.Name}}'
+          echo 'ENVIRONMENT_NAMES_ONLY:'
+          docker inspect kq247-seo-google-login --format '{{range .Config.Env}}{{println .}}{{end}}' | cut -d= -f1 | sort | grep -E '^(CHROMIUM_|DISPLAY_|SECURE_|WEB_|VNC_|USER_ID|GROUP_ID)' || true
+          echo 'MOUNT_DESTINATIONS_ONLY:'
+          docker inspect kq247-seo-google-login --format '{{range .Mounts}}{{println .Destination .Type}}{{end}}'
+          echo 'SEO_SCRIPT_SYNC_CHECK:'
+          sha256sum /opt/pwremote/kq247-backlink-background/kq247-bulk-auto-submit.py 2>/dev/null | awk '{print $1}' || true
+          echo 'SEO_REGISTRATION_STATE:'
+          python3 - <<'PY'
+          import sqlite3,pathlib,json
+          db=pathlib.Path('/opt/pwremote/kq247-backlink-background/sources.sqlite3')
+          if db.is_file():
+              try:
+                  c=sqlite3.connect('file:'+str(db)+'?mode=ro',uri=True,timeout=5)
+                  print(json.dumps([{'target':r[0],'state':r[1],'count':r[2]} for r in c.execute("select grp,state,count(*) from submissions group by grp,state order by grp,state")],ensure_ascii=False))
+              except Exception as ex: print('db_read_error='+type(ex).__name__)
+          else: print('db_missing')
+          PY
           echo 'GROUPSGYANI_NO_SUBMISSION_SENT_BY_THIS_PROBE'
           VPS
