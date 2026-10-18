@@ -1,0 +1,58 @@
+name: KQ247 Vietlott live customer and timer verification 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-live-customer-timer-verify-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify active VPS prediction, customer link, and nightly timer (read-only)
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,json
+          b="http://127.0.0.1:18088"
+          for path in ("/health","/api/state"):
+              try:
+                  with urllib.request.urlopen(b+path,timeout=12) as r: j=json.load(r)
+                  print("VIETLOTT_ENDPOINT",path,"OK",j.get("ok"),"READY",j.get("ready",j.get("data_ready")),"DATE",j.get("expected_analysis_date"),"VERSION",j.get("ruleset_version"))
+                  if path=="/api/state":
+                      for p in ("mega645","power655"):
+                          s=j.get("products",{}).get(p,{}).get("snapshot",{})
+                          print("VIETLOTT_SNAP",p,"analysis",s.get("analysis_date"),"target",s.get("target_date"),"locked",s.get("locked"),"rules",s.get("ruleset_version"))
+              except Exception as e: print("VIETLOTT_ENDPOINT_ERROR",path,type(e).__name__,str(e)[:100])
+          PY
+          for path in / /client.html /guest-snapshot.html;do
+            echo "VIETLOTT_LOCAL_PAGE=$path:HTTP_$(curl -sS --max-time 12 -o /dev/null -w '%{http_code}' http://127.0.0.1:18088$path || true)"
+          done
+          echo 'VIETLOTT_NIGHTLY_TIMER:'
+          systemctl is-enabled kq247-vietlott-verified-nightly.timer
+          systemctl is-active kq247-vietlott-verified-nightly.timer
+          systemctl list-timers --all --no-pager | grep -F 'kq247-vietlott-verified-nightly.timer'
+          echo 'VIETLOTT_R34_STAGE_SOURCES:'
+          for name in kq247-vietlott-r34-stage-20261015 kq247-vietlott-r35-stage-20261015;do
+             docker inspect -f '{{.Name}}|{{.State.Status}}' "$name" 2>/dev/null || true
+          done
+          echo 'VIETLOTT_READONLY_VERIFIED=YES'
+          VPS
+      - name: Check public HTTPS link and customer page from outside VPS (read-only)
+        run: |
+          for path in /health /api/state /client.html /guest-snapshot.html;do
+            status=$(curl -sSL --max-time 14 -o /dev/null -w '%{http_code}' "https://vietlott.64-120-92-172.sslip.io$path" || true)
+            echo "VIETLOTT_PUBLIC_PAGE=$path:HTTP_$status"
+          done
