@@ -49,6 +49,11 @@ TIME_LIMIT=min(7200,max(60,int(os.environ.get("KQ247_SUBMIT_SECONDS","2400"))))
 PAUSE=max(5,min(120,int(os.environ.get("KQ247_POST_SPACING_S","12"))))
 WATCH = "--watch" in sys.argv
 POLL_SECONDS = max(60,min(1800,int(os.environ.get("KQ247_POST_POLL_S","120"))))
+# Authenticated browser sidecar uses the existing Chrome profile through a
+# *container-local*, loopback-only DevTools endpoint; do not export cookies.
+AUTH_CDP = os.environ.get("KQ247_AUTH_CDP_URL", "").strip()
+if AUTH_CDP and AUTH_CDP != "http://127.0.0.1:9222":
+    raise SystemExit("CDP endpoint must be the private local Chrome socket")
 # Retry only a proven pre-submit GET failure, never a sent form or unknown POST.
 RETRY_GET_AFTER_S = max(3600,int(os.environ.get("KQ247_RETRY_GET_AFTER_S","3600")))
 # Reinspect only conclusively pre-POST failures after the site may have changed.
@@ -425,10 +430,18 @@ def main():
     deadline=time.monotonic()+TIME_LIMIT
     posted=0
     print("KQ247_BULK_SUBMIT_READY="+json.dumps({"max_attempts":BATCH_LIMIT,"poll_seconds":POLL_SECONDS if WATCH else 30,
-        "limit_seconds":TIME_LIMIT,"skipped_previously_submitted":sorted(ALREADY_SENT_HOSTS)}),flush=True)
+        "limit_seconds":TIME_LIMIT,"skipped_previously_submitted":sorted(ALREADY_SENT_HOSTS),
+        "authenticated_chrome":bool(AUTH_CDP)}),flush=True)
     with sync_playwright() as p:
-        browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
-        context=browser.new_context(viewport={"width":1200,"height":900})
+        if AUTH_CDP:
+            browser=p.chromium.connect_over_cdp(AUTH_CDP,timeout=15000)
+            if not browser.contexts:
+                raise RuntimeError("No existing signed-in Chrome context")
+            context=browser.contexts[0]
+        else:
+            browser=p.chromium.launch(headless=True,args=["--no-sandbox"])
+            context=browser.new_context(viewport={"width":1200,"height":900})
+        # A dedicated tab reuses the account context but never closes user tabs.
         page=context.new_page()
         while WATCH or (posted<BATCH_LIMIT and time.monotonic()<deadline):
             queue=read_queue(con)
@@ -456,8 +469,13 @@ def main():
                         print("KQ247_POSTER_WINDOW_LIMIT="+str(posted),flush=True)
                         time.sleep(POLL_SECONDS)
                         posted=0
-        context.close()
-        browser.close()
+        if AUTH_CDP:
+            page.close()
+            # The context and persistent Chrome belong to the user and MUST stay up.
+            # sync_playwright exits its CDP transport without closing user pages.
+        else:
+            context.close()
+            browser.close()
     print("KQ247_BULK_SUBMIT_DONE="+json.dumps({"attempts":posted,
         "counts":dict(con.execute("SELECT state,COUNT(*) FROM submissions GROUP BY state"))}),flush=True)
     con.close()
