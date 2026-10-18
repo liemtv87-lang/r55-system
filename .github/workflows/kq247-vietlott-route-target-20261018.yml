@@ -1,0 +1,37 @@
+name: KQ247 Vietlott current Caddy route targeted audit
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-route-target-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect exact Caddy service domain routing and R34 progress without mutation
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo CADDY_RUNNING_MOUNTS
+          docker inspect kq247-football-staging --format '{{range .Mounts}}{{.Source}}=>{{.Destination}}:{{.RW}};{{end}}' | cut -c 1-1600
+          echo CADDY_MAIN_CONTRACT
+          cfg=/opt/kq247/deployment/football-staging/Caddyfile
+          grep -n -A 16 -B 5 -E 'vietlott|18088|18146|18152' "$cfg" | head -180 || true
+          echo CADDY_CONFIG_CHECK
+          docker exec kq247-football-staging caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>&1 | tail -7 || true
+          echo R34_PROGRESS
+          base=/opt/kq247/vietlott/versions/r34-direct-20261018-5582b100
+          if test -f "$base/daily-refresh.log";then grep -E 'R34|LOCKED|thành công|thiếu|Không đủ|source|3 miền|Xong|Error' "$base/daily-refresh.log" | tail -18 | cut -c 1-190 || true;fi
+          echo R34_PROGRESS_READONLY=YES
+          VPS
