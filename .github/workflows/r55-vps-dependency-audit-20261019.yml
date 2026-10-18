@@ -1,0 +1,49 @@
+name: R55 VPS Only Readonly Dependency Audit
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - r55-single-locked-snapshot-vps-20261019
+    paths:
+      - .github/workflows/r55-vps-dependency-audit-20261019.yml
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect production VPS without changing containers
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 root@64.120.92.172 'bash -se' <<'VPS'
+          set -euo pipefail
+          echo READ_ONLY_VPS_DEPENDENCIES
+          python3 /opt/kq247/deployment/football-staging/audit-external-runtime.py || echo EXTERNAL_AUDIT_BLOCKERS_RECORDED
+          echo CONTAINERS_BY_EXACT_NAME
+          for n in kq247-football-original kq247-football-native kq247-r55-group-bot kq247-football-cache kq247-football-preview kq247-sales-bot-primary kq247-customer-auth-fixed-20261018; do
+            st="$(docker inspect -f '{{.State.Status}}' "$n" 2>/dev/null || echo absent)"
+            echo "$n=$st"
+          done
+          echo AUTH_AND_SALES_ENV_KEY_FLAGS
+          for n in kq247-sales-bot-primary kq247-customer-auth-fixed-20261018 kq247-r55-group-bot; do
+            if docker inspect "$n" >/dev/null 2>&1; then
+              docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$n" |
+                cut -d= -f1 |
+                grep -Ei '^(NEON_|DATABASE_URL|SALES_DATABASE_URL|AUTH_DATABASE_URL|RENDER_|RAILWAY_|SUPABASE_)' |
+                sed "s|^|$n:|" || true
+            fi
+          done
+          echo CANONICAL_LOCKED_API
+          curl -fsS --max-time 12 'http://127.0.0.1:18080/api/main-football?data=1&limit=20' |
+            python3 -c 'import sys,json; d=json.load(sys.stdin);print(json.dumps({k:d.get(k) for k in ("ok","locked","found","snapshot_id","source","snapshot_total","provisional")}));assert d.get("locked") and d.get("source")=="bongdalu_verified_only"'
+          echo GROUP_HEALTH
+          curl -fsS --max-time 8 'http://127.0.0.1:18083/healthz' |
+            python3 -c 'import sys,json;d=json.load(sys.stdin);print(json.dumps({k:d.get(k) for k in ("ok","active","primarySender","tokenConfigured","service")}))'
+          echo READ_ONLY_DONE
+          VPS
