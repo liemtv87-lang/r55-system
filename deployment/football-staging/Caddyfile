@@ -12,6 +12,12 @@
     rewrite * /healthz
     reverse_proxy football-native:3001
   }
+  # Single VPS-local customer auth route. Preserve existing activation/link paths.
+  # Never proxy a client activation to Neon, Render or another external runtime.
+  handle_path /api/customer-auth/* {
+    reverse_proxy kq247-customer-auth-fixed-20261018:3039
+  }
+
   # PayOS callbacks are verified and processed exclusively by the sales bot.
   # Do not proxy arbitrary sales admin or internal health endpoints.
   @payos_callback path /payos/webhook /payos/return /payos/cancel
