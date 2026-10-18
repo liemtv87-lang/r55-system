@@ -1,0 +1,47 @@
+name: KQ247 Vietlott direct R34 cutover infrastructure preflight
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-r34-direct-preflight-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Preflight current runtime bindings, R34 stage data, public proxy without changes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo 'VPS_TIME'; TZ=Asia/Ho_Chi_Minh date
+          echo 'STAGE_INFO'; for c in kq247-vietlott-vps kq247-vietlott-r34-stage-20261015 kq247-vietlott-r34-replay-150-stage-20261016; do 
+           docker inspect -f '{{.Name}}|{{.Config.Image}}|{{range .Mounts}}{{.Source}}=>{{.Destination}};{{end}}|PORTS={{json .NetworkSettings.Ports}}' "$c" | cut -c 1-1400 || true
+           docker exec "$c" sh -c 'for f in /app/scripts/xsmb-verified-daily.mjs /app/scripts/update-data.mjs /app/scripts/vps-release-gate.mjs;do if test -f "$f";then sha256sum "$f";fi;done' || true
+          done
+          echo 'STAGE_ARCHIVE_SOURCE:'
+          for r in /opt/kq247/vietlott-r34-stage /opt/kq247/vietlott/versions/r34-replay-c57520eb416b2507b8d6e1079559272aea211bed/output;do
+            if test -d "$r";then ls -ld "$r"; for f in "$r/data/xsmb200.json" "$r/public/state.json";do test -f "$f" && ls -lh "$f" || true;done;fi
+          done
+          echo 'CADDY_ROUTE_LINES:'
+          for f in /etc/caddy/Caddyfile /opt/kq247/Caddyfile /etc/nginx/sites-enabled/default;do
+            if test -f "$f";then echo "FILE=$f"; grep -n -A 12 -B 3 -E 'vietlott\.64|18088|18146|18148' "$f" | head -100 || true;fi
+          done
+          echo 'R34_PORTS:'
+          for port in 18088 18146 18148;do
+            for path in /health /api/state /client.html /guest-snapshot.html;do
+              echo "$port $path HTTP $(curl -sS --max-time 7 -o /dev/null -w '%{http_code}' http://127.0.0.1:$port$path || true)"
+            done
+          done
+          echo 'R34_DIRECT_PREFLIGHT_READONLY=YES'
+          VPS
