@@ -2,7 +2,9 @@ name: KQ247 Vietlott VPS 20h05 verified nightly timer installer
 on:
   push:
     branches: [main]
-    paths: [.github/workflows/kq247-vietlott-nightly-vps-install-20261018.yml]
+    paths:
+      - .github/workflows/kq247-vietlott-nightly-vps-install-20261018.yml
+      - deployment/vietlott/kq247-nightly-retry-20261018.py
   workflow_dispatch:
 permissions:
   contents: read
