@@ -1,0 +1,39 @@
+name: KQ247 diagnose exact R34 direct switch guard failure
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-r34-switch-guard-diagnose-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read only exact cutover conditions and route
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo 'NEW_STAGE_DOCKER:'
+          docker inspect -f '{{.Name}}|{{.State.Status}}|{{json .NetworkSettings.Networks}}' kq247-vietlott-r34-direct-20261018 | cut -c 1-1200 || true
+          echo 'CADDY_NETWORK:'
+          docker inspect kq247-football-staging --format '{{range $n,$v := .NetworkSettings.Networks}}{{println $n}}{{end}}' || true
+          echo 'OLD_R34_NETWORK:'
+          docker inspect kq247-vietlott-r34-replay-150-stage-20261016 --format '{{range $n,$v := .NetworkSettings.Networks}}{{println $n}}{{end}}' || true
+          echo 'TOKEN_FILE_FLAGS:'
+          for p in /opt/kq247/vietlott-r33-stage/.admin-token /opt/kq247/vietlott-r33-primary/.admin-token;do if test -s "$p";then echo "$p exists_nonempty";else echo "$p missing";fi;done
+          echo 'CADDY_LIVE_ROUTE:'
+          grep -n -A 7 '^vietlott.64-120-92-172.sslip.io' /opt/kq247/deployment/football-staging/Caddyfile || true
+          echo 'DIRECT_PROD_PRESENT:'
+          if docker inspect kq247-vietlott-r34-production-20261018 >/dev/null 2>&1;then docker inspect kq247-vietlott-r34-production-20261018 --format '{{.State.Status}}'; else echo NO;fi
+          echo READ_ONLY_DONE
+          VPS
