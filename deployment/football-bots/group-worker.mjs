@@ -54,15 +54,30 @@ async function send(text){
   throw Error('telegram_missing_ack_'+r.status);
  return Number(j.result.message_id);
 }
+// Fetch snapshot payload only once per locked version; cheap metadata probes
+// discover the next 13:00 immutable lock without recomputing picks.
+let canonicalCache=null;
+async function canonicalLockedSnapshot(day){
+ const meta=await pool.query("SELECT day::text AS day,locked_at FROM football_snapshots WHERE source='bongdalu-r55' AND locked_at IS NOT NULL AND day<=$1::date ORDER BY day DESC LIMIT 1",[day]);
+ const item=meta.rows[0];
+ if(!item)return [];
+ const snapshotId='bongdalu-r55:'+item.day+':'+new Date(item.locked_at).toISOString();
+ if(canonicalCache?.snapshotId===snapshotId)return [canonicalCache.row];
+ const q=await pool.query("SELECT day::text AS day,payload,locked_at FROM football_snapshots WHERE source='bongdalu-r55' AND day=$1::date AND locked_at=$2::timestamptz LIMIT 1",[item.day,item.locked_at]);
+ if(q.rowCount!==1)throw Error('canonical_snapshot_changed_mid_read');
+ canonicalCache={snapshotId,row:q.rows[0]};
+ log('R55_CANONICAL_SNAPSHOT_LOADED',{snapshotId,onePayloadRead:true});
+ return [canonicalCache.row];
+}
 async function sendPick(){
  const now=Date.now(), last=await lastPickSentAt();
  if(last&&now-last<SEND_INTERVAL_MS)
   return {reason:'cooldown_50_minutes',minutesRemaining:Math.ceil((SEND_INTERVAL_MS-(now-last))/60000)};
  const day=vnDate();
- // Exactly one locked source-verified forecast snapshot, same source as customer API.
- const q=await pool.query("SELECT day::text AS day,payload,locked_at FROM football_snapshots WHERE source='bongdalu-r55' AND locked_at IS NOT NULL AND day<=$1::date ORDER BY day DESC LIMIT 1",[day]);
+ // One full payload read per canonical locked version; all later ticks reuse memory.
+ const rows=await canonicalLockedSnapshot(day);
  const byFixture=new Map();
- for(const x of q.rows){
+ for(const x of rows){
   if(!x.locked_at)continue;
   const matches=typeof x.payload==='string'?JSON.parse(x.payload).matches:x.payload?.matches;
   for(const m of matches||[]){
