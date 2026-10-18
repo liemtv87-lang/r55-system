@@ -1,0 +1,144 @@
+name: KQ247 direct live R34 same URL atomically 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-r34-live-cutover-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-r34-direct-production-cutover
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Publish source-verified R34 17 Oct without changing existing URLs or stopping old container
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -Eeuo pipefail
+          exec 9>/var/lock/kq247-vietlott-r34-cutover.lock
+          flock -n 9
+          base=/opt/kq247/vietlott/versions/r34-direct-20261018-5582b100
+          image=kq247-vietlott-r34-direct:5582b100
+          container=kq247-vietlott-r34-production-20261018
+          caddy=/opt/kq247/deployment/football-staging/Caddyfile
+          timer=/opt/kq247/vietlott/ops/kq247-nightly-retry.py
+          pre="kq247-vietlott-r34-replay-150-stage-20261016:8080"
+          post="$container:8080"
+          stamp="$(date -u +%Y%m%d%H%M%S)"
+          backup=/opt/kq247/backups/vietlott-r34-direct-$stamp
+          mkdir -p -m 700 "$backup"
+          cp -p "$caddy" "$backup/Caddyfile"
+          cp -p "$timer" "$backup/kq247-nightly-retry.py"
+          old_container_id="$(docker inspect kq247-vietlott-vps --format '{{.Id}}')"
+          if [ ! -f "$base/public/state.json" ];then echo "MISSING_R34_SNAPSHOT";exit 1;fi
+          python3 - "$base/public/state.json" <<'PY'
+          import json,sys
+          x=json.load(open(sys.argv[1]))
+          assert x.get('ok') and x.get('ready') and not x.get('last_update_error')
+          assert x.get('ruleset_version')=='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1'
+          for key,target in (('mega645','2026-10-18'),('power655','2026-10-20')):
+              s=x['products'][key]['snapshot']
+              assert s['analysis_date']=='2026-10-17' and s['target_date']==target and s['locked'] and s['ruleset_version']==x['ruleset_version']
+              assert s['filtered_total']>0
+              print('R34_RELEASE_LOCKED_'+key.upper()+'='+str(s['filtered_total']))
+          PY
+          test "$(docker inspect kq247-vietlott-r34-direct-20261018 --format '{{.State.Running}}')" = true
+          network="$(comm -12 <(docker inspect kq247-football-staging --format '{{range $n,$v := .NetworkSettings.Networks}}{{println $n}}{{end}}' | sort) <(docker inspect kq247-vietlott-r34-replay-150-stage-20261016 --format '{{range $n,$v := .NetworkSettings.Networks}}{{println $n}}{{end}}' | sort) | head -1)"
+          test -n "$network"
+          tokenfile=/opt/kq247/vietlott-r33-stage/.admin-token
+          test -s "$tokenfile" || tokenfile=/opt/kq247/vietlott-r33-primary/.admin-token
+          test -s "$tokenfile"
+          token="$(cat "$tokenfile")"
+          test -n "$token"
+          if ! docker inspect "$container" >/dev/null 2>&1;then
+            docker run -d --name "$container" --restart unless-stopped --cpus 3 --memory 7g \
+              --network "$network" -p 127.0.0.1:18153:8080 \
+              -e PORT=8080 -e NODE_OPTIONS=--max-old-space-size=6144 \
+              -e VIETLOTT_STAGE_READONLY=1 -e "VIETLOTT_ADMIN_TOKEN=$token" \
+              -v "$base/data:/app/data" -v "$base/public:/app/public" "$image" >/dev/null
+          fi
+          for n in $(seq 1 24);do
+            if curl -fsS --max-time 7 http://127.0.0.1:18153/health >/dev/null;then break;fi
+            sleep 1
+          done
+          for p in / /client.html /guest-snapshot.html /api/state;do
+            test "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:18153$p)" = 200
+          done
+          python3 - <<'PY'
+          import json,urllib.request
+          with urllib.request.urlopen('http://127.0.0.1:18153/api/state',timeout=15) as r:j=json.load(r)
+          assert j['ruleset_version']=='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1'
+          assert all(j['products'][p]['snapshot']['locked'] for p in ('mega645','power655'))
+          assert all(j['products'][p]['snapshot']['analysis_date']=='2026-10-17' for p in ('mega645','power655'))
+          print('R34_NEW_CONTAINER_READINESS=PASS')
+          PY
+          changed=0
+          restore(){
+            status=$?
+            trap - ERR
+            if [ "$changed" -eq 1 ];then
+               cat "$backup/Caddyfile" > "$caddy"
+               cat "$backup/kq247-nightly-retry.py" > "$timer"
+               docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || true
+            fi
+            echo "R34_PUBLIC_CUTOVER_REVERTED_AFTER_FAILURE_CODE=$status"
+            exit "$status"
+          }
+          trap restore ERR
+          python3 - "$caddy" "$timer" "$pre" "$post" <<'PY'
+          import pathlib,sys
+          cfg=pathlib.Path(sys.argv[1]);tmr=pathlib.Path(sys.argv[2])
+          old=sys.argv[3];new=sys.argv[4]
+          txt=cfg.read_text()
+          oldroute='  reverse_proxy '+old
+          newroute='  reverse_proxy '+new
+          if txt.count(oldroute)==1: cfg.write_text(txt.replace(oldroute,newroute,1))
+          elif txt.count(newroute)!=1: raise RuntimeError('Unexpected Vietlott Caddy route; refuse unrelated change')
+          data=tmr.read_text()
+          original='ENDPOINT="http://127.0.0.1:18088"'
+          replacement='ENDPOINT="http://127.0.0.1:18153"'
+          if data.count(original)==1: tmr.write_text(data.replace(original,replacement,1))
+          elif data.count(replacement)!=1: raise RuntimeError('Unexpected nightly timer endpoint')
+          PY
+          changed=1
+          python3 -m py_compile "$timer"
+          docker exec kq247-football-staging caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+          docker exec kq247-football-staging caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+          python3 - <<'PY'
+          import urllib.request,json
+          base='https://vietlott.64-120-92-172.sslip.io'
+          h={'Cache-Control':'no-store','User-Agent':'KQ247-R34-VerifiedCutover'}
+          with urllib.request.urlopen(urllib.request.Request(base+'/api/state',headers=h),timeout=25) as f:j=json.load(f)
+          assert j.get('ok') and j.get('ready')
+          assert j['ruleset_version']=='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1'
+          for key,target in [('mega645','2026-10-18'),('power655','2026-10-20')]:
+              s=j['products'][key]['snapshot']
+              assert s.get('analysis_date')=='2026-10-17' and s.get('target_date')==target and s.get('locked') is True
+              print('KQ247_PUBLIC_R34_'+key.upper()+'=LOCKED_'+target)
+          for path in ('/','/client.html','/guest-snapshot.html'):
+              with urllib.request.urlopen(urllib.request.Request(base+path,headers=h),timeout=25) as f:
+                  assert f.status==200 and len(f.read(1700))>=400
+              print('KQ247_PUBLIC_R34_PAGE='+path+':HTTP_200')
+          PY
+          test "$(docker inspect kq247-vietlott-vps --format '{{.Id}}')" = "$old_container_id"
+          test "$(systemctl is-active kq247-vietlott-verified-nightly.timer)" = active
+          test "$(docker inspect "$container" --format '{{.State.Running}}')" = true
+          trap - ERR
+          echo "KQ247_VIETLOTT_R34_PUBLIC_DIRECT_CUTOVER=SUCCESS"
+          echo "KQ247_VIETLOTT_NIGHTLY_ENDPOINT=18153"
+          echo "KQ247_VIETLOTT_SAME_URL_AND_CODES_PRESERVED=YES"
+          echo "KQ247_VIETLOTT_ROLLBACK_FILES=$backup"
+          VPS
