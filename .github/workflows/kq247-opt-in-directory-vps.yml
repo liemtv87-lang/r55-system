@@ -42,24 +42,59 @@ jobs:
           python3 -m py_compile "$base/kq247-bulk-auto-submit.py"
           docker image inspect "$image" >/dev/null
           existing="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
-          if docker ps --format '{{.Names}}' | grep -Fxq "$name"; then
-            echo "RESTARTING_ONLY_DEDICATED_OPT_IN_SUBMITTER"
-            docker restart "$name"
-          else
-            docker rm "$name" >/dev/null 2>&1 || true
-            docker run -d --init --name "$name" --restart unless-stopped \
-              --network bridge --read-only --security-opt no-new-privileges --cap-drop ALL \
+          # Verify private CDP before touching the currently running SEO poster.
+          docker ps --format '{{.Names}}' | grep -Fxq kq247-seo-google-login
+          docker exec kq247-seo-google-login sh -c \
+            'wget -q -T 3 -O /dev/null http://127.0.0.1:9222/json/version'
+          backup="${name}-before-auth"
+          if docker inspect "$name" >/dev/null 2>&1; then
+            mode="$(docker inspect "$name" --format '{{.HostConfig.NetworkMode}}')"
+            if test "$mode" = "container:kq247-seo-google-login" || \
+               test "$mode" = "container:$(docker inspect kq247-seo-google-login --format '{{.Id}}')"; then
+              echo 'AUTHED_POSTER_ALREADY_INSTALLED=YES'
+              docker restart "$name" >/dev/null
+            else
+              test ! "$(docker inspect "$backup" >/dev/null 2>&1; echo $?)" = 0
+              docker stop --time 20 "$name" >/dev/null
+              docker rename "$name" "$backup"
+            fi
+          fi
+          if ! docker inspect "$name" >/dev/null 2>&1; then
+            echo 'INSTALLING_ONLY_DEDICATED_AUTHENTICATED_SEO_POSTER'
+            if ! docker run -d --init --name "$name" --restart unless-stopped \
+              --network container:kq247-seo-google-login --read-only \
+              --security-opt no-new-privileges --cap-drop ALL \
               --user 0:0 --pids-limit 120 --cpus 0.5 --memory 1000m \
               --shm-size 192m --tmpfs /tmp:rw,nosuid,nodev,size=450m,mode=1777 \
               --tmpfs /root:rw,nosuid,nodev,size=128m,mode=0700 \
               --mount "type=bind,src=$base/kq247-bulk-auto-submit.py,dst=/app/post.py,readonly" \
               --mount "type=bind,src=$base,dst=/state" \
-              -e KQ247_SUBMIT_MAX=20 -e KQ247_POST_POLL_S=900 -e KQ247_POST_SPACING_S=20 \
-              "$image" python3 -u /app/post.py --watch
+              -e KQ247_AUTH_CDP_URL=http://127.0.0.1:9222 \
+              -e KQ247_SUBMIT_MAX=20 -e KQ247_POST_POLL_S=900 \
+              -e KQ247_POST_SPACING_S=20 \
+              "$image" python3 -u /app/post.py --watch; then
+              docker rm -f "$name" >/dev/null 2>&1 || true
+              if docker inspect "$backup" >/dev/null 2>&1; then
+                docker rename "$backup" "$name"
+                docker start "$name" >/dev/null
+              fi
+              exit 1
+            fi
           fi
-          sleep 5
-          docker ps -a --filter "name=^/$name$" --format "{{.Names}} {{.Status}}"
-          docker logs --tail 20 "$name" || true
+          sleep 7
+          docker logs --tail 60 "$name" || true
+          if ! docker ps --format '{{.Names}}' | grep -Fxq "$name" || \
+             ! docker logs --tail 80 "$name" 2>&1 | grep -Fq '"authenticated_chrome": true'; then
+            echo 'AUTHED_POSTER_STARTUP_FAILED_ROLLBACK'
+            docker rm -f "$name" >/dev/null 2>&1 || true
+            if docker inspect "$backup" >/dev/null 2>&1; then
+              docker rename "$backup" "$name"
+              docker start "$name" >/dev/null
+            fi
+            exit 1
+          fi
+          echo 'AUTHED_POSTER_RUNNING=YES'
+          echo 'OLD_SQLITE_SUBMISSIONS_PRESERVED=YES'
           after="$(docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | grep ' kq247-' | sort || true)"
           test "$existing" = "$after"
           echo "KQ247_PRODUCTION_UNTOUCHED=YES"
