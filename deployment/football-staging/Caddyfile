@@ -4,9 +4,9 @@
   @health path /_kq247/health
   respond @health "KQ247 R55 VPS running" 200
 
+  # The old Neon cache is retired. No redirect or fallback to that service.
   handle /_kq247/cache-health {
-    rewrite * /healthz
-    reverse_proxy football-cache:3000
+    respond "Legacy cache retired; use the locked VPS API" 410
   }
   handle /_kq247/native-health {
     rewrite * /healthz
