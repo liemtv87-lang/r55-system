@@ -59,9 +59,11 @@ async function sendPick(){
  if(last&&now-last<SEND_INTERVAL_MS)
   return {reason:'cooldown_50_minutes',minutesRemaining:Math.ceil((SEND_INTERVAL_MS-(now-last))/60000)};
  const day=vnDate();
- const q=await pool.query("SELECT day::text AS day,payload FROM football_snapshots WHERE day>=($1::date-interval '1 day') ORDER BY day DESC LIMIT 2",[day]);
+ // Exactly one locked source-verified forecast snapshot, same source as customer API.
+ const q=await pool.query("SELECT day::text AS day,payload,locked_at FROM football_snapshots WHERE source='bongdalu-r55' AND locked_at IS NOT NULL AND day<=$1::date ORDER BY day DESC LIMIT 1",[day]);
  const byFixture=new Map();
  for(const x of q.rows){
+  if(!x.locked_at)continue;
   const matches=typeof x.payload==='string'?JSON.parse(x.payload).matches:x.payload?.matches;
   for(const m of matches||[]){
    if(!fixture(m)||!cleanMarket(m))continue;
