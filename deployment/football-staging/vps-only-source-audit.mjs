@@ -12,6 +12,7 @@ const files=Object.fromEntries(await Promise.all([
  'deployment/football-native/publicApi.mjs',
  'deployment/football-bots/group-worker.mjs',
  'deployment/sales-bot/worker.mjs',
+ 'deployment/sales-bot/payos-orders.mjs',
  'deployment/football-original/public/client.html',
 ].map(async p=>[p,await read(p)])));
 const find=p=>files['deployment/'+p];
@@ -49,6 +50,10 @@ verify('vps_only_sales_database',sales.includes('SALES_DATABASE_URL') &&
   sales.includes('KQ247_SALES_DATABASE_MUST_BE_VPS_LOCAL') &&
   !sales.includes('process.env.NEON_DATABASE_URL'));
 verify('no_external_payment_runtime',!/PAYOS_BRIDGE_URL|createRemotePayosCheckout|tool-sales-bot\.onrender\.com/.test(sales));
+const payos=find('sales-bot/payos-orders.mjs');
+verify('payos_callback_vps_only',payos.includes('KQ247_VPS_PUBLIC_HOST') &&
+  payos.includes("64-120-92-172.sslip.io") &&
+  !payos.includes('Neon administrator'));
 const customer=find('football-original/public/client.html');
 verify('vps_customer_auth_origin',customer.includes('https://64-120-92-172.sslip.io/api/customer-auth/') &&
   !customer.includes('compute.c-3.ap-southeast-1.aws.neon.tech'));
