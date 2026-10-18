@@ -7,7 +7,14 @@ let client=null,prepared=false;
 
 export function payosStatus(){
   let publicEndpoint=false;
-  try{const u=new URL(process.env.PAYOS_PUBLIC_BASE_URL||'');publicEndpoint=u.protocol==='https:'&&!u.username&&!u.password&&!!u.hostname;}
+  // PayOS callbacks/return pages must land on this VPS, never on old Render.
+  // A custom hostname is allowed only when explicitly configured for VPS routing.
+  try{
+    const u=new URL(process.env.PAYOS_PUBLIC_BASE_URL||'');
+    const allowed=new Set(['64-120-92-172.sslip.io']);
+    if(process.env.KQ247_VPS_PUBLIC_HOST)allowed.add(String(process.env.KQ247_VPS_PUBLIC_HOST).toLowerCase());
+    publicEndpoint=u.protocol==='https:'&&!u.username&&!u.password&&allowed.has(u.hostname.toLowerCase());
+  }
   catch{}
   const credentials=!!(process.env.PAYOS_CLIENT_ID&&process.env.PAYOS_API_KEY&&process.env.PAYOS_CHECKSUM_KEY);
   const webhookConfirmed=process.env.PAYOS_WEBHOOK_CONFIRMED==='1';
@@ -28,7 +35,7 @@ async function payosClient(){
 }
 export async function ensurePaymentSchema(pool){
   if(prepared)return;
-  // Schema is provisioned once by the Neon administrator; do not require CREATE
+  // Schema must be provisioned on local VPS PostgreSQL; do not require CREATE
   // permissions or mutate the public schema from the restricted Telegram bot.
   const r=await pool.query("SELECT to_regclass('public.sales_payos_orders') AS orders_table");
   if(!r.rows[0]?.orders_table)throw Error('sales_payos_schema_missing');
