@@ -1,0 +1,42 @@
+name: KQ247 Groupsgyani session safe probe
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/kq247-groupsgyani-session-safe-probe-20261018.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: VPS read-only SEO browser inspection
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass >/dev/null
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo "REPORT_UTC=$(date -u +%FT%TZ)"
+          echo 'SEO_PROCESS_LIST:'
+          docker ps --format '{{.Names}} {{.Image}}' | grep -Ei 'seo|browser|chrome|desktop|pwremote|kq247-backlink|playwright' | head -35 || true
+          echo 'CHROME_PROCESS_COUNT:'
+          ps -eo comm= | grep -Ei 'chrome|chromium|Xvfb|x11vnc|websockify' | sort | uniq -c || true
+          echo 'LISTENING_DISPLAY_DEBUG_PORTS:'
+          ss -H -ltn | awk '$4 ~ /:(9222|9223|5900|5901|6080|6081|3000)$/ {print $4}' | sort -u || true
+          echo 'VPS_SEO_SERVICE_STATE:'
+          for x in kq247-telegram-playwright.timer kq247-seo-groups.timer; do
+            printf '%s: ' "$x"; systemctl is-active "$x" || true
+          done
+          echo 'SEO_BACKGROUND_STATUS:'
+          docker ps --format '{{.Names}} {{.Status}}' | grep -Ei 'seo-kq247-opt-in-directory|seo|backlink' | head -20 || true
+          echo 'GROUPSGYANI_NO_SUBMISSION_SENT_BY_THIS_PROBE'
+          VPS
