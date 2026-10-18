@@ -41,6 +41,18 @@ def health():
         time.sleep(2)
     return False
 
+def cdp_loopback_only():
+    # CDP grants full access to signed-in browser sessions. Forbid LAN binds.
+    r = docker("exec", NAME, "cat", "/proc/net/tcp", check=False)
+    if r.returncode != 0:
+        return False
+    listened = []
+    for line in r.stdout.splitlines()[1:]:
+        cols = line.split()
+        if len(cols) > 3 and cols[3] == "0A" and cols[1].endswith(":2406"):
+            listened.append(cols[1].split(":")[0])
+    return bool(listened) and all(ip == "0100007F" for ip in listened)
+
 def main():
     if exists(STAGING) or exists(BACKUP):
         raise SystemExit("Existing staging/rollback container; inspect manually, no changes.")
@@ -113,6 +125,8 @@ def main():
             docker("start", NAME)
             if not health():
                 raise RuntimeError("cdp_health_failed")
+            if not cdp_loopback_only():
+                raise RuntimeError("cdp_not_private_loopback")
             # Check transport exposure from host: no Docker port publishing.
             new = inspect(NAME)
             if new["HostConfig"].get("PortBindings") not in ({}, None):
