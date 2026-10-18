@@ -1,0 +1,95 @@
+name: KQ247 repair Vietlott oversized state JSON parser VPS 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-fix-vietlott-json-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kq247-vietlott-live-timer-json-repair
+  cancel-in-progress: false
+jobs:
+  guarded-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Replace truncated JSON parsing and safely recheck locked day
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          mkdir -p diagnostics
+          {
+            echo '# KQ247 Vietlott runtime JSON fix'
+            echo '```text'
+            sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          exec 9>/var/lock/kq247-vietlott-timer-json-fix.lock
+          flock -n 9
+          python3 - <<'PY'
+          import urllib.request,json,datetime
+          with urllib.request.urlopen('http://127.0.0.1:18153/api/state',timeout=15) as r: j=json.load(r)
+          assert j.get('ok') and j.get('ready')
+          assert j.get('ruleset_version')=='USER_34_HARD_RULES_REMOVE_ADJACENT_HEAD_PAIRS_2026_10_15_R1'
+          for key in ['mega645','power655']:
+              s=j['products'][key]['snapshot']
+              assert s['analysis_date']=='2026-10-18' and s['locked']
+          print('GUARD_R34_18OCT_IMMUTABLE_SNAPSHOTS=PASS')
+          PY
+          python3 - <<'PY'
+          import pathlib,datetime,os,shutil,tempfile
+          p=pathlib.Path('/opt/kq247/vietlott/ops/kq247-nightly-retry.py')
+          txt=p.read_text()
+          old=['json.loads(r.read(80000))','json.loads(e.read(80000))']
+          new=['json.load(r)','json.load(e)']
+          assert 'ENDPOINT="http://127.0.0.1:18153"' in txt, 'refuse repair if timer does not use R34'
+          if all(x in txt for x in old):
+              backup=p.with_name(p.name+'.before-fulljson-'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H%M%S'))
+              shutil.copy2(p,backup)
+              for a,b in zip(old,new): assert txt.count(a)==1;txt=txt.replace(a,b)
+              fd,tmp=tempfile.mkstemp(prefix='.nightly-fixed-',dir=str(p.parent))
+              with os.fdopen(fd,'w') as f:f.write(txt)
+              shutil.copymode(p,tmp)
+              os.replace(tmp,p)
+              print('PARSER_PATCHED_ATOMICALLY=YES')
+              print('BACKUP_SAVED='+str(backup))
+          else:
+              assert all(x in txt for x in new), 'unexpected script; refuse mutation'
+              print('PARSER_ALREADY_FIXED=YES')
+          PY
+          python3 -m py_compile /opt/kq247/vietlott/ops/kq247-nightly-retry.py
+          echo 'PYTHON_COMPILE=PASS'
+          systemctl start kq247-vietlott-verified-nightly.service
+          echo 'AFTER_FIX_SERVICE_STATE:'
+          systemctl show kq247-vietlott-verified-nightly.service --property=Result,ExecMainStatus,ActiveState
+          test "$(systemctl show -p ExecMainStatus --value kq247-vietlott-verified-nightly.service)" = 0
+          systemctl is-active --quiet kq247-vietlott-verified-nightly.timer
+          echo 'SCHEDULER_CHECK=PASS'
+          python3 - <<'PY'
+          import urllib.request,json
+          with urllib.request.urlopen('http://127.0.0.1:18153/api/state',timeout=15) as r:j=json.load(r)
+          assert all(j['products'][k]['snapshot']['analysis_date']=='2026-10-18' and j['products'][k]['snapshot']['locked'] for k in ['mega645','power655'])
+          print('SNAPSHOT_PRESERVED=YES')
+          PY
+          echo 'NO_CONTAINERS_RESTARTED=YES'
+          echo 'REPAIR_COMPLETE'
+          VPS
+            echo '```'
+          } > diagnostics/KQ247_VIETLOTT_PARSER_FIX_20261018.md
+      - name: Record sanitized repair receipt
+        run: |
+          set -euo pipefail
+          git config user.name "kq247-vps-audit"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp diagnostics/KQ247_VIETLOTT_PARSER_FIX_20261018.md docs/KQ247_VIETLOTT_PARSER_FIX_20261018.md
+          git add docs/KQ247_VIETLOTT_PARSER_FIX_20261018.md
+          git commit -m "Record successful safe Vietlott 80KB JSON parser repair" || exit 0
+          git push
