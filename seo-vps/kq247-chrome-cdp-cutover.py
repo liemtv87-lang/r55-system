@@ -79,12 +79,14 @@ def main():
         key, sep, val = entry.partition("=")
         if sep:
             replaced[key] = val
-    replaced["CHROMIUM_REMOTE_DEBUGGING"] = "1"
+    replaced["CHROMIUM_REMOTE_DEBUGGING"] = "0"
     replaced["CHROMIUM_REMOTE_DEBUGGING_PORT"] = "9222"
     custom = replaced.get("CHROMIUM_CUSTOM_ARGS", "")
-    flag = "--remote-debugging-address=127.0.0.1"
-    if flag not in custom:
-        replaced["CHROMIUM_CUSTOM_ARGS"] = (custom + " " + flag).strip()
+    flags = ("--remote-debugging-port=9222", "--remote-debugging-address=127.0.0.1")
+    for flag in flags:
+        if flag not in custom:
+            custom = (custom + " " + flag).strip()
+    replaced["CHROMIUM_CUSTOM_ARGS"] = custom
     args = [
         "docker", "create", "--name", NAME,
         "--network", host["NetworkMode"],
