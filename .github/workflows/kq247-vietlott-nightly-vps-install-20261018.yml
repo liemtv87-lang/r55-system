@@ -1,0 +1,46 @@
+name: KQ247 Vietlott VPS 20h05 verified nightly timer installer
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-nightly-vps-install-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kq247-vietlott-verified-nightly-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate isolated scheduler scripts without running prediction
+        run: |
+          python3 -m py_compile deployment/vietlott/kq247-nightly-retry-20261018.py
+          bash -n deployment/vietlott/install-verified-nightly-20261018.sh
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Install only nightly systemd timer on existing VPS
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          remote=root@64.120.92.172
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes "$remote" 'mkdir -p -m 700 /opt/kq247/vietlott/ops'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes deployment/vietlott/kq247-nightly-retry-20261018.py "$remote":/opt/kq247/vietlott/ops/kq247-nightly-retry.py
+          sshpass -e scp -q -o StrictHostKeyChecking=yes deployment/vietlott/install-verified-nightly-20261018.sh "$remote":/opt/kq247/vietlott/ops/install-verified-nightly-20261018.sh
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes "$remote" 'bash -s' <<'VPS'
+          set -euo pipefail
+          before="$(docker inspect kq247-vietlott-vps --format '{{.Id}}')"
+          bash /opt/kq247/vietlott/ops/install-verified-nightly-20261018.sh
+          echo 'NEXT_3_RUNS_UTC:'
+          systemctl list-timers --all --no-pager | grep -F 'kq247-vietlott-verified-nightly.timer'
+          test "$before" = "$(docker inspect kq247-vietlott-vps --format '{{.Id}}')"
+          echo 'VIETLOTT_EXISTING_PRODUCTION_CONTAINER_PRESERVED=YES'
+          VPS
