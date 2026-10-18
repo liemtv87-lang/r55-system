@@ -19,9 +19,14 @@ for service in kq247-sales-bot-primary kq247-customer-auth-fixed-20261018 kq247-
     echo "BLOCK:external_database_env:$service"; exit 1
   fi
 done
-if grep -qE 'reverse_proxy[[:space:]]+@original_main|reverse_proxy[[:space:]]+football-native:3001' /opt/kq247/deployment/football-staging/Caddyfile; then
-  echo BLOCK:split_public_football_routes; exit 1
-fi
+python3 - <<'PY'
+import re
+from pathlib import Path
+config=Path('/opt/kq247/deployment/football-staging/Caddyfile').read_text()
+routes=re.findall(r'handle\\s+/api/main-football\\s*\\{([^{}]*)\\}',config)
+if len(routes)!=1 or routes[0].strip()!='reverse_proxy football-original:3002':
+    raise SystemExit('BLOCK:split_public_football_routes')
+PY
 temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
 curl --fail --silent --show-error --max-time 15 "$KQ247_VPS_API/api/main-football?data=1&limit=5000&from_ts=0" > "$temp/main.json"
