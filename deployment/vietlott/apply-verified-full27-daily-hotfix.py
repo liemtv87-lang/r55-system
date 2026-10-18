@@ -10,7 +10,7 @@ def run(*args,timeout=30):
  return subprocess.run(args,check=True,text=True,capture_output=True,timeout=timeout)
 def check_live():
  mounts=run("docker","inspect","--format","{{range .Mounts}}{{.Source}}=>{{.Destination}};{{end}}",CONTAINER).stdout
- if str(ROOT/"public")+"=>/app/public" not in mounts:raise RuntimeError("Container mounted production path mismatch")
+ if not any(p+"=>/app/public" in mounts for p in (str(ROOT/"public"),"/opt/kq247/vietlott/public")):raise RuntimeError("Container mounted production path mismatch")
  status=run("docker","inspect","--format","{{.State.Status}}",CONTAINER).stdout.strip()
  if status!="running":raise RuntimeError("Production container not running")
  return mounts
@@ -44,7 +44,8 @@ def apply():
   if text.count(first)!=1 or text.count(marker)!=1:raise RuntimeError("Unknown deployed update-data.mjs; refuse blind patch")
   extra="""  // Existing XSMB 200-day indexes may lag the confirmed same-day result.
   // Accept only two independently agreeing sources on all 27 original prizes.
-  if(!xsmbRows.some(r=>r.date===analysisDate)&&analysisDate===today){
+  const yesterday=new Date(Date.parse(today+'T00:00:00Z')-86400000).toISOString().slice(0,10);
+  if(!xsmbRows.some(r=>r.date===analysisDate)&&(analysisDate===today||analysisDate===yesterday)){
     const daily=await fetchValidatedXsmbDay(analysisDate);
     healthAll.xsmb.push({source:'xsmb_dated_two_source_verified',date:analysisDate,
        ok:daily.ok,confirmations:daily.sources?.length||0,
@@ -63,6 +64,10 @@ def apply():
  patched.write_text(text,"utf-8")
  run("docker","cp",str(source),CONTAINER+":/app/scripts/xsmb-verified-daily.mjs")
  run("docker","exec",CONTAINER,"node","--check","/app/scripts/xsmb-verified-daily.mjs")
+ # Source must independently prove a full draw on this VPS, not only in CI.
+ # Failing this probe does not modify the existing updater or locked snapshots.
+ yesterday=(dt.datetime.now(dt.timezone(dt.timedelta(hours=7)))-dt.timedelta(days=1)).date().isoformat()
+ run("docker","exec",CONTAINER,"node","/app/scripts/xsmb-verified-daily.mjs",yesterday,timeout=90)
  try:
   if inserted:run("docker","cp",str(patched),CONTAINER+":/app/scripts/update-data.mjs")
   run("docker","exec",CONTAINER,"node","--check","/app/scripts/update-data.mjs")
