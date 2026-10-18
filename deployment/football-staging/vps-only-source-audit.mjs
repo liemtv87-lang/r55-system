@@ -1,8 +1,9 @@
 // Run on the VPS against the candidate checkout. Read-only source inspection.
 // node deployment/football-staging/vps-only-source-audit.mjs
 import {readFile} from 'node:fs/promises';
-import {resolve} from 'node:path';
-const root=resolve(import.meta.dirname,'../..');
+import {resolve,dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const read=async p=>readFile(resolve(root,p),'utf8');
 const files=Object.fromEntries(await Promise.all([
  'deployment/football-staging/Caddyfile',
