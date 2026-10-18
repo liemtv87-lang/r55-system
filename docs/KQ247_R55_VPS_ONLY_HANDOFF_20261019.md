@@ -35,3 +35,17 @@ No live VPS shell/VPS Control tool was available in this chat. Changes have NOT 
 3. Verify one locked football snapshot ID in main, customer and bot. Check source/match count/FT grading; ensure new 13:00 lock replaces old only after complete build.
 4. Cut over public reverse proxy with zero-loss rollback point and run read-only tests. Verify old public links exactly, including on phone.
 5. Only then disable old external runtime and remove verified-unreferenced redundant services. Delete Neon projects only when project ownership/deletion access and complete migration evidence are available.
+
+## Additional source fixes and verification in the same branch
+- Found `football-staging/cache.mjs` was still polling a Neon API every five minutes. Replaced it with a fail-closed HTTP 410 tombstone, removed the `football-cache` service and Caddy proxy route from the candidate compose, and removed the Caddy dependency. **The old already-running container may still exist until an authorized VPS operator safely retires it**. Keep its volume as historical archive pending parity.
+- Removed fallback to the XS bot token in `football-bots/group-worker.mjs`. The football bot now requires its own `R55_GROUP_BOT_TOKEN`; no accidental XS-token publishing.
+- Customer/sales DB DSN is parsed as a URL and must resolve to a predefined VPS-local hostname. Direct PayOS callbacks must return to `64-120-92-172.sslip.io` or an explicitly configured VPS-owned hostname, never external Render.
+- Removed historical `apiFootball.js` dependency from primary football API date-boundary helper.
+- Added `deployment/football-staging/vps-only-source-audit.mjs` and `audit-external-runtime.py` for read-only checks; `verify-vps-only-cutover.sh` blocks if legacy Neon-polling cache is still running.
+- **20/20 source invariants passed in a read-only GitHub-connected static check** on this staging branch (single API, locked ID, bot, cache retirement, local auth/DB, PayOS callback, no client redirect, old URL unchanged). This is NOT an on-VPS smoke test and does not prove external hosts are disabled.
+
+## Still required
+- Establish authorized VPS terminal or VPS Control session for safe backup, migration, deployment and live cutover checks. No such control is currently available in this conversation. Neither GitHub source updates nor public web probes can substitute for this.
+- Current VPS deployment of `kq247-football-cache` is unknown. It might still be polling the old Neon endpoint; a source-only tombstone does NOT stop the old image.
+- `Neon list_projects` on available connector returned an empty list; no project ownership/deletion target is available, and **nothing has been deleted**.
+- Full XS, Vietlott and SEO VPS-only runtime audit remains open. Preserve existing customer-facing links. External service-owned `*.onrender.com` hosts cannot continue serving the same URL after terminating the host entirely.
