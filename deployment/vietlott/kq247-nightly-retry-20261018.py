@@ -25,9 +25,9 @@ def fetch_json(path,method="GET",token=None):
     req=urllib.request.Request(ENDPOINT+path,headers=headers,method=method)
     try:
         with urllib.request.urlopen(req,timeout=15) as r:
-            return r.status,json.loads(r.read(80000))
+            return r.status,json.load(r)
     except urllib.error.HTTPError as e:
-        try: data=json.loads(e.read(80000))
+        try: data=json.load(e)
         except ValueError: data={}
         return e.code,data
 
