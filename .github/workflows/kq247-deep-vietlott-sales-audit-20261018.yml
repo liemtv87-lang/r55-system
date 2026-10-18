@@ -1,0 +1,102 @@
+name: KQ247 deep Vietlott sales parity audit 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-deep-vietlott-sales-audit-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  deep-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect production carefully without disclosing secrets
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mkdir -p diagnostics
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          {
+            echo '# KQ247 deep VPS audit (no mutations)'
+            echo
+            echo '```text'
+            sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'VPS'
+          set +e
+          echo "DATE_UTC=$(date -u +%FT%TZ)"
+          echo 'TIMER_CONFIGURATION:'
+          grep -E '^ENDPOINT=' /opt/kq247/vietlott/ops/kq247-nightly-retry.py | sed -E 's#(.*http://)127.0.0.1:#\1localhost:#'
+          systemctl list-timers --all --no-pager --no-legend | grep -Ei 'vietlott|lottery|kq247' | head -35 | cut -c 1-180
+          echo 'NIGHTLY_FAILURE_TYPES:'
+          journalctl -u kq247-vietlott-verified-nightly.service --since '2026-10-18 13:00 UTC' --no-pager -o cat | python3 -c 'import sys,re; lines=sys.stdin.read().splitlines(); pats=["VIETLOTT_NIGHTLY_","Admin token missing","Admin token empty","not accepted","status inaccessible","api/state unavailable","Traceback","Error","already_locked","run_already_in_progress"]; out=[x.strip()[:175] for x in lines if any(p in x for p in pats)]; print("\n".join(re.sub(r"(?i)(token|bearer|password|api[_-]?key)\s*[:=]\s*\S+",r"\1=REDACTED",x) for x in out[-25:]))'
+          echo 'R34_PRODUCTION_RUNNING_MODE:'
+          for name in kq247-vietlott-r34-production-20261018 kq247-vietlott-r34-direct-20261018 kq247-vietlott-vps; do
+            docker inspect "$name" --format '{{.Name}} {{.State.Status}} {{range .Config.Env}}{{if eq . "VIETLOTT_STAGE_READONLY=1"}}READONLY_ENABLED{{end}}{{end}}' 2>/dev/null || true
+          done
+          echo 'PRODUCTION_STATE_DATES_AND_SOURCE_FIELDS:'
+          python3 - <<'PY'
+          import json,urllib.request
+          for p in [18088,18153]:
+              for path in ['/status','/api/state']:
+                  try:
+                      with urllib.request.urlopen('http://127.0.0.1:%d%s'%(p,path),timeout=9) as r:j=json.load(r)
+                      if path=='/status':
+                          print('STATUS',p,{k:j.get(k) for k in ['status','last_run_status','last_run_date','error','running']})
+                      else:
+                          print('STATE_META',p,'keys',sorted(j.keys()))
+                          print('STATE_SOURCES',p,'source_fields', sorted(k for k in j.keys() if 'source' in k or 'history' in k or 'update' in k))
+                          for k in ['mega645','power655']:
+                              a=j.get('products',{}).get(k,{})
+                              s=a.get('snapshot') or {}
+                              print('SNAPSHOT_KEYS',p,k,sorted(s.keys())[:35])
+                  except Exception as e:
+                      print('API_PROBE_FAIL',p,path,type(e).__name__)
+          PY
+          echo 'CUSTOMER_AND_SALES_ENV_CLASSIFICATIONS:'
+          python3 - <<'PY'
+          import subprocess,json,re
+          names=['kq247-sales-bot-primary','kq247-customer-auth-fixed-20261018','kq247-customer-auth-stage-20261018','kq247-sales-vps','kq247-sales-candidate-20261018']
+          for name in names:
+              a=subprocess.run(['docker','inspect',name],capture_output=True,text=True)
+              if a.returncode:print(name,'ABSENT');continue
+              d=json.loads(a.stdout)[0]
+              env=dict(x.split('=',1) for x in d.get('Config',{}).get('Env',[]) if '=' in x)
+              urls=' '.join(v for k,v in env.items() if any(t in k.upper() for t in ['DATABASE','NEON','POSTGRES','SUPABASE','RENDER']))
+              cloud=sorted(set(x for x in ['neon','onrender','supabase','railway'] if x in urls.lower()))
+              m=d.get('Mounts',[])
+              print(name,'running',d['State']['Running'],'ports',sorted(d.get('NetworkSettings',{}).get('Ports',{}).keys()),'db_external_indicators',cloud,'db_configured',any(x in env for x in ['DATABASE_URL','POSTGRES_URL','PGHOST']),'telegram_configured',any('TELEGRAM' in k and any(t in k for t in ['TOKEN','KEY']) and bool(v) for k,v in env.items()),'mounts',len(m))
+          PY
+          echo 'SALES_BOT_LOG_ERROR_COUNTS_LAST100:'
+          for name in kq247-sales-bot-primary kq247-customer-auth-fixed-20261018 kq247-customer-auth-stage-20261018;do
+            docker logs --tail 100 "$name" 2>&1 | python3 -c 'import sys; x=sys.stdin.read().lower();print("error_mentions",x.count("error"),"failed_mentions",x.count("failed"),"exception_mentions",x.count("exception"),"neon_mentions",x.count("neon"),"postgres_mentions",x.count("postgres"))'
+          done
+          echo 'CADDY_SERVICE_ROUTING_KEYS:'
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/opt/kq247/deployment/football-staging/Caddyfile')
+          if p.exists():
+              for i,line in enumerate(p.read_text().splitlines()):
+                  if 'reverse_proxy' in line and ('kq247-' in line or '127.0.0.1' in line):
+                      print('ROUTE',i+1,line.strip().split('#')[0][:180])
+          PY
+          echo 'DEEP_READ_ONLY_DONE'
+          VPS
+            echo '```'
+          } > diagnostics/KQ247_DEEP_AUDIT_20261018.md
+      - name: Save nonsecret VPS diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "kq247-vps-audit"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp diagnostics/KQ247_DEEP_AUDIT_20261018.md docs/KQ247_DEEP_AUDIT_20261018.md
+          git add docs/KQ247_DEEP_AUDIT_20261018.md
+          git commit -m "Record deep runtime Vietlott scheduler and sales bot state" || exit 0
+          git push
