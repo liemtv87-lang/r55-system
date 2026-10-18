@@ -7,7 +7,8 @@ import {settle} from './lib/r55Settlement.js';
 const CHANNEL='@keochuyengia79';
 const pool=new Pool({connectionString:process.env.DATABASE_URL, max:3,connectionTimeoutMillis:6000});
 const active=process.env.R55_VPS_GROUP_BOT_ACTIVE==='1';
-const token=process.env.R55_GROUP_BOT_TOKEN||process.env.TELEGRAM_LOTTERY_BOT_TOKEN||'';
+// Do not share a token with the lottery bot: one verified Telegram sender per product.
+const token=process.env.R55_GROUP_BOT_TOKEN||'';
 const delay=60000;
 let ticking=false,lastCheck=null,lastResult=null,lastError=null;
 const log=(name,obj)=>console.log(new Date().toISOString(),name,JSON.stringify(obj));
