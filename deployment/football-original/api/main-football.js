@@ -36,7 +36,8 @@ const toLegacy=(m,validated=false)=>{
 };
 export default async function(req,res){
  // Public R55 source: the existing customer Render origin reads exactly this feed.
- // Authentication, codes, device bindings and expiry remain exclusively on Neon.
+ // Customer codes, device bindings and expiry are verified ONLY by VPS-local auth.
+ // This API reads the same locked PostgreSQL snapshot as customers and Telegram.
  res.setHeader('Access-Control-Allow-Origin','*');
  res.setHeader('Cache-Control','no-store');
  const day=vnWindowDay();
