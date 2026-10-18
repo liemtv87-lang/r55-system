@@ -77,16 +77,31 @@ jobs:
           done
           echo 'R34_READONLY_SOURCE_FILES:'
           docker exec kq247-vietlott-r34-production-20261018 sh -c 'grep -R -l "VIETLOTT_STAGE_READONLY" /app --include="*.js" --include="*.mjs" 2>/dev/null | head -10' || true
+          echo 'AUTH_PUBLIC_HOST_IDENTIFICATION:'
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,urllib.request,json
+          cfg=Path('/opt/kq247/deployment/football-staging/Caddyfile').read_text().splitlines()
+          for i,s in enumerate(cfg[:36]):
+              t=s.strip()
+              if t.endswith('{') or 'reverse_proxy' in t: print('CADDY',i+1,t[:150])
+          for i,s in enumerate(cfg):
+              if 'kq247-customer-auth-fixed-20261018' in s:
+                  print('AUTH_UPSTREAM_LINE',i+1)
+          h=urllib.request.urlopen('http://127.0.0.1:18153/client.html',timeout=10).read(20000).decode('utf-8','replace')
+          a=re.search(r'const API=["\x27]([^"\x27]+)',h)
+          print('VIETLOTT_CLIENT_API_ORIGIN',a.group(1) if a else 'not_found')
+          PY
           echo 'READ_ONLY_PROBES_DONE'
           VPS
             echo '```'
-          } > diagnostics/KQ247_SAFE_CLIENT_SALES_20261018.md
+          } > diagnostics/KQ247_SAFE_CLIENT_SALES_V2_20261018.md
       - name: Publish sanitized health receipt
         run: |
           set -euo pipefail
           git config user.name "kq247-vps-audit"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp diagnostics/KQ247_SAFE_CLIENT_SALES_20261018.md docs/KQ247_SAFE_CLIENT_SALES_20261018.md
-          git add docs/KQ247_SAFE_CLIENT_SALES_20261018.md
+          cp diagnostics/KQ247_SAFE_CLIENT_SALES_V2_20261018.md docs/KQ247_SAFE_CLIENT_SALES_V2_20261018.md
+          git add docs/KQ247_SAFE_CLIENT_SALES_V2_20261018.md
           git commit -m "Record safe sales and frontend status checks on VPS" || exit 0
           git push
