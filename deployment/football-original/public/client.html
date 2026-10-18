@@ -589,7 +589,8 @@
         currentMode = 'featured',
         ALL = [],
         META = {},
-        COLLAPSED = false;
+        COLLAPSED = false,
+        SNAPSHOT_REQUEST = null;
       const $ = id => document.getElementById(id);
       async function sha(s) {
         const b = await crypto.subtle.digest(
@@ -916,17 +917,22 @@
         return Number.isFinite(Number(x?.ts)) && Number(x.ts) > Date.now();
       }
       function cleanSnapshot(j) {
-        const snapDay = String(j.date || '');
+        // One immutable server snapshot is valid until a NEW locked snapshot replaces it.
+        // Do not expire it at midnight or at 12:05 before the 13:00 lock.
         const all = Array.isArray(j.predictions) ? j.predictions : [];
-        if (snapDay !== expectedDay(j)) {
-          return {...j, found:false, predictions:[], total:0, stale:true, error:'snapshot_expired', snapshot_total:all.length};
-        }
-        const fresh=all.filter(upcoming);
-        return {...j, predictions:fresh, total:fresh.length, snapshot_total:all.length, hidden_past:all.length-fresh.length};
+        const fresh = all.filter(upcoming);
+        return {
+          ...j,
+          found: j.found === true && j.locked === true,
+          predictions: fresh,
+          total: fresh.length,
+          snapshot_total: Number(j.snapshot_total ?? all.length),
+          hidden_past: all.length - fresh.length,
+        };
       }
       function visible() {
         const s = ($('q').value || '').toLowerCase().trim();
-        const relevant = META?.date === expectedDay(META) ? ALL.filter(upcoming) : [];
+        const relevant = META?.locked === true ? ALL.filter(upcoming) : [];
         const a = s
           ? relevant.filter(x =>
               ((x.home || '') + ' ' + (x.away || '') + ' ' + leagueLabel(x))
@@ -1060,26 +1066,38 @@
           '<div class="muted" style="padding:12px 0">Không có trận phù hợp.</div>';
       }
       async function fetchMode(n, mode) {
-        // Neon exclusively verifies existing customer codes and expiry.
-        // Predictions always come from the exact same Bongdalu R55 API as the Hatchable main site;
-        // before 13h it marks them provisional, then switches to the locked snapshot.
-        const r = await fetch(
-          PICKS_API +
-            '&mode=' + encodeURIComponent(mode) +
-            '&limit=' + encodeURIComponent(n) +
-            '&from_ts=0',
-          { cache: 'no-store', signal: AbortSignal.timeout(15000) }
-        );
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) throw Error(j.error || 'Không tải được snapshot bóng đá');
-        // Native VPS returns locked predictions but intentionally omits 'found'.
-        // An absent field is not the same as no data: verify the snapshot array.
-        const hasSnapshot = Array.isArray(j.predictions) && j.predictions.length > 0 &&
-          (j.locked === true || j.provisional === true);
-        const normalized = { ...j, found: j.found === true || hasSnapshot };
-        if (normalized.found && !normalized.locked && !normalized.provisional) throw Error('Snapshot chưa khóa và chưa có dự đoán tạm tính');
-        const verified = cleanSnapshot(normalized);
-        return { ...verified, data: verified };
+        // Read exactly one full snapshot per page session; tabs/copy reuse in-memory data.
+        // The manual CẬP NHẬT button is the only way to invalidate this cache.
+        if (!SNAPSHOT_REQUEST) {
+          SNAPSHOT_REQUEST = (async () => {
+            const r = await fetch(
+              PICKS_API + '&mode=all&limit=5000&from_ts=0',
+              { cache: 'no-store', signal: AbortSignal.timeout(15000) }
+            );
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || !j.ok) throw Error(j.error || 'Không tải được snapshot bóng đá');
+            if (j.found && (!j.locked || !j.snapshot_id)) {
+              throw Error('Snapshot không có khóa xác minh duy nhất');
+            }
+            return j;
+          })();
+        }
+        let source;
+        try {
+          source = await SNAPSHOT_REQUEST;
+        } catch (error) {
+          SNAPSHOT_REQUEST = null;
+          throw error;
+        }
+        const all = Array.isArray(source.predictions) ? source.predictions : [];
+        const filtered = mode === 'featured' ? all.filter(x => x.top === true) : all;
+        return {
+          ...source,
+          predictions: filtered.slice(0, Math.min(5000, Math.max(1, Number(n) || 5000))),
+          total: filtered.length,
+          found: source.found === true,
+          data: source,
+        };
       }
       async function copyMode(n, mode, label) {
         try {
@@ -1131,6 +1149,7 @@
         return load(5000, 'featured');
       }
       function refreshCurrent() {
+        SNAPSHOT_REQUEST = null;
         return load(current, currentMode);
       }
       function importLinkMigration() {
@@ -1179,13 +1198,10 @@
         } catch {}
         return true;
       }
-      setInterval(() => {
-        if (document.visibilityState !== 'visible' || $('gate').classList.contains('hidden') === false) return;
-        if (META?.provisional || (META?.date && META.date !== expectedDay(META))) refreshCurrent();
-        else render();
-      }, 60000);
+      // Filter already-started fixtures locally; do not refetch the snapshot each minute.
+      setInterval(render, 60000);
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && $('gate').classList.contains('hidden')) refreshCurrent();
+        if (document.visibilityState === 'visible') render();
       });
       $('code').addEventListener('keydown', event => {
         if (event.key === 'Enter') { event.preventDefault(); activate(); }
