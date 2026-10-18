@@ -1,0 +1,37 @@
+name: KQ247 Vietlott route select audit for R34 cutover
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-route-select-audit-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read Caddy/nginx public route and container network wiring without changes
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          echo ROUTER_PROCESSES:
+          ps ax -o pid,comm,args | grep -Ei '[c]addy|[n]ginx|[t]raefik' | head -18 | cut -c 1-190 || true
+          echo ROUTER_CONTAINERS:
+          docker ps --format '{{.Names}}|{{.Image}}|{{.Ports}}' | grep -Ei 'caddy|proxy|nginx|traefik|443|80/tcp' | head -30 | cut -c 1-170 || true
+          echo ROUTER_FILES:
+          find /etc /opt/kq247 -maxdepth 6 -type f \( -iname '*caddy*' -o -name '*.caddy' -o -name '*nginx*.conf' \) -size -2M 2>/dev/null | head -30 || true
+          echo ROUTER_CONFIG_REFERENCES:
+          grep -RIlE 'vietlott\\.64-120-92-172|18088' /etc/caddy /opt/kq247 2>/dev/null | head -24 | cut -c 1-165 || true
+          echo PORT443_PROCESS:
+          ss -lntp | grep -E ':(443|80|18088|18152) ' | cut -c 1-180 || true
+          echo ROUTE_AUDIT_READONLY_DONE=YES
+          VPS
