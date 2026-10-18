@@ -1,0 +1,106 @@
+name: KQ247 late Vietlott VPS and bot sales audit 20261018
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-late-safe-audit-20261018.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kq247-late-safe-audit-20261018
+  cancel-in-progress: false
+jobs:
+  read-only-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Read VPS live diagnostics without changing containers
+        shell: bash
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          mkdir -p diagnostics
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          {
+            echo '# KQ247 VPS live read-only audit'
+            echo
+            echo 'Run: 2026-10-18, after 20:05 Asia/Bangkok; read-only; no tokens/license data.'
+            echo
+            echo '```text'
+            sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=15 root@64.120.92.172 'bash -s' <<'VPS'
+          set +e
+          echo "SERVER_UTC=$(date -u +%FT%TZ)"
+          echo 'CONTAINERS:'
+          docker ps --format '{{.Names}}|{{.Status}}|{{.Image}}' | grep -Ei 'kq247|vietlott|xs|football|sales|bot|client' | head -70
+          echo 'SPECIFIC CONTAINERS:'
+          for name in kq247-vietlott-vps kq247-vietlott-r34-direct-20261018 kq247-vietlott-r34-production-20261018 kq247-vietlott-r34-replay-150-stage-20261016 kq247-football-staging; do
+            val=$(docker inspect "$name" --format '{{.State.Status}}' 2>/dev/null) || val=absent
+            echo "$name=$val"
+          done
+          echo 'VIETLOTT_TIMER:'
+          systemctl show kq247-vietlott-verified-nightly.timer --property=ActiveState,Result,LastTriggerUSec,NextElapseUSecRealtime 2>/dev/null
+          systemctl show kq247-vietlott-verified-nightly.service --property=ActiveState,Result,ExecMainStatus,ExecMainStartTimestamp 2>/dev/null
+          echo 'VIETLOTT_INTERNAL_APIS:'
+          python3 - <<'PY'
+          import json,urllib.request
+          for port in [18088,18153]:
+              base='http://127.0.0.1:'+str(port)
+              for path in ['/health','/client.html','/guest-snapshot.html','/api/state']:
+                  try:
+                      with urllib.request.urlopen(base+path,timeout=8) as r:
+                          print('HTTP',port,path,r.status)
+                          if path!='/api/state':continue
+                          j=json.load(r)
+                          print('STATE',port,'ok',j.get('ok'),'ready',j.get('ready'),'rules',j.get('ruleset_version'),'error?',bool(j.get('last_update_error')))
+                          for k in ['mega645','power655']:
+                              p=j.get('products',{}).get(k,{})
+                              s=p.get('snapshot') or {}
+                              print('SNAP',port,k,'analysis',s.get('analysis_date'),'target',s.get('target_date'),'locked',s.get('locked'),'rules',s.get('ruleset_version'),'total',s.get('filtered_total'))
+                  except Exception as e:
+                      print('HTTP_FAIL',port,path,type(e).__name__,str(e)[:140])
+          PY
+          echo 'PUBLIC_VIETLOTT:'
+          for path in / /client.html /guest-snapshot.html /api/state; do
+            code=$(curl -L -sS --max-time 10 -o /dev/null -w '%{http_code}' "https://vietlott.64-120-92-172.sslip.io$path" 2>/dev/null)
+            echo "$path HTTP_${code:-ERR}"
+          done
+          echo 'PUBLIC_CADDY_ROUTES:'
+          python3 - <<'PY'
+          import pathlib
+          p=pathlib.Path('/opt/kq247/deployment/football-staging/Caddyfile')
+          if not p.exists():print('NOT_FOUND')
+          else:
+              lines=p.read_text().splitlines()
+              for i,x in enumerate(lines):
+                  if x.strip().startswith('vietlott.64-120-92-172.sslip.io'):
+                      print(' '.join(s.strip() for s in lines[i:i+7]))
+          PY
+          echo 'SALES_BOT_SERVICE_CANDIDATES:'
+          systemctl list-units --type=service --all --no-pager --no-legend | grep -Ei 'kq247|sale|bot|customer' | cut -c 1-180 | head -45
+          echo 'NIGHTLY_STATUS_FILES:'
+          for p in /opt/kq247/vietlott/ops/nightly-attempts.json /opt/kq247/vietlott/versions/r34-direct-20261018-5582b100/public/state.json; do
+            if test -s "$p";then echo "$p exists";else echo "$p missing_or_empty";fi
+          done
+          echo 'AUDIT_READ_ONLY_DONE'
+          VPS
+            echo '```'
+          } > diagnostics/KQ247_AUDIT_20261018_LATE.md
+      - name: Commit sanitized VPS status only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "kq247-vps-audit"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p docs
+          cp diagnostics/KQ247_AUDIT_20261018_LATE.md docs/KQ247_AUDIT_20261018_LATE.md
+          git add docs/KQ247_AUDIT_20261018_LATE.md
+          git commit -m "Record safe VPS-only Vietlott and sales bot status Oct 18" || exit 0
+          git push
