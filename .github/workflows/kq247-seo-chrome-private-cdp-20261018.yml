@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/kq247-seo-chrome-private-cdp-20261018.yml
+      - seo-vps/kq247-chrome-cdp-cutover.py
   workflow_dispatch:
 permissions:
   contents: read
