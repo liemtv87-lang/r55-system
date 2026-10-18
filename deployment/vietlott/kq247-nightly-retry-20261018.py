@@ -66,7 +66,10 @@ def main():
         return
     status,live=fetch_json("/status")
     if status!=200: raise SystemExit("Vietlott local status inaccessible; no POST")
-    if complete(read(STATE,{}),day):
+    state_code,state=fetch_json("/api/state")
+    if state_code!=200 or not isinstance(state,dict):
+        raise SystemExit("Vietlott live /api/state unavailable; refuse blind duplicate trigger")
+    if complete(state,day):
         print("VIETLOTT_NIGHTLY_SKIPPED=already_locked_for_today")
         return
     if live.get("status")=="running":
