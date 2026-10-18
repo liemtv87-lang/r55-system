@@ -122,16 +122,29 @@ jobs:
               except Exception as e:
                   print('AUTH_FAILURE',product,type(e).__name__)
           PY
+          echo 'AUTH_LATEST_LINK_RESPONSE_SCHEMA:'
+          python3 - <<'PY'
+          import json,urllib.request
+          for product in ['vietlott','football','lottery']:
+              u='https://64-120-92-172.sslip.io/api/customer-auth/?action=latest-link&product='+product
+              try:
+                  with urllib.request.urlopen(u,timeout=12) as f: j=json.load(f)
+                  print('KEYS',product,sorted(j.keys()) if isinstance(j,dict) else type(j).__name__)
+                  for k,v in j.items():
+                      if isinstance(v,dict):print('NESTED_KEYS',product,k,sorted(v.keys())[:25])
+                      if k in ('error','reason','code','message','service'):print('META',product,k,str(v)[:90])
+              except Exception as e:print('AUTH_SCHEMA_ERROR',product,type(e).__name__)
+          PY
           echo 'READ_ONLY_PROBES_DONE'
           VPS
             echo '```'
-          } > diagnostics/KQ247_SAFE_CLIENT_SALES_V3_20261018.md
+          } > diagnostics/KQ247_SAFE_CLIENT_SALES_V4_20261018.md
       - name: Publish sanitized health receipt
         run: |
           set -euo pipefail
           git config user.name "kq247-vps-audit"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp diagnostics/KQ247_SAFE_CLIENT_SALES_V3_20261018.md docs/KQ247_SAFE_CLIENT_SALES_V3_20261018.md
-          git add docs/KQ247_SAFE_CLIENT_SALES_V3_20261018.md
+          cp diagnostics/KQ247_SAFE_CLIENT_SALES_V4_20261018.md docs/KQ247_SAFE_CLIENT_SALES_V4_20261018.md
+          git add docs/KQ247_SAFE_CLIENT_SALES_V4_20261018.md
           git commit -m "Record safe sales and frontend status checks on VPS" || exit 0
           git push
