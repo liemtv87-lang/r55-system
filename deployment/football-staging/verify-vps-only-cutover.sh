@@ -13,6 +13,10 @@ command -v curl >/dev/null
 for service in kq247-r55-postgres kq247-football-original kq247-r55-group-bot kq247-sales-bot-primary kq247-customer-auth-fixed-20261018; do
   test "$(docker inspect -f '{{.State.Running}}' "$service")" = true || { echo "BLOCK:required_service_unhealthy:$service"; exit 1; }
 done
+# A running retired cache might still poll the old external endpoint.
+if test "$(docker inspect -f '{{.State.Running}}' kq247-football-cache 2>/dev/null || echo false)" = true; then
+  echo BLOCK:retired_neon_cache_still_running; exit 1
+fi
 # Cannot sever a production Neon connection before both auth and sales are locally verified.
 for service in kq247-sales-bot-primary kq247-customer-auth-fixed-20261018 kq247-r55-group-bot; do
   if docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$service" | cut -d= -f1 | grep -Eq '^(NEON_DATABASE_URL|NEON_AUTH_URL|NEON_API_URL)$'; then
