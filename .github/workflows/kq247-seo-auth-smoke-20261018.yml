@@ -1,0 +1,38 @@
+name: KQ247 SEO authenticated browser smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/kq247-seo-auth-smoke-20261018.yml
+      - seo-vps/kq247-seo-auth-smoke.py
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile seo-vps/kq247-seo-auth-smoke.py
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Verify private Chrome session through isolated read-only sidecar
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${SSHPASS:-}"
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e scp -q -o StrictHostKeyChecking=yes -o ConnectTimeout=20 seo-vps/kq247-seo-auth-smoke.py root@64.120.92.172:/root/kq247-seo-auth-smoke-20261018.py
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          image=pwremote/playwright:1.56.0
+          docker image inspect "$image" >/dev/null
+          docker ps --filter "name=^/kq247-seo-google-login$" --format '{{.Names}}' | grep -Fxq kq247-seo-google-login
+          docker run --rm --init --network container:kq247-seo-google-login --read-only --security-opt no-new-privileges --cap-drop ALL --cpus 0.5 --memory 600m --pids-limit 100 --tmpfs /tmp:rw,nosuid,nodev,size=128m,mode=1777 --mount type=bind,src=/root/kq247-seo-auth-smoke-20261018.py,dst=/app/smoke.py,readonly "$image" python3 /app/smoke.py
+          echo 'SEO_EXISTING_GOOGLE_PROFILE_PRESERVED=YES'
+          VPS
