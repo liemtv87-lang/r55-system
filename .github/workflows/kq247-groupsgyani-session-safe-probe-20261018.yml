@@ -42,5 +42,7 @@ jobs:
           docker exec kq247-seo-google-login sh -lc 'for x in xdotool wmctrl curl python3 node; do command -v "$x" || true; done; echo DISPLAY_AVAILABLE=${DISPLAY:+yes}' || true
           echo 'BROWSER_DISPLAY_CHECK:'
           docker exec kq247-seo-google-login sh -lc 'for d in :0 :1 :2; do echo DISPLAY_$d; DISPLAY=$d xdotool getdisplaygeometry 2>/dev/null || true; done' || true
+          echo 'AUTH_PROFILE_STORAGE_PROBE:'
+          docker exec kq247-seo-google-login sh -lc 'test -d /config && echo PERSISTENT_PROFILE_PATH_EXISTS || echo NO_CONFIG_DIRECTORY' || true
           echo 'GROUPSGYANI_NO_SUBMISSION_SENT_BY_THIS_PROBE'
           VPS
