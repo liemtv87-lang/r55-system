@@ -1,0 +1,56 @@
+name: KQ247 Vietlott source and snapshot gate 20261018
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/kq247-vietlott-source-gate-20261018.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+      - name: Inspect live-source readiness and staged datasets without writing snapshots
+        env:
+          SSHPASS: ${{ secrets.VPS_ROOT_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          ssh-keyscan -T 12 -t ed25519 64.120.92.172 > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          ssh-keygen -lf "$HOME/.ssh/known_hosts" | grep -Fq 'SHA256:Nl+BE+S3rt6wgoh4Q9IaSRejLzPtN0/0lHL46iKYirg'
+          sshpass -e ssh -T -o StrictHostKeyChecking=yes -o ConnectTimeout=20 root@64.120.92.172 'bash -s' <<'VPS'
+          set -euo pipefail
+          for name in kq247-vietlott-vps kq247-vietlott-r34-stage-20261015 kq247-vietlott-r35-regionbackup-stage kq247-vietlott-r35-sourcefix-stage; do
+            echo "=== $name ==="
+            docker exec "$name" node --input-type=module -e '
+              import fs from "node:fs";
+              const read=p=>{try{return JSON.parse(fs.readFileSync(p,"utf8"))}catch{return null}};
+              const xs=read("data/xsmb200.json");
+              const state=read("public/state.json");
+              console.log(JSON.stringify({
+                xsmb_rows:Array.isArray(xs)?xs.length:null,
+                xsmb_latest:Array.isArray(xs)?xs.slice(0,4).map(z=>({date:z.date,full:z.full?.length,confirmations:z.confirmations,source_count:z.sources?.length})):null,
+                state_keys:state?Object.keys(state).slice(0,18):[],
+                ruleset:state?.ruleset_version,
+                last_update:state?.generated_at||state?.analysis_date||null,
+                expected:state?.analysis_date||state?.source_date||null,
+                products:state?.products?Object.keys(state.products):null
+              }));
+              for(const p of ["mega645","power655"]){
+                const s=read("data/snapshot-"+p+".json");
+                console.log(JSON.stringify({product:p,analysis:s?.analysis_date,draw:s?.target_date,locked:s?.locked,version:s?.ruleset_version}));
+              }
+            ' || true
+          done
+          echo 'LIVE_UPDATE_SOURCE_LOCATIONS:'
+          docker exec kq247-vietlott-vps sh -lc 'for p in /app/scripts/xsmb-verified-daily.mjs /app/scripts/update-data.mjs /app/scripts/fetch-xsmb.mjs; do if test -f "$p"; then echo "$p PRESENT"; else echo "$p MISSING"; fi; done'
+          echo 'LIVE_SOURCE_GATE_HINTS:'
+          docker exec kq247-vietlott-vps sh -lc 'grep -nE "xsmbRows|analysisDate|fetchValidatedXsmbDay|fetchXsmb|retry|xsmb200" /app/scripts/update-data.mjs | head -45 | cut -c 1-170' || true
+          echo 'LATEST_CRON_RESULT:'
+          systemctl show kq247-vietlott-offline-ci.service -p Result -p ExecMainStatus -p ActiveState || true
+          echo 'READONLY_DONE=YES'
+          VPS
