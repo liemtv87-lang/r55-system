@@ -44,6 +44,6 @@
 
 ## Chấm kết quả thực tế
 
-Ghi lại ngày gửi, URL hồ sơ công khai, link đích đã xác nhận (exact href), rel=nofollow/sponsored, HTTP status, noindex và kết quả click/referral nếu có. Dùng [gói kiểm tra SEO KQ247](../../README.md) hoặc trình kiểm tra liên kết độc lập; đừng mặc định website đã có backlink nếu chưa có URL hồ sơ công khai. Đánh giá SEO bằng số lần click Search Console và số lượt tham gia thật, không bằng số website được gửi form.
+Ghi lại ngày gửi, URL hồ sơ công khai, link đích đã xác nhận (exact href), rel=nofollow/sponsored, HTTP status, noindex và kết quả click/referral nếu có. Dùng [hướng dẫn kho mã KQ247](../README.md) và trình kiểm tra liên kết độc lập; đừng mặc định website đã có backlink nếu chưa có URL hồ sơ công khai. Đánh giá SEO bằng số lần click Search Console và số lượt tham gia thật, không bằng số website được gửi form.
 
 Google không khuyến khích backlink tạo hàng loạt để thao túng thứ hạng: https://developers.google.com/search/docs/essentials/spam-policies
