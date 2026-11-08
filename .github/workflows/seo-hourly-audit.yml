@@ -22,10 +22,13 @@ jobs:
         run: python3 -m unittest discover -s seo-monitor -p 'test_*.py'
       - name: Audit 17 SEO objectives and technical endpoints
         run: python3 seo-monitor/audit.py
+      - name: Verify previously recorded public backlink evidence
+        run: python3 seo-monitor/verify_backlinks.py
       - name: Add GitHub job summary
         if: always()
         run: |
           if test -f seo-monitor/out/report.md; then cat seo-monitor/out/report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          if test -f seo-monitor/out/backlinks-evidence.md; then cat seo-monitor/out/backlinks-evidence.md >> "$GITHUB_STEP_SUMMARY"; fi
       - name: Save hourly audit report
         if: always()
         uses: actions/upload-artifact@v6
