@@ -6,7 +6,7 @@ No Supabase dependency, authentication, IndexNow submissions, or synthetic traff
 import json
 import re
 import time
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlsplit, urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -20,6 +20,11 @@ MAX_WORKERS = 7
 RETRY_DELAY = 0.45
 TRACKING_KEYS = ('f', 'id', 'uid', 'uagt', 'invite_type', 'path')
 TECH = [
+    {"name":"KQ247 VPS homepage","url":"https://64-120-92-172.sslip.io/","kind":"html"},
+    {"name":"KQ247 Telegram community hub","url":"https://64-120-92-172.sslip.io/cong-dong-telegram-kq247.html",
+     "kind":"html","required_links":["https://t.me/keochuyengia79","https://t.me/xsbm999","https://t.me/tooldudoan999"]},
+    {"name":"KQ247 VPS robots.txt","url":"https://64-120-92-172.sslip.io/robots.txt","kind":"robots"},
+    {"name":"KQ247 VPS sitemap.xml","url":"https://64-120-92-172.sslip.io/sitemap.xml","kind":"sitemap"},
     {"name":"KQ247 homepage","url":"https://www.kq247.com/","kind":"html"},
     {"name":"KQ247 robots.txt","url":"https://www.kq247.com/robots.txt","kind":"robots"},
     {"name":"KQ247 sitemap.xml","url":"https://www.kq247.com/sitemap.xml","kind":"sitemap"},
@@ -37,11 +42,14 @@ class PageHead(HTMLParser):
         self.canonical = ""
         self.robots = ""
         self.h1_count = 0
+        self.links = set()
 
     def handle_starttag(self, tag, attrs):
         d = dict(attrs)
         if tag == "title":
             self.in_title = True
+        if tag == "a" and d.get("href"):
+            self.links.add(d["href"].strip())
         if tag == "h1":
             self.h1_count += 1
         if tag == "meta":
@@ -156,6 +164,12 @@ def audit(target):
                 result["issues"].append("Missing H1 (advisory)")
             if "noindex" in parser.robots.lower():
                 result["issues"].append("Noindex present; confirm intended customer privacy")
+            if target.get("required_links"):
+                observed = {urljoin(result["final_url"] or url, href).split("?")[0].rstrip("/")
+                            for href in parser.links}
+                missing = [link for link in target["required_links"] if link.rstrip("/") not in observed]
+                if missing:
+                    result["issues"].append("Missing direct Telegram CTA hrefs: " + ", ".join(missing))
         except Exception as e:
             result["issues"].append("HTML parsing error: " + type(e).__name__)
     if kind == "robots":
@@ -197,6 +211,7 @@ def main():
         "objective_count":17,"affiliate_count":14,"telegram_group_count":2,"sales_bot_count":1,
         "objective_grades":grades,
         "technical_grades":technical_grades,
+        "technical_endpoint_count":len(TECH),
         "alerts":[{"name":x["name"],"grade":x["grade"],"issues":x["issues"]}
                   for x in results if x["grade"] != "OK"],
         "objective_results":results[:17],
@@ -211,7 +226,7 @@ def main():
         "",
         "**Scope: 14 destination links + 2 Telegram groups + 1 sales bot.**",
         "17 destinations: OK "+str(grades["OK"])+", WARN "+str(grades["WARN"])+", FAIL "+str(grades["FAIL"])+".",
-        "6 technical endpoints: OK "+str(technical_grades["OK"])+", WARN "+
+        str(len(TECH))+" technical endpoints: OK "+str(technical_grades["OK"])+", WARN "+
         str(technical_grades["WARN"])+", FAIL "+str(technical_grades["FAIL"])+".",
         "",
         "## 17 objective URLs",
@@ -219,7 +234,7 @@ def main():
         "| Item | HTTP | Grade | Findings |","|---|---:|---|---|",
     ]
     lines += [table_row(x) for x in results[:17]]
-    lines += ["","## Six technical KQ247 sites/endpoints","","| Item | HTTP | Grade | Findings |","|---|---:|---|---|"]
+    lines += ["","## Technical KQ247 sites/endpoints ("+str(len(TECH))+")","","| Item | HTTP | Grade | Findings |","|---|---:|---|---|"]
     lines += [table_row(x) for x in results[17:]]
     lines += ["", "## Actionable warnings (read-only)", ""]
     for item in report["alerts"]:
