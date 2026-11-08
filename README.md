@@ -19,3 +19,8 @@ KQ247 chia sẻ thông tin bóng đá và xổ số mang tính tham khảo. Ch�
 Các tệp `seo-monitor/targets.json` và `seo-monitor/audit.py` theo dõi **đúng hai nhóm**. Kết quả HTTP 200 chỉ là kiểm tra khả năng truy cập, không phải lượt tìm kiếm, lượt nhấp hay thứ hạng Google. Không tự tạo backlink hàng loạt, không dùng traffic/thành viên giả.
 
 Cả hai nhóm có thể tham gia không cần mua công cụ.
+
+## Tài liệu hướng dẫn & kiểm chứng SEO
+
+- [Hướng dẫn đọc dữ liệu bóng đá và xổ số KQ247](public-guides/kq247-huong-dan-thong-ke-bong-da-xo-so.md) — giải thích kèo, thống kê lịch sử và cách tự đối chiếu thông tin.
+- [Sổ nguồn đăng ký danh bạ & xác minh backlink](seo-monitor/BACKLINK_REGISTRY.md) — tách biệt backlink đã thấy công khai với biểu mẫu chưa gửi, không tính số lượng ảo.
