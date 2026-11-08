@@ -62,6 +62,30 @@ class CommunityLinkTests(unittest.TestCase):
         self.assertEqual(result["grade"], "WARN")
         self.assertTrue(any("tooldudoan999" in issue for issue in result["issues"]))
 
+    def test_x_robots_header_noindex_is_flagged(self):
+        response = FakeResponse(sample(self.target["required_links"]))
+        response.headers = {"Content-Type": "text/html", "X-Robots-Tag": "noindex, nofollow"}
+        with patch("audit.urlopen", return_value=response):
+            result = audit(self.target)
+        self.assertEqual(result["grade"], "WARN")
+        self.assertTrue(any("Noindex" in issue for issue in result["issues"]))
+
+    def test_cross_host_canonical_is_flagged(self):
+        page = sample(self.target["required_links"]).replace(
+            'https://64-120-92-172.sslip.io/cong-dong-telegram-kq247.html',
+            'https://elsewhere.example/other-page', 1)
+        with patch("audit.urlopen", return_value=FakeResponse(page)):
+            result = audit(self.target)
+        self.assertEqual(result["grade"], "WARN")
+        self.assertTrue(any("Cross-host canonical" in issue for issue in result["issues"]))
+
+    def test_duplicate_h1_is_flagged(self):
+        page = sample(self.target["required_links"]).replace(
+            "<h1>KQ247</h1>", "<h1>KQ247</h1><h1>Again</h1>")
+        with patch("audit.urlopen", return_value=FakeResponse(page)):
+            result = audit(self.target)
+        self.assertTrue(any("Multiple H1" in issue for issue in result["issues"]))
+
     def test_query_tracking_on_real_link_does_not_mask_cta(self):
         links = [link + "?utm_source=seo" for link in self.target["required_links"]]
         with patch("audit.urlopen", return_value=FakeResponse(sample(links))):
