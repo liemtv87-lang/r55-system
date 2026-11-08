@@ -92,6 +92,7 @@ def audit(target):
                 result["http_status"] = resp.getcode()
                 result["final_url"] = resp.geturl()
                 result["content_type"] = resp.headers.get("Content-Type","")
+                result["x_robots_tag"] = resp.headers.get("X-Robots-Tag","")
                 body = resp.read(96000 if kind in ("html","sitemap") else 24000)
             if attempt:
                 result["note"] = "Recovered after one bounded network retry"
@@ -162,8 +163,15 @@ def audit(target):
                 result["issues"].append("Missing canonical (advisory)")
             if parser.h1_count == 0:
                 result["issues"].append("Missing H1 (advisory)")
-            if "noindex" in parser.robots.lower():
-                result["issues"].append("Noindex present; confirm intended customer privacy")
+            if "noindex" in (parser.robots + " " + result.get("x_robots_tag","")).lower():
+                result["issues"].append("Noindex meta/header present; confirm intended privacy")
+            if parser.h1_count > 1:
+                result["issues"].append("Multiple H1 headings; review page structure")
+            if parser.canonical:
+                canonical_host = urlsplit(urljoin(result["final_url"] or url, parser.canonical)).hostname
+                current_host = urlsplit(result["final_url"] or url).hostname
+                if canonical_host and current_host and canonical_host.lower() != current_host.lower():
+                    result["issues"].append("Cross-host canonical; verify intentional migration")
             if target.get("required_links"):
                 observed = {urljoin(result["final_url"] or url, href).split("?")[0].rstrip("/")
                             for href in parser.links}
