@@ -13,11 +13,11 @@
 | Nguồn | URL nguồn | Đích | Trạng thái 09/11/2026 | Lưu ý |
 | --- | --- | --- | --- | --- |
 | PromoteIndex | https://www.promoteindex.com/p/kq247-football-and-lottery-community | Landing KQ247 | `verified_public` | Trang công khai có href đến landing; liên kết nofollow, không phải dofollow |
-| TeleSeeker | https://teleseeker.com/trend | 2 @username | `mentions_only` | Trang xu hướng nhắc cả hai tài khoản; chưa xác minh được trang hồ sơ riêng |
+| TeleSeeker | https://teleseeker.com/trend | 2 @username | `mentions_only` | Xu hướng hiện có nhắc cả hai tài khoản nhưng chỉ hiển thị chữ, chưa có href trỏ tới hai nhóm; không tính backlink |
 | TGStat | https://tgstat.com/add/channel | Cả hai nhóm | `not_submitted` | Biểu mẫu cần chọn quốc gia, ngôn ngữ và danh mục; kiểm tra trước khi gửi |
 | list.tg | https://list.tg/en/add | Cả hai nhóm | `not_submitted` | Miễn phí, có duyệt nội dung |
 | TelegramDir | https://telegramdir.com/ | Cả hai nhóm | `not_submitted` | Bấm Submit; duyệt thủ công |
-| TG Metrix | https://tgmetrix.com/en/add-channel/ | Cả hai nhóm | `not_submitted` | Không nhận nội dung cờ bạc, cần đối chiếu điều kiện trước khi gửi |
+| TG Metrix | https://tgmetrix.com/en/add-channel/ | Cả hai nhóm | `not_submitted` | Không nhận nội dung cờ bạc; KQ247 có yếu tố kèo/xổ số nên **chưa đủ điều kiện xác minh**, không tự gửi |
 | DirectoryTG | https://directorytg.com/en/add | Cả hai nhóm | `not_submitted` | Gửi qua bot Telegram, không phải form web |
 
 **Không** tự đặt trạng thái pending hoặc completed cho biểu mẫu chưa thực hiện. Không gửi cùng lúc 1000 hồ sơ, không dùng nội dung quảng cáo tỷ lệ thắng không được kiểm chứng.
