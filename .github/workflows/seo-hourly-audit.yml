@@ -1,4 +1,5 @@
-name: KQ247 SEO technical audit (independent)
+name: KQ247 SEO check on push or manual run
+# Existing VPS SEO timers remain primary; do not duplicate hourly remote scans.
 on:
   workflow_dispatch:
   push:
