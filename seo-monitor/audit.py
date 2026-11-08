@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KQ247: bounded read-only SEO/link audit of 17 targets + 6 technical endpoints.
+"""KQ247: bounded read-only SEO/link audit of 17 targets + 10 technical endpoints.
 External URLs are NOT sites the operator can optimize or control.
 No Supabase dependency, authentication, IndexNow submissions, or synthetic traffic.
 """
